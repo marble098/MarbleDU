@@ -123,6 +123,18 @@
     <string name="widget_today">Today</string>
     <string name="widget_mobile">Mobile</string>
 
+    <!-- Runtime permissions -->
+    <string name="permissions_title">App permissions</string>
+    <string name="permissions_desc">For accurate monitoring and carrier detection we need notification and phone-state permissions.</string>
+    <string name="perm_notifications">Show monitoring notification in status bar</string>
+    <string name="perm_phone_state">Identify mobile SIM carrier</string>
+    <string name="perm_usage_stats">Per-app data usage access</string>
+    <string name="perm_usage_stats_desc">To show per-app reports, enable this in system settings.</string>
+    <string name="perm_status_granted">Granted</string>
+    <string name="perm_status_denied">Not granted</string>
+    <string name="perm_request">Request permission</string>
+    <string name="perm_open_system_settings">Open system settings</string>
+
     <string name="ui_mode">UI mode</string>
     <string name="ui_mode_desc">Simple UI for beginners or advanced for pros</string>
     <string name="ui_mode_minimal">Minimal</string>

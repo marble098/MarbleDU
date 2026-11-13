@@ -28,22 +28,24 @@ object NetworkStatsReader {
      * برمی‌گردد؛ در آن حالت از TrafficStats (API رسمی) استفاده می‌کنیم.
      */
     fun totalInterfaceBytes(): Pair<Long, Long> {
-        var rx = 0L
-        var tx = 0L
-        runCatching {
-            ifaceDir.listFiles()?.forEach { iface ->
-                val name = iface.name
-                if (name == "lo" || name.startsWith("tun") || name.startsWith("ppp") || name == "dummy0") return@forEach
-                rx += readLong(File(iface, "statistics/rx_bytes"))
-                tx += readLong(File(iface, "statistics/tx_bytes"))
+        val totalRx = runCatching { TrafficStats.getTotalRxBytes() }.getOrDefault(-1L)
+        val totalTx = runCatching { TrafficStats.getTotalTxBytes() }.getOrDefault(-1L)
+        return if (totalRx >= 0 && totalTx >= 0) {
+            totalRx to totalTx
+        } else {
+            // Fallback خیلی محدود: فقط وقتی TrafficStats پاسخ ندهد (عمدتاً دستگاه‌های قدیمی / شبیه‌ساز)
+            var rx = 0L
+            var tx = 0L
+            runCatching {
+                ifaceDir.listFiles()?.forEach { iface ->
+                    val name = iface.name
+                    if (name == "lo" || name.startsWith("tun") || name.startsWith("ppp") || name == "dummy0") return@forEach
+                    rx += readLong(File(iface, "statistics/rx_bytes"))
+                    tx += readLong(File(iface, "statistics/tx_bytes"))
+                }
             }
+            rx to tx
         }
-        if (rx == 0L && tx == 0L) {
-            val totalRx = runCatching { TrafficStats.getTotalRxBytes() }.getOrDefault(-1L)
-            val totalTx = runCatching { TrafficStats.getTotalTxBytes() }.getOrDefault(-1L)
-            if (totalRx >= 0 && totalTx >= 0) return totalRx to totalTx
-        }
-        return rx to tx
     }
 
     private fun readLong(file: File): Long = runCatching {

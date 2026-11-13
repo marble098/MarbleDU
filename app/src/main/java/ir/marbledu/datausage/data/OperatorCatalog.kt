@@ -107,12 +107,16 @@ object OperatorCatalog {
             "fanapmobile", "فناپ موبایل", "Fanap Mobile", "FNP", 0xFF6D4C41, 0xFF9E9E9E,
             keywords = listOf(
                 "fanap", "فناپ", "fanapmobile", "فناپموبایل", "fanap mobile", "فناپ موبایل",
+                "fnp", "fnpmobile", "فناپ موبایل-ir",
             ),
             isMobile = true,
         ),
         Operator(
             "arintel", "ارین تل", "Arin Tel", "ART", 0xFF455A64, 0xFF78909C,
-            keywords = listOf("arin", "ارین", "arintel", "ارینتل", "arin tel", "ارین تل"),
+            keywords = listOf(
+                "arin", "ارین", "arintel", "ارینتل", "arin tel", "ارین تل",
+                "art", "arintelco",
+            ),
             isMobile = true,
         ),
     )
@@ -265,6 +269,9 @@ object OperatorCatalog {
                 else collapsed.contains(nkw)
                 if (hit) return op
             }
+            // شناسه‌ی کوتاهِ نمایشی (mark) هم نشانِ تشخیص است (مثل FNP / ART)
+            val mark = collapse(op.mark)
+            if (mark.isNotEmpty() && (tokens.contains(mark) || collapsed == mark)) return op
         }
         return null
     }

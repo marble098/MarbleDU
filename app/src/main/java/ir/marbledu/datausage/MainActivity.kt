@@ -37,7 +37,10 @@ class MainActivity : ComponentActivity() {
     /** ثبت قبل از STARTED و به‌صورت همیشگی (نه شرطی داخل onCreate). */
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { }
+    ) { results ->
+        val granted = results.entries.filter { it.value }.map { it.key }.toSet()
+        MarbleDuApp.instance.permissionState.value = granted
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
