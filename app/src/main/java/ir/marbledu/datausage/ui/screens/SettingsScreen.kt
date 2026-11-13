@@ -74,6 +74,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val usage by vm.usage.collectAsState()
 
     var showCapDialog by remember { mutableStateOf(false) }
+    var showDailyLimitDialog by remember { mutableStateOf(false) }
     var showCarrierDialog by remember { mutableStateOf(false) }
     var showChangelog by remember { mutableStateOf(false) }
     var showNotifSheet by remember { mutableStateOf(false) }
@@ -288,6 +289,36 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             }
         }
 
+        // ----------------------------------------------------- هشدار مصرف
+        item {
+            SettingsCard(
+                title = if (persian) "هشدار مصرف" else "Usage alerts",
+                description = if (persian) {
+                    "وقتی به سقف روزانه یا ۸۰٪ و ۱۰۰٪ بسته برسی، اعلان می‌گیری"
+                } else "Get notified at your daily limit and at 80% / 100% of your plan",
+                icon = MIcons.Bell,
+            ) {
+                SwitchRow(
+                    label = if (persian) "هشدارها فعال باشند" else "Enable alerts",
+                    checked = settings.usageAlerts,
+                    description = if (persian) "به پایش پس‌زمینه نیاز دارد" else "Requires background monitoring",
+                ) { vm.setUsageAlerts(it) }
+                Text(
+                    text = if (settings.dailyLimitMb > 0) {
+                        (if (persian) "سقف روزانه‌ی دیتای موبایل: " else "Daily mobile-data limit: ") +
+                            Formats.bytes(settings.dailyLimitBytes, persian)
+                    } else {
+                        if (persian) "سقف روزانه تنظیم نشده" else "No daily limit set"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { showDailyLimitDialog = true }) {
+                    Text(if (persian) "تنظیم سقف روزانه" else "Set daily limit")
+                }
+            }
+        }
+
         // --------------------------------------------------- دوره‌ی صورتحساب
         item {
             SettingsCard(
@@ -376,6 +407,43 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             },
             dismissButton = {
                 TextButton(onClick = { showCapDialog = false }) { Text(context.getString(R.string.cancel)) }
+            },
+        )
+    }
+
+    if (showDailyLimitDialog) {
+        var input by remember {
+            mutableStateOf(if (settings.dailyLimitMb > 0) settings.dailyLimitMb.toString() else "")
+        }
+        AlertDialog(
+            onDismissRequest = { showDailyLimitDialog = false },
+            title = { Text(if (persian) "سقف مصرف روزانه" else "Daily limit") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (persian) {
+                            "برای دیتای موبایل، بر حسب مگابایت. خالی یا صفر = خاموش."
+                        } else "For mobile data, in megabytes. Empty or zero turns it off.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { raw ->
+                            input = Formats.normalizeDigits(raw).filter { it.isDigit() }.take(6)
+                        },
+                        label = { Text(context.getString(R.string.mb)) },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.setDailyLimitMb(Formats.normalizeDigits(input).toIntOrNull() ?: 0)
+                    showDailyLimitDialog = false
+                }) { Text(context.getString(R.string.save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDailyLimitDialog = false }) { Text(context.getString(R.string.cancel)) }
             },
         )
     }
@@ -552,6 +620,14 @@ private fun OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 private fun changelogText(persian: Boolean): String = if (persian) {
+    "۱.۳.۰ – آیکون جدید، پینگ واقعی، لوگوی اپراتورها و ۴ قابلیت تازه\n" +
+        "• آیکون کاملاً بازطراحی‌شده با پشتیبانی از همه‌ی شکل‌ها و آیکون تم‌دار\n" +
+        "• پینگ درست شد: تأخیر واقعی تا سرور به‌جای پاسخ محلی VPN (۳–۴ میلی‌ثانیه‌ی اشتباه)\n" +
+        "• تست کیفیت اتصال: داخلی/بین‌الملل، نمره و مناسب بودن برای بازی، تماس و ویدیو\n" +
+        "• لوگوی رسمی اپراتورها کنار نام‌شان\n" +
+        "• هشدار مصرف: سقف روزانه و ۸۰٪ / ۱۰۰٪ بسته\n" +
+        "• پیش‌بینی بسته: چند روز دوام می‌آورد و سهم هر روز\n" +
+        "• ویجت «مصرف امروز» برای صفحه‌ی اصلی\n\n" +
     "۱.۲.۰ – شناسایی هوشمند وای‌فای، فارسی کامل و اعلان دلخواه\n" +
         "• تشخیص چندلایه‌ی اپراتور وای‌فای و هات‌اسپات (IP عمومی، DNS اپراتور، IPv6، دامنه DHCP و نام شبکه)\n" +
         "• تفکیک مودم/روتر از هات‌اسپات آیفون/اندروید و نمایش دلیل در صورت مسدود شدن توسط VPN\n" +
@@ -581,6 +657,14 @@ private fun changelogText(persian: Boolean): String = if (persian) {
         "• فارسی/انگلیسی با چیدمان راست‌چین و چپ‌چین\n" +
         "• طراحی Material 3 Expressive"
 } else {
+    "1.3.0 – New icon, real ping, operator logos & 4 new features\n" +
+        "• Fully redesigned icon for every launcher shape, plus a themed icon\n" +
+        "• Ping fixed: real round-trip delay to the server instead of the VPN's local 3–4 ms reply\n" +
+        "• Connection quality test: Iran/global delay, score, gaming / call / streaming verdict\n" +
+        "• Official operator logos next to their names\n" +
+        "• Usage alerts: daily limit and 80% / 100% of your plan\n" +
+        "• Plan forecast: days left at your pace and a daily budget\n" +
+        "• \"Today's usage\" home-screen widget\n\n" +
     "1.2.0 – Multi-tier Wi-Fi ISP detection, full Persian localization & rich notifications\n" +
         "• Multi-tier Wi-Fi & hotspot operator detection (parallel GeoIP, ISP DNS, IPv6 prefix, DHCP domain & SSID)\n" +
         "• Router vs. iPhone/Android hotspot detection and explicit VPN/captive-portal diagnostics\n" +

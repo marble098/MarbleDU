@@ -21,6 +21,7 @@ import ir.marbledu.datausage.data.NotificationLockVisibility
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.data.UsageLedger
+import ir.marbledu.datausage.widget.UsageWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -228,6 +229,30 @@ class MonitorService : Service() {
 
                 refreshStatsIfNeeded(settings, persian, forceStats = false)
                 postCurrentNotification(down = down, up = up)
+                if (lastStatsFetchAt > 0L) {
+                    runCatching {
+                        UsageAlertNotifier.check(
+                            context = this@MonitorService,
+                            settings = settings,
+                            persian = persian,
+                            todayMobileBytes = cachedTodayMobile.total,
+                            capUsedBytes = cachedMonthMobileBytes,
+                        )
+                        UsageWidgetProvider.push(
+                            this@MonitorService,
+                            UsageWidgetProvider.Snapshot(
+                                persian = persian,
+                                mobileBytes = cachedTodayMobile.total,
+                                wifiBytes = cachedTodayWifi.total,
+                                operatorName = UsageWidgetProvider.operatorName(
+                                    this@MonitorService, persian, settings.operatorOverride,
+                                ),
+                                capUsedBytes = cachedMonthMobileBytes,
+                                capTotalBytes = settings.dataCapBytes,
+                            ),
+                        )
+                    }
+                }
                 delay(intervalSeconds * 1000L)
             }
         }
@@ -242,7 +267,9 @@ class MonitorService : Service() {
         val appRepo = (application as MarbleDuApp).appUsageRepository
         val notif = settings.notification
         val needsUsageStats = notif.showTodayTotal || notif.showTodayMobileWifi ||
-            notif.showDataCap || notif.progressMode != ir.marbledu.datausage.data.NotificationProgressMode.NONE
+            notif.showDataCap || notif.progressMode != ir.marbledu.datausage.data.NotificationProgressMode.NONE ||
+            (settings.usageAlerts && (settings.dailyLimitMb > 0 || settings.dataCapBytes > 0L)) ||
+            UsageWidgetProvider.hasWidgets(this)
         if (needsUsageStats && (forceStats || now - lastStatsFetchAt >= STATS_REFRESH_MS)) {
             runCatching {
                 val (m, w) = appRepo.todayDeviceTraffic()

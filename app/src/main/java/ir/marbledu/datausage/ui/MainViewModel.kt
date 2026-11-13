@@ -95,6 +95,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _ping = MutableStateFlow<List<PingResult>>(emptyList())
     val ping: StateFlow<List<PingResult>> = _ping.asStateFlow()
 
+    private val _pingRunning = MutableStateFlow(false)
+    val pingRunning: StateFlow<Boolean> = _pingRunning.asStateFlow()
+
     private val _peakHours = MutableStateFlow<List<HourUsage>>(emptyList())
     val peakHours: StateFlow<List<HourUsage>> = _peakHours.asStateFlow()
 
@@ -199,16 +202,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun runPingTest() {
         if (pingJob?.isActive == true) return
         pingJob = viewModelScope.launch {
-            _ping.value = emptyList()
-            val results = mutableListOf<PingResult>()
-            monitor.ping().collect { result ->
-                results.add(result)
-                _ping.value = results.toList()
+            _pingRunning.value = true
+            try {
+                _ping.value = emptyList()
+                val results = mutableListOf<PingResult>()
+                monitor.ping().collect { result ->
+                    results.add(result)
+                    _ping.value = results.toList()
+                }
+                // «میانگین پینگ» خانه = مسیری که کاربر واقعاً از آن استفاده می‌کند.
+                val defaultRoute = results.firstOrNull()?.route
+                val avg = results.filter { it.route == defaultRoute && it.ok }.map { it.averageMs }
+                _dashboard.value = _dashboard.value.copy(
+                    averagePingMs = if (avg.isEmpty()) -1.0 else avg.average(),
+                )
+            } finally {
+                _pingRunning.value = false
             }
-            val avg = results.map { it.averageMs }.filter { it > 0 }
-            _dashboard.value = _dashboard.value.copy(
-                averagePingMs = if (avg.isEmpty()) -1.0 else avg.average(),
-            )
         }
     }
 
@@ -287,6 +297,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setPalette(name: String, dynamic: Boolean) = viewModelScope.launch { settingsRepo.setPalette(name, dynamic) }
     fun setDataCap(bytes: Long) = viewModelScope.launch { settingsRepo.setDataCap(bytes) }
     fun setBillingDay(day: Int) = viewModelScope.launch { settingsRepo.setBillingCycleDay(day.coerceIn(1, 28)) }
+    fun setUsageAlerts(on: Boolean) = viewModelScope.launch { settingsRepo.setUsageAlerts(on) }
+    fun setDailyLimitMb(mb: Int) = viewModelScope.launch { settingsRepo.setDailyLimitMb(mb) }
     fun setMonitorInterval(seconds: Int) = viewModelScope.launch {
         settingsRepo.setMonitorInterval(seconds.coerceIn(1, 60))
     }
