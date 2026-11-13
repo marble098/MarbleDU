@@ -22,12 +22,14 @@ class UsageInsightsTest {
         val hours = MutableList(24) { 0L }
         hours[21] = 500 * mb
         val snapshot = UsageInsights.build(days, hours, weekdayOf = { it.toInt() })
-        assertEquals(200 * mb, snapshot.averageDailyBytes)
-        assertEquals(100 * mb, snapshot.averageMobileBytes)
+        // دو روزِ دارای مصرف: (۱۰۰) و (۲۰۰+۲۰۰) → میانگین ۲۵۰، میانگین موبایل ۱۵۰.
+        assertEquals(250 * mb, snapshot.averageDailyBytes)
+        assertEquals(150 * mb, snapshot.averageMobileBytes)
         assertEquals(21, snapshot.peakHour)
         assertEquals(2, snapshot.activeDays)
         assertEquals(500 * mb, snapshot.peakHourBytes)
-        assertEquals(0.5f, snapshot.mobileShare, 0.001f)
+        // ۳۰۰ موبایل از ۵۰۰ کل.
+        assertEquals(0.6f, snapshot.mobileShare, 0.001f)
     }
 
     @Test
