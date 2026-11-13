@@ -3,7 +3,6 @@ package ir.marbledu.datausage.ui
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
@@ -24,7 +23,7 @@ object MIcons {
                 fill = SolidColor(Color.Black),
                 pathFillType = androidx.compose.ui.graphics.PathFillType.NonZero,
             ) {
-                this.pathData = PathParser().parsePathString(pathData).toNodes()
+                addPathNodes(pathData)
             }
         }.build()
 
