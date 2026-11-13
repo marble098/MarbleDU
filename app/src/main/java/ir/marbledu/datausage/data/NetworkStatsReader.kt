@@ -95,9 +95,9 @@ object NetworkStatsReader {
         caps: NetworkCapabilities?,
     ): String {
         if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) return "Wi-Fi"
-        val raw = runCatching { tm?.networkOperatorName }.getOrNull().orEmpty()
+        val raw = runCatching<String?> { tm?.networkOperatorName }.getOrNull().orEmpty()
         if (raw.isNotBlank()) return OperatorCatalog.normalizeDisplay(raw)
-        val sim = runCatching { tm?.simOperatorName }.getOrNull().orEmpty()
+        val sim = runCatching<String?> { tm?.simOperatorName }.getOrNull().orEmpty()
         if (sim.isNotBlank()) return OperatorCatalog.normalizeDisplay(sim)
         return context.getString(ir.marbledu.datausage.R.string.network_unknown)
     }
