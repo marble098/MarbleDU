@@ -56,6 +56,8 @@ object MIcons {
     val Calendar = icon("calendar", "M7 2h2v2h6V2h2v2h3v18H4V4h3zM6 10v10h12V10zM8 12h3v3H8zM13 12h3v3h-3zM8 16h3v2H8z")
     val Sim = icon("sim", "M7 2h7l5 5v15H5V4a2 2 0 0 1 2-2zM8 12v7h8v-7zM10 14h4v3h-4z")
     val Palette = icon("palette", "M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7H17a4 4 0 0 0 4-4c0-4.6-4-8.3-9-8.3zM6.8 12.5a1.4 1.4 0 1 1 0-2.8 1.4 1.4 0 0 1 0 2.8zM9.6 8.3a1.4 1.4 0 1 1 0-2.8 1.4 1.4 0 0 1 0 2.8zM14.4 8.3a1.4 1.4 0 1 1 0-2.8 1.4 1.4 0 0 1 0 2.8zM17.2 12.5a1.4 1.4 0 1 1 0-2.8 1.4 1.4 0 0 1 0 2.8z")
+    val Layout = icon("layout", "M3 21h18v-2H3v2zM3 19h18v-2H3v2zM3 13h18v-2H3v2zM3 7h18V5H3v2z")
+    val Widget = icon("widget", "M4 4h16v16H4zM6 6h12v12H6z")
     val Check = icon("check", "M9.2 16.6L4.8 12.2l-1.4 1.4 5.8 5.8L21 7.6l-1.4-1.4z")
     val ChevronStart = icon("chevron-start", "M15.4 5.4L14 4l-8 8 8 8 1.4-1.4L8.8 12z")
     val ChevronEnd = icon("chevron-end", "M8.6 5.4L10 4l8 8-8 8-1.4-1.4L15.2 12z")

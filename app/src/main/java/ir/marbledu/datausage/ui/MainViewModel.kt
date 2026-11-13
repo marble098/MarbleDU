@@ -21,6 +21,8 @@ import ir.marbledu.datausage.data.NotificationPreset
 import ir.marbledu.datausage.data.PingResult
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.data.TimeMath
+import ir.marbledu.datausage.data.UiMode
+import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.TimeRange
 import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.service.MonitorService
@@ -74,6 +76,14 @@ data class DayReportUi(
     val loading: Boolean = false,
 )
 
+/** ترافیک ساعتی یک اپراتور در یک روز خاص. */
+data class OperatorHourlyUi(
+    val dayStart: Long = 0L,
+    val operatorId: String = "",
+    val hours: List<UsageLedger.HourOperatorTraffic> = emptyList(),
+    val loading: Boolean = false,
+)
+
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = (app as MarbleDuApp).appUsageRepository
@@ -109,6 +119,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _dayReport = MutableStateFlow(DayReportUi())
     val dayReport: StateFlow<DayReportUi> = _dayReport.asStateFlow()
+
+    private val _operatorHourly = MutableStateFlow(OperatorHourlyUi())
+    val operatorHourly: StateFlow<OperatorHourlyUi> = _operatorHourly.asStateFlow()
 
     private var historyJob: Job? = null
     private var dayJob: Job? = null
@@ -303,6 +316,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         settingsRepo.setMonitorInterval(seconds.coerceIn(1, 60))
     }
     fun setOperator(name: String) = viewModelScope.launch { settingsRepo.setOperator(name) }
+
+    /** حالت نمایشی اپ (ساده / پیشرفته). */
+    fun setUiMode(mode: UiMode) = viewModelScope.launch { settingsRepo.setUiMode(mode) }
+
+    fun setWidgetOperator(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetOperator(value) }
+    fun setWidgetCap(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetCap(value) }
+    fun setWidgetDetailed(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetDetailed(value) }
+    fun setWidgetBigText(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetBigText(value) }
+
+    /** ترافیک ساعتی یک اپراتور در روز انتخاب‌شده (برای گزارش ۲۴ ساعت). */
+    fun loadOperatorHourly(dayStart: Long, operatorId: String) {
+        if (dayJob?.isActive == true) return
+        _operatorHourly.value = OperatorHourlyUi(dayStart = dayStart, operatorId = operatorId, loading = true)
+        dayJob = viewModelScope.launch {
+            val hours = repository.hourlyOperatorTraffic(dayStart, operatorId)
+            _operatorHourly.value = OperatorHourlyUi(
+                dayStart = dayStart,
+                operatorId = operatorId,
+                hours = hours,
+                loading = false,
+            )
+        }
+    }
     fun setMonitorBackground(on: Boolean) = viewModelScope.launch {
         settingsRepo.setMonitorBackground(on)
         val context = getApplication<Application>()

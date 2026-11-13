@@ -123,3 +123,20 @@
     <string name="widget_today">مصرف امروز</string>
     <string name="widget_mobile">موبایل</string>
 </resources>
+
+    <string name="ui_mode">حالت نمایش</string>
+    <string name="ui_mode_desc">رابطی ساده برای مبتدیان یا پیشرفته برای حرفه‌ای‌ها</string>
+    <string name="ui_mode_minimal">ساده</string>
+    <string name="ui_mode_minimal_desc">رابط آرام، مرتب و کم‌جزئیات برای مبتدیان و کاربران عادی</string>
+    <string name="ui_mode_advanced">پیشرفته</string>
+    <string name="ui_mode_advanced_desc">جزئیات کامل، گزارش‌های پیشرفته و امکانات حرفه‌ای</string>
+
+    <string name="widget_settings">تنظیمات ویجت</string>
+    <string name="widget_settings_desc">محتوا و ظاهر ویجت صفحه‌ی اصلی را انتخاب کنید</string>
+    <string name="widget_show_operator">نمایش نام و لوگو اپراتور</string>
+    <string name="widget_show_cap">نمایش سقف بسته و پیشرفت</string>
+    <string name="widget_detailed">حالت کامل (جزئیات بیشتر)</string>
+    <string name="widget_big_text">اندازه متن بزرگ</string>
+
+    <string name="about_view_repo">مشاهده در گیت‌هاب</string>
+

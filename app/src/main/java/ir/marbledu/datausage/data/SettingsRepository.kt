@@ -170,6 +170,12 @@ data class NotificationConfig(
     }
 }
 
+/** حالت نمایشی اپ: «ساده» برای مبتدیان و کاربران عادی (رابط آرام، مرتب و کم‌جزئیات) و «پیشرفته» برای کاربران حرفه‌ای. */
+enum class UiMode(val fa: String, val en: String) {
+    MINIMAL("ساده", "Minimal"),
+    ADVANCED("پیشرفته", "Advanced"),
+}
+
 data class AppSettings(
     val language: AppLanguage = AppLanguage.SYSTEM,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -188,6 +194,16 @@ data class AppSettings(
     val usageAlerts: Boolean = true,
     /** سقف مصرف روزانه‌ی دیتای موبایل بر حسب مگابایت؛ ۰ یعنی خاموش. */
     val dailyLimitMb: Int = 0,
+    /** حالت نمایشی اپ: ساده یا پیشرفته. */
+    val uiMode: UiMode = UiMode.ADVANCED,
+    /** ویجت: نمایش نام و لوگو اپراتور فعلی. */
+    val widgetShowOperator: Boolean = true,
+    /** ویجت: نمایش سقف بسته و نوار پیشرفت. */
+    val widgetShowCap: Boolean = true,
+    /** ویجت: حالت کامل (جزئیات بیشتر، مثل ساعت پرمصرف و بقیه‌ی جزئیات). */
+    val widgetDetailed: Boolean = false,
+    /** ویجت: اندازه متن بزرگتر. */
+    val widgetBigText: Boolean = false,
 ) {
     val dailyLimitBytes: Long get() = dailyLimitMb.toLong() * 1024L * 1024L
 }
@@ -207,6 +223,12 @@ class SettingsRepository(private val context: Context) {
         val PALETTE = stringPreferencesKey("palette")
         val USAGE_ALERTS = booleanPreferencesKey("usage_alerts")
         val DAILY_LIMIT_MB = intPreferencesKey("daily_limit_mb")
+
+        val UI_MODE = stringPreferencesKey("ui_mode")
+        val WIDGET_OPERATOR = booleanPreferencesKey("widget_operator")
+        val WIDGET_CAP = booleanPreferencesKey("widget_cap")
+        val WIDGET_DETAILED = booleanPreferencesKey("widget_detailed")
+        val WIDGET_BIG_TEXT = booleanPreferencesKey("widget_big_text")
 
         val NOTIF_STYLE = stringPreferencesKey("notif_style")
         val NOTIF_TITLE_MODE = stringPreferencesKey("notif_title_mode")
@@ -282,6 +304,12 @@ class SettingsRepository(private val context: Context) {
             notification = readNotificationConfig(p),
             usageAlerts = p[Keys.USAGE_ALERTS] ?: true,
             dailyLimitMb = p[Keys.DAILY_LIMIT_MB] ?: 0,
+            uiMode = p[Keys.UI_MODE]?.let { runCatching { UiMode.valueOf(it) }.getOrNull() }
+                ?: UiMode.ADVANCED,
+            widgetShowOperator = p[Keys.WIDGET_OPERATOR] ?: true,
+            widgetShowCap = p[Keys.WIDGET_CAP] ?: true,
+            widgetDetailed = p[Keys.WIDGET_DETAILED] ?: false,
+            widgetBigText = p[Keys.WIDGET_BIG_TEXT] ?: false,
         )
     }
 
@@ -302,6 +330,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setUsageAlerts(value: Boolean) = context.dataStore.edit { it[Keys.USAGE_ALERTS] = value }
     suspend fun setDailyLimitMb(value: Int) = context.dataStore.edit { it[Keys.DAILY_LIMIT_MB] = value.coerceIn(0, 1_000_000) }
+
+    suspend fun setUiMode(value: UiMode) = context.dataStore.edit { it[Keys.UI_MODE] = value.name }
+
+    suspend fun setWidgetOperator(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_OPERATOR] = value }
+    suspend fun setWidgetCap(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_CAP] = value }
+    suspend fun setWidgetDetailed(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_DETAILED] = value }
+    suspend fun setWidgetBigText(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_BIG_TEXT] = value }
 
     suspend fun setOnboarded(value: Boolean) = context.dataStore.edit { it[Keys.ONBOARDED] = value }
 

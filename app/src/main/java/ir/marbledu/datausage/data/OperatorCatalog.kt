@@ -82,8 +82,8 @@ object OperatorCatalog {
             isMobile = true,
         ),
         Operator(
-            "lotustel", "لوتوس‌تل", "LotusTel", "LTS", 0xFF5E35B1, 0xFF9575CD,
-            keywords = listOf("lotustel", "لوتوستل"),
+            "lotustel", "لوتوس تل", "Lotus Tel", "LTS", 0xFF5E35B1, 0xFF9575CD,
+            keywords = listOf("lotustel", "lotus tel", "lotus-tel", "لوتوستل", "لوتوس تل", "لوتوس‌تل"),
             isMobile = true,
         ),
         Operator(
@@ -101,6 +101,18 @@ object OperatorCatalog {
             "mtce", "اسپادان", "MTCE (Espadan)", "MTC", 0xFF5D4037, 0xFFA1887F,
             mncs = listOf("19"),
             keywords = listOf("mtce", "espadan", "اسپادان"),
+            isMobile = true,
+        ),
+        Operator(
+            "fanapmobile", "فناپ موبایل", "Fanap Mobile", "FNP", 0xFF6D4C41, 0xFF9E9E9E,
+            keywords = listOf(
+                "fanap", "فناپ", "fanapmobile", "فناپموبایل", "fanap mobile", "فناپ موبایل",
+            ),
+            isMobile = true,
+        ),
+        Operator(
+            "arintel", "ارین تل", "Arin Tel", "ART", 0xFF455A64, 0xFF78909C,
+            keywords = listOf("arin", "ارین", "arintel", "ارینتل", "arin tel", "ارین تل"),
             isMobile = true,
         ),
     )
@@ -137,12 +149,14 @@ object OperatorCatalog {
             keywords = listOf("parsonline", "پارسآنلاین", "پارسانلاین"),
         ),
         Operator(
-            "mobinnet", "مبین‌نت", "MobinNet", "MBN", 0xFF6A1B9A, 0xFFAB47BC,
-            asns = listOf(50810),
-            keywords = listOf("mobinnet", "مبیننت"),
-        ),
         Operator(
-            "sabanet", "صبانت", "SabaNet", "SBN", 0xFF2E7D32, 0xFF9CCC65,
+            "mobinnet", "مبین نت", "Mobin Net", "MBN", 0xFF6A1B9A, 0xFFAB47BC,
+            asns = listOf(50810),
+            keywords = listOf(
+                "mobinnet", "mobin net", "mobin-net", "مبیننت", "مبین نت", "مبین نتم", "مبین‌نت",
+            ),
+            isMobile = true,
+        ),
             asns = listOf(39501),
             keywords = listOf("sabanet", "nedagostarsaba", "صبانت"),
         ),

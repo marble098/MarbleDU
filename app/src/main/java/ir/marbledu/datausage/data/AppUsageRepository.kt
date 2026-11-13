@@ -368,6 +368,14 @@ class AppUsageRepository(private val context: Context) {
         name to top.total.total
     }
 
+    /** ترافیک ساعتی یک روز به تفکیک یک اپراتور (برای گزارش ۲۴ ساعت). */
+    suspend fun hourlyOperatorTraffic(
+        dayStart: Long,
+        operatorId: String,
+    ): List<UsageLedger.HourOperatorTraffic> = withContext(Dispatchers.IO) {
+        UsageLedger.hourlyForDay(context, dayStart).filter { it.operatorId == operatorId }
+    }
+
     /** گزارش کامل یک روز. */
     suspend fun dayReport(summary: DaySummary): DayReport {
         val now = System.currentTimeMillis()

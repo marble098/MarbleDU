@@ -33,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -111,6 +112,7 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     var hourMode by rememberSaveable { mutableStateOf(0) }
     var showAllApps by remember(dayUi.dayStart) { mutableStateOf(false) }
     var appSelection by remember(dayUi.dayStart) { mutableStateOf<Int?>(null) }
+    var selectedOperatorId by remember(dayUi.dayStart) { mutableStateOf<String?>(null) }
 
     val monthMobile = days.fold(0L) { acc, d -> acc + d.mobile.total }
     val monthWifi = days.fold(0L) { acc, d -> acc + d.wifi.total }
@@ -312,6 +314,19 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             selection = appSelection,
                             onSelect = { appSelection = it },
                         )
+                    }
+
+                    // ------------------------------------------------ ۲۴ ساعت اپراتور انتخاب‌شده
+                    if (selectedOperatorId != null) {
+                        item {
+                            OperatorHourlyCard(
+                                vm = vm,
+                                dayStart = dayUi.dayStart,
+                                operatorId = selectedOperatorId!!,
+                                persian = persian,
+                                onDismiss = { selectedOperatorId = null },
+                            )
+                        }
                     }
                 }
             }
@@ -609,7 +624,7 @@ private fun OperatorsCard(report: DayReport, persian: Boolean) {
                 color = scheme.onSurfaceVariant,
             )
         }
-        rows.forEach { row -> OperatorRow(row, total, persian) }
+        rows.forEach { row -> OperatorRow(row, total, persian, onSelect = { selectedOperatorId = it }) }
         if (rows.any { it.estimated && it.transport == UsageLedger.WIFI }) {
             Text(
                 text = if (persian) {
@@ -631,7 +646,12 @@ private fun OperatorsCard(report: DayReport, persian: Boolean) {
 }
 
 @Composable
-private fun OperatorRow(row: OperatorTraffic, total: Long, persian: Boolean) {
+private fun OperatorRow(
+    row: OperatorTraffic,
+    total: Long,
+    persian: Boolean,
+    onSelect: (String) -> Unit = {},
+) {
     val context = LocalContext.current
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
@@ -643,7 +663,12 @@ private fun OperatorRow(row: OperatorTraffic, total: Long, persian: Boolean) {
         row.operatorId == OperatorCatalog.ID_MOBILE -> if (persian) "سیم‌کارت نامشخص" else "Unknown SIM"
         else -> operator.name(persian)
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = { if (row.operatorId != OperatorCatalog.ID_WIFI && row.operatorId != OperatorCatalog.ID_MOBILE) onSelect(row.operatorId) }),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         OperatorBadge(operator, size = 46.dp, transportIcon = if (wifi) MIcons.Wifi else MIcons.Signal)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -1064,3 +1089,98 @@ private fun DayRow(
         }
     }
 }
+
+@Composable
+private fun OperatorHourlyCard(
+    vm: MainViewModel,
+    dayStart: Long,
+    operatorId: String,
+    persian: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val marble = LocalMarbleColors.current
+    val operator = OperatorCatalog.byId(operatorId)
+    val hourly by vm.operatorHourly.collectAsState()
+    val loading = hourly.loading && hourly.dayStart == dayStart && hourly.operatorId == operatorId
+
+    LaunchedEffect(dayStart, operatorId) {
+        if (hourly.dayStart != dayStart || hourly.operatorId != operatorId || !hourly.loading) {
+            vm.loadOperatorHourly(dayStart, operatorId)
+        }
+    }
+
+    MarbleCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(MIcons.ArrowForward, null, Modifier.size(18.dp), tint = scheme.primary)
+                    Spacer(Modifier.size(8.dp))
+                    Column {
+                        Text(
+                            text = if (persian) "۲۴ ساعت: ${operator.name(persian)}" else "24h: ${operator.name(persian)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = scheme.onSurface,
+                        )
+                        Text(
+                            text = operator.mark,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(if (persian) "بسته شود" else "Dismiss")
+                }
+            }
+
+            val hours = if (hourly.dayStart == dayStart && hourly.operatorId == operatorId) hourly.hours else emptyList()
+            if (hourly.loading && hours.isEmpty()) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center), strokeWidth = 4.dp)
+            } else if (hours.isEmpty()) {
+                Text(
+                    text = if (persian) "داده‌ی ساعتی برای این اپراتور ثبت نشده" else "No hourly data for this operator",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    val max = hours.maxOfOrNull { it.total } ?: 1L
+                    hours.forEach { h ->
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .background(marble.mobile.copy(alpha = 0.15f + 0.6f * (h.total.toFloat() / max))),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Text(
+                                    text = Formats.bytes(h.total, persian),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = scheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = "${h.hour}:00",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = scheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
