@@ -65,14 +65,14 @@ class AppUsageRepository(private val context: Context) {
                         packageName = pkg ?: "uid:$uid",
                         label = labelFor(pkg),
                         bytes = bytes,
-                        firstTimestamp = bucket.firstTimestamp.toLong().takeIf { it > 0 } ?: fromMillis,
-                        lastTimestamp = bucket.lastTimestamp.toLong().takeIf { it > 0 } ?: toMillis,
+                        firstTimestamp = bucket.startTimeStamp.takeIf { it > 0 } ?: fromMillis,
+                        lastTimestamp = bucket.endTimeStamp.takeIf { it > 0 } ?: toMillis,
                     )
                 } else {
                     result[uid] = existing.copy(
                         bytes = existing.bytes + bytes,
-                        firstTimestamp = minOf(existing.firstTimestamp, bucket.firstTimestamp.toLong()),
-                        lastTimestamp = maxOf(existing.lastTimestamp, bucket.lastTimestamp.toLong()),
+                        firstTimestamp = minOf(existing.firstTimestamp, bucket.startTimeStamp),
+                        lastTimestamp = maxOf(existing.lastTimestamp, bucket.endTimeStamp),
                     )
                 }
             }
