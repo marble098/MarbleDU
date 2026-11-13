@@ -73,8 +73,10 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (iran.detectOperator) {
                         InfoChip(
-                            text = dashboard.operatorName.ifBlank {
-                                context.getString(R.string.network_unknown)
+                            text = settings.operatorOverride.ifBlank {
+                                dashboard.operatorName.ifBlank {
+                                    context.getString(R.string.network_unknown)
+                                }
                             },
                             color = MaterialTheme.colorScheme.tertiary,
                         )

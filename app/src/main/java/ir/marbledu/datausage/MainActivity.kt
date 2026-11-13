@@ -1,10 +1,14 @@
 package ir.marbledu.datausage
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
@@ -17,12 +21,14 @@ import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.ui.AppRoot
 import ir.marbledu.datausage.ui.MainViewModel
+import ir.marbledu.datausage.service.MonitorService
 import ir.marbledu.datausage.ui.theme.MarbleDuTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        requestNotificationPermission()
         setContent {
             val vm: MainViewModel = viewModel()
             val settings by vm.settings.collectAsState()
@@ -40,6 +46,22 @@ class MainActivity : ComponentActivity() {
                 AppRoot(vm = vm, settings = settings)
             }
         }
+    }
+
+    /** اجازه‌ی اعلان (اندروید ۱۳+) تا سرعت در نوار اعلان دیده شود. */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+                .launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        MonitorService.start(this)
     }
 }
 

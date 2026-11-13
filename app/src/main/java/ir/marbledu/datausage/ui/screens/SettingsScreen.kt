@@ -103,12 +103,13 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
 
         item {
             SettingsCard(
-                title = context.getString(R.string.expressive_design),
+                title = context.getString(R.string.appearance),
                 description = context.getString(R.string.expressive_desc),
                 icon = MIcons.Speed,
             ) {
                 SwitchRow(
                     label = context.getString(R.string.expressive_design),
+                    description = context.getString(R.string.expressive_desc),
                     checked = settings.expressiveDesign,
                     onCheckedChange = { vm.setExpressive(it) },
                 )
