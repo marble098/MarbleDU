@@ -1,0 +1,147 @@
+name: Build APK (all ABIs)
+
+# بعد از هر merge روی main (و هر تگ نسخه) APK همه‌ی معماری‌ها ساخته می‌شود
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build signed APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install SDK platforms
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-37.2" "build-tools;37.0.0" > /dev/null 2>&1 || \
+          sdkmanager "platform-tools" "platforms;android-37.1" "build-tools;36.0.0" > /dev/null 2>&1 || true
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon testDebugUnitTest --stacktrace > gradle-test.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            awk '/What went wrong/{flag=1} flag' gradle-test.log | head -25 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
+          fi
+          exit $code
+
+      - name: Build debug + release (per-ABI + universal)
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace > gradle-build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            awk '/What went wrong/{flag=1} flag' gradle-build.log | head -25 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
+          fi
+          exit $code
+
+      - name: Verify signing (all APKs, identical certificate)
+        shell: bash
+        run: |
+          set -e
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "Build tools: $BT"
+          FINGERPRINTS=""
+          for apk in $(find app/build/outputs/apk -name '*.apk' | sort); do
+            echo "── $apk"
+            OUT=$("$BT/apksigner" verify --print-certs "$apk" 2>&1) || { echo "::error::apksigner failed for $apk"; echo "$OUT"; exit 1; }
+            FP=$(echo "$OUT" | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}')
+            echo "   SHA-256: $FP"
+            FINGERPRINTS="$FINGERPRINTS$apk -> $FP\n"
+          done
+          echo -e "$FINGERPRINTS"
+          UNIQUE=$(printf "%b" "$FINGERPRINTS" | grep -v '^$' | awk -F'-> ' '{print $2}' | sort -u | wc -l)
+          echo "Unique certificates: $UNIQUE"
+          if [ "$UNIQUE" != "1" ]; then echo "::error::APKs are not signed with the same certificate"; exit 1; fi
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          find app/build/outputs/apk -name '*.apk' -exec cp {} dist/ \;
+          ls -la dist
+          {
+            echo "### APK ها"
+            echo "| فایل | حجم |"
+            echo "|---|---|"
+            for f in dist/*.apk; do
+              printf "| %s | %s |\n" "$(basename "$f")" "$(du -h "$f" | cut -f1)"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload per-architecture APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: MarbleDU-apk-${{ github.sha }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Attach APKs to GitHub Release
+    needs: build
+    # اگر در تنظیمات ریپو اجازه‌ی نوشتن برای workflow فعال نباشد، بیلد APK
+    # همچنان موفق می‌ماند و فقط مرحله‌ی انتشار رد می‌شود.
+    continue-on-error: true
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: MarbleDU-apk-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            TITLE="${TAG}"
+          else
+            TAG="build-${GITHUB_RUN_NUMBER}"
+            TITLE="Build #${GITHUB_RUN_NUMBER}"
+          fi
+          echo "Publishing $TAG"
+          gh release create "$TAG" dist/*.apk \
+            --title "$TITLE" \
+            --notes-file CHANGELOG.md \
+            --target "$GITHUB_SHA" || \
+          gh release upload "$TAG" dist/*.apk --clobber
