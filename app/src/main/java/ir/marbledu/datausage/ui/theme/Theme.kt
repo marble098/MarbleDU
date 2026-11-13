@@ -102,7 +102,7 @@ fun MarbleDuTheme(
 
     // در حالت روشن و بدون رنگ پویا از پالت Expressive خودمان استفاده می‌کنیم.
     val scheme: ColorScheme = if (expressive && !darkTheme && !dynamicColor) {
-        expressiveLightColorScheme(
+        expressiveLightColorScheme().copy(
             primary = MarblePrimary,
             secondary = MarbleSecondary,
             tertiary = MarbleTertiary,
