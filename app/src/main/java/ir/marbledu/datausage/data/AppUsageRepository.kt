@@ -122,12 +122,19 @@ class AppUsageRepository(private val context: Context) {
 
     /** مجموع بایت‌های کل دستگاه از تاریخچه‌ی رسمی اندروید (نه جمع تخمینی اپ‌ها). */
     @SuppressLint("MissingPermission")
-    suspend fun aggregateTraffic(fromMillis: Long, toMillis: Long, type: ConnectionType): Traffic =
+    suspend fun aggregateTraffic(
+        fromMillis: Long,
+        toMillis: Long,
+        type: ConnectionType,
+        epochMillis: Long = 0L,
+    ): Traffic =
         withContext(Dispatchers.IO) {
             val manager = nsm ?: return@withContext Traffic()
+            val from = if (epochMillis > 0L) maxOf(fromMillis, epochMillis) else fromMillis
+            if (toMillis <= from) return@withContext Traffic()
             val networkType = if (type == ConnectionType.WIFI) ConnectivityManager.TYPE_WIFI
             else ConnectivityManager.TYPE_MOBILE
-            deviceTraffic(manager, networkType, if (type == ConnectionType.WIFI) null else subscriberId(), fromMillis, toMillis)
+            deviceTraffic(manager, networkType, if (type == ConnectionType.WIFI) null else subscriberId(), from, toMillis)
         }
 
     /** نوع اتصال فعلی (برای این‌که «مصرف امروز» همان چیزی باشد که کاربر انتظار دارد). */
@@ -141,7 +148,7 @@ class AppUsageRepository(private val context: Context) {
      * مستقیماً از تاریخچه‌ی NetworkStatsManager خوانده می‌شود؛ نیازی به ذخیره‌سازی نیست.
      */
     @SuppressLint("MissingPermission")
-    suspend fun dailyTotals(days: Int, type: ConnectionType): List<DayUsage> =
+    suspend fun dailyTotals(days: Int, type: ConnectionType, epochMillis: Long = 0L): List<DayUsage> =
         withContext(Dispatchers.IO) {
             val manager = nsm ?: return@withContext emptyList()
             val networkType = if (type == ConnectionType.WIFI) ConnectivityManager.TYPE_WIFI
@@ -161,9 +168,12 @@ class AppUsageRepository(private val context: Context) {
                 val start = calendar.timeInMillis
                 calendar.add(Calendar.DAY_OF_MONTH, 1)
                 val end = calendar.timeInMillis
-                val bytes = runCatching {
+                val from = if (epochMillis > 0L) maxOf(start, epochMillis) else start
+                val bytes = if (from >= end) {
+                    0L
+                } else runCatching {
                     val bucket =
-                        manager.querySummaryForDevice(networkType, subscriber, start, end)
+                        manager.querySummaryForDevice(networkType, subscriber, from, end)
                     bucket.rxBytes + bucket.txBytes
                 }.getOrDefault(0L)
                 result.add(DayUsage(start, bytes))
@@ -237,8 +247,12 @@ class AppUsageRepository(private val context: Context) {
         }.getOrDefault(Traffic())
     }
 
-    /** خلاصه‌ی هر روز از [days] روز اخیر (قدیمی‌ترین اول): دانلود/آپلودِ موبایل و وای‌فای. */
-    suspend fun daySummaries(days: Int = 30): List<DaySummary> = withContext(Dispatchers.IO) {
+    /**
+     * خلاصه‌ی هر روز از [days] روز اخیر (قدیمی‌ترین اول): دانلود/آپلودِ موبایل و وای‌فای.
+     * اگر [epochMillis] بزرگ‌تر از صفر باشد، روزهای قبل از آن اصلاً نشان داده نمی‌شوند
+     * (شروع آمارگیری از روز خاص) و برای روز شروع، شمارش از همان لحظه انجام می‌شود.
+     */
+    suspend fun daySummaries(days: Int = 30, epochMillis: Long = 0L): List<DaySummary> = withContext(Dispatchers.IO) {
         val manager = nsm ?: return@withContext emptyList()
         val subscriber = subscriberId()
         val now = System.currentTimeMillis()
@@ -254,15 +268,20 @@ class AppUsageRepository(private val context: Context) {
         repeat(days.coerceAtLeast(0)) {
             val start = calendar.timeInMillis
             calendar.add(Calendar.DAY_OF_MONTH, 1)
-            val end = minOf(calendar.timeInMillis, now)
-            result.add(
-                DaySummary(
-                    startMillis = start,
-                    endMillis = calendar.timeInMillis,
-                    mobile = deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriber, start, end),
-                    wifi = deviceTraffic(manager, ConnectivityManager.TYPE_WIFI, null, start, end),
-                ),
-            )
+            val dayEnd = calendar.timeInMillis
+            val end = minOf(dayEnd, now)
+            val from = if (epochMillis > 0L) maxOf(start, epochMillis) else start
+            if (end > from) {
+                result.add(
+                    DaySummary(
+                        startMillis = start,
+                        endMillis = dayEnd,
+                        mobile = deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriber, from, end),
+                        wifi = deviceTraffic(manager, ConnectivityManager.TYPE_WIFI, null, from, end),
+                    ),
+                )
+            }
+            // روزهای قبل از شروع آمارگیری نادیده گرفته می‌شوند.
         }
         result
     }
@@ -358,10 +377,11 @@ class AppUsageRepository(private val context: Context) {
     }
 
     /** مجموع مصرف ۳۰ روزه‌ی موبایل برای محاسبه‌ی باقی‌مانده‌ی سقف بسته. */
-    suspend fun monthMobileTotal(): Long = withContext(Dispatchers.IO) {
+    suspend fun monthMobileTotal(epochMillis: Long = 0L): Long = withContext(Dispatchers.IO) {
         val manager = nsm ?: return@withContext 0L
         val now = System.currentTimeMillis()
-        val start = now - TimeRange.MONTH.millis()
+        val start = if (epochMillis > 0L) maxOf(now - TimeRange.MONTH.millis(), epochMillis)
+        else now - TimeRange.MONTH.millis()
         val fromApps = usageByApp(start, now, ConnectionType.CELLULAR).sumOf { it.bytes }
         if (fromApps > 0L) return@withContext fromApps
         deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriberId(), start, now).total
@@ -400,12 +420,133 @@ class AppUsageRepository(private val context: Context) {
         }
     }
 
+    /**
+     * مصرف هر اپراتور در بازه‌ی [fromMillis, toMillis) به تفکیک وای‌فای و داده‌ی موبایل.
+     * روزهای تقویمی کامل محاسبه می‌شوند (مثل دفتر اپراتور که روزانه است).
+     * روزهای قبل از [epochMillis] نادیده گرفته می‌شوند.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun operatorRange(
+        fromMillis: Long,
+        toMillis: Long,
+        epochMillis: Long = 0L,
+    ): List<OperatorRangeRow> = withContext(Dispatchers.IO) {
+        val manager = nsm ?: return@withContext emptyList()
+        val subscriber = subscriberId()
+        val from = if (epochMillis > 0L) maxOf(fromMillis, epochMillis) else fromMillis
+        val to = maxOf(from, toMillis)
+        val defaultMobileId = NetworkStatsReader.simOperator(context)?.id ?: OperatorCatalog.ID_MOBILE
+        val calendar = Calendar.getInstance().apply {
+            timeInMillis = from
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val acc = LinkedHashMap<Pair<String, SimIdentity?>, OperatorRangeRow>()
+        var guard = 0
+        while (calendar.timeInMillis < to && guard < 62) {
+            guard++
+            val dayStart = calendar.timeInMillis
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
+            val dayEnd = calendar.timeInMillis
+            if (epochMillis > 0L && dayEnd <= epochMillis) continue
+            val sliceFrom = maxOf(dayStart, from)
+            val sliceEnd = minOf(dayEnd, to)
+            if (sliceEnd <= sliceFrom) continue
+            val mobile = deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriber, sliceFrom, sliceEnd)
+            val wifi = deviceTraffic(manager, ConnectivityManager.TYPE_WIFI, null, sliceFrom, sliceEnd)
+            val recorded = UsageLedger.forDay(context, dayStart)
+            val rows = UsageLedger.reconcile(recorded, mobile, wifi, defaultMobileId)
+            rows.forEach { row ->
+                val key = row.operatorId to row.sim
+                val prev = acc[key] ?: OperatorRangeRow(row.operatorId, row.sim, Traffic(), Traffic())
+                acc[key] = if (row.transport == UsageLedger.MOBILE) {
+                    prev.copy(mobile = prev.mobile + row.traffic)
+                } else {
+                    prev.copy(wifi = prev.wifi + row.traffic)
+                }
+            }
+        }
+        acc.values.sortedByDescending { it.total.total }
+    }
+
+    /**
+     * ریز مصرف یک اپراتور در [days] روز اخیر (قدیمی‌ترین اول):
+     * مصرف روزانه به تفکیک اتصال + نمودار ۲۴ ساعته‌ی جمع‌شده در کل بازه.
+     */
+    suspend fun operatorDetail(
+        operatorId: String,
+        sim: SimIdentity?,
+        days: Int = 30,
+        epochMillis: Long = 0L,
+    ): OperatorDetailData = withContext(Dispatchers.IO) {
+        val manager = nsm
+        val subscriber = subscriberId()
+        val defaultMobileId = NetworkStatsReader.simOperator(context)?.id ?: OperatorCatalog.ID_MOBILE
+        val calendar = Calendar.getInstance().apply {
+            timeInMillis = System.currentTimeMillis()
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            add(Calendar.DAY_OF_MONTH, -(days - 1).coerceAtLeast(0))
+        }
+        val now = System.currentTimeMillis()
+        val dayStats = ArrayList<OperatorDayStat>(days.coerceAtLeast(0))
+        val hourAgg = HashMap<Int, Traffic>()
+        var guard = 0
+        while (guard < days.coerceAtLeast(0)) {
+            guard++
+            val dayStart = calendar.timeInMillis
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
+            val dayEnd = calendar.timeInMillis
+            if (epochMillis > 0L && dayEnd <= epochMillis) continue
+            val sliceEnd = minOf(dayEnd, now)
+            val sliceFrom = if (epochMillis > 0L) maxOf(dayStart, epochMillis) else dayStart
+            val recorded = UsageLedger.forDay(context, dayStart)
+            var mobile = Traffic()
+            var wifi = Traffic()
+            if (manager != null && sliceEnd > sliceFrom) {
+                val systemMobile =
+                    deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriber, sliceFrom, sliceEnd)
+                val systemWifi = deviceTraffic(manager, ConnectivityManager.TYPE_WIFI, null, sliceFrom, sliceEnd)
+                UsageLedger.reconcile(recorded, systemMobile, systemWifi, defaultMobileId)
+                    .filter { it.operatorId == operatorId && it.sim == sim }
+                    .forEach { row ->
+                        if (row.transport == UsageLedger.MOBILE) mobile += row.traffic else wifi += row.traffic
+                    }
+            } else {
+                recorded.filter { it.operatorId == operatorId && it.sim == sim }.forEach { row ->
+                    if (row.transport == UsageLedger.MOBILE) mobile += row.traffic else wifi += row.traffic
+                }
+            }
+            dayStats.add(OperatorDayStat(dayStart, mobile, wifi))
+            UsageLedger.hourlyForDay(context, dayStart)
+                .filter { it.operatorId == operatorId && it.sim == sim }
+                .forEach { hourTraffic ->
+                    hourAgg[hourTraffic.hour] = (hourAgg[hourTraffic.hour] ?: Traffic()) + hourTraffic.traffic
+                }
+        }
+        val hours = (0..23).map { hour ->
+            HourOperatorTraffic(
+                hour = hour,
+                operatorId = operatorId,
+                transport = "mixed",
+                traffic = hourAgg[hour] ?: Traffic(),
+                sim = sim,
+            )
+        }
+        OperatorDetailData(days = dayStats, hours = hours)
+    }
+
     /** گزارش کامل یک روز. فایل محلی و پرس‌وجوهای شبکه همگی روی IO اجرا می‌شوند. */
-    suspend fun dayReport(summary: DaySummary): DayReport = withContext(Dispatchers.IO) {
+    suspend fun dayReport(summary: DaySummary, epochMillis: Long = 0L): DayReport = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val end = minOf(summary.endMillis, now)
-        val hours = dayHours(summary.startMillis, summary.endMillis)
-        val apps = appTraffic(summary.startMillis, end)
+        val from = if (epochMillis > 0L) maxOf(summary.startMillis, epochMillis) else summary.startMillis
+        val hours = dayHours(from, summary.endMillis)
+        val apps = appTraffic(from, end)
         val recorded = UsageLedger.forDay(context, summary.startMillis)
         val sessions = UsageLedger.sessionsForDay(context, summary.startMillis)
         val operatorHours = UsageLedger.hourlyForDay(context, summary.startMillis)
@@ -433,9 +574,10 @@ class AppUsageRepository(private val context: Context) {
     }
 
     /** مصرف تک‌تک اپ‌ها به تفکیک وای‌فای و موبایل (نمای جزئیات). */
-    suspend fun detailedBreakdown(from: Long, to: Long): Pair<List<AppUsage>, List<AppUsage>> {
-        val mobile = usageByApp(from, to, ConnectionType.CELLULAR)
-        val wifi = usageByApp(from, to, ConnectionType.WIFI)
+    suspend fun detailedBreakdown(from: Long, to: Long, epochMillis: Long = 0L): Pair<List<AppUsage>, List<AppUsage>> {
+        val effectiveFrom = if (epochMillis > 0L) maxOf(from, epochMillis) else from
+        val mobile = usageByApp(effectiveFrom, to, ConnectionType.CELLULAR)
+        val wifi = usageByApp(effectiveFrom, to, ConnectionType.WIFI)
         return mobile to wifi
     }
 
@@ -450,6 +592,27 @@ class AppUsageRepository(private val context: Context) {
         pkg?.let { pm.getApplicationIcon(it) }
     }.getOrNull()
 }
+
+/** مجموع مصرف یک اپراتور (یا وای‌فای/نامشخص) در یک بازه، تفکیک اتصال. */
+data class OperatorDayStat(val dayStart: Long, val mobile: Traffic, val wifi: Traffic) {
+    val total: Long get() = mobile.total + wifi.total
+}
+
+/** ردیف مصرف اپراتور در بازه‌ی دلخواه، برای کارت «اپراتورها». */
+data class OperatorRangeRow(
+    val operatorId: String,
+    val sim: SimIdentity?,
+    val mobile: Traffic,
+    val wifi: Traffic,
+) {
+    val total: Traffic get() = mobile + wifi
+}
+
+/** داده‌ی کامل صفحه‌ی جزئیات اپراتور: مصرف روزانه‌ی ۳۰ روز + هیستوگرام ساعتی کل بازه. */
+data class OperatorDetailData(
+    val days: List<OperatorDayStat>,
+    val hours: List<HourOperatorTraffic>,
+)
 
 data class DayUsage(val startMillis: Long, val bytes: Long)
 

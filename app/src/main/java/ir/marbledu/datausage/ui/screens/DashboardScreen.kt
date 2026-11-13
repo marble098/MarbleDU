@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +51,7 @@ import ir.marbledu.datausage.ui.HistoryUi
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.JalaliDate
+import ir.marbledu.datausage.data.SimIdentity
 import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.NetworkSnapshot
 import ir.marbledu.datausage.data.OperatorCatalog
@@ -63,6 +66,7 @@ import ir.marbledu.datausage.ui.HeroCard
 import ir.marbledu.datausage.ui.InfoChip
 import ir.marbledu.datausage.ui.LegendDot
 import ir.marbledu.datausage.ui.MIcons
+import ir.marbledu.datausage.ui.LargeTitleScaffold
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.MarbleCard
 import ir.marbledu.datausage.ui.Metric
@@ -76,7 +80,12 @@ import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import ir.marbledu.datausage.util.UsageAccess
 
 @Composable
-fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
+fun DashboardScreen(
+    vm: MainViewModel,
+    settings: AppSettings,
+    persian: Boolean,
+    onOpenOperatorDetail: (operatorId: String, sim: SimIdentity?) -> Unit,
+) {
     val context = LocalContext.current
     val dashboard by vm.dashboard.collectAsState()
     val usage by vm.usage.collectAsState()
@@ -84,33 +93,20 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
 
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(top = 8.dp, bottom = FloatingBarClearance),
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val homeTabs = if (persian) listOf("امروز", "بسته و اپراتورها") else listOf("Today", "Plan & operators")
+    val listState = rememberLazyListState()
+    LargeTitleScaffold(
+        title = context.getString(R.string.app_name),
+        listState = listState,
+        subtitle = JalaliDate.weekday(System.currentTimeMillis(), persian) + "، " +
+            JalaliDate.fromMillis(System.currentTimeMillis()).long(persian) + "  •  " +
+            JalaliDate.gregorianLong(System.currentTimeMillis(), persian),
+        tabs = homeTabs,
+        selectedTab = selectedTab,
+        onTabSelected = { selectedTab = it },
     ) {
-        item {
-            Column {
-                Text(
-                    text = context.getString(R.string.app_name),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = context.getString(R.string.app_tagline),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurfaceVariant,
-                )
-                Text(
-                    text = JalaliDate.weekday(System.currentTimeMillis(), persian) + "، " +
-                        JalaliDate.fromMillis(System.currentTimeMillis()).long(persian) + "  •  " +
-                        JalaliDate.gregorianLong(System.currentTimeMillis(), persian),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = scheme.primary,
-                )
-            }
-        }
-
+        if (selectedTab == 0) {
         item {
             ConnectionCard(
                 vm = vm,
@@ -238,6 +234,50 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 }
             }
 
+            if (dashboard.hasUsageAccess) {
+                item {
+                    SectionTitle(
+                        text = context.getString(R.string.per_app),
+                        action = {
+                            TextButton(onClick = { vm.refreshAll() }) {
+                                Text(context.getString(R.string.refresh_label))
+                            }
+                        },
+                    )
+                }
+                if (usage.mobile.isEmpty()) {
+                    item { EmptyState(context.getString(R.string.no_data_yet)) }
+                } else {
+                    val top = usage.mobile.take(5)
+                    val max = top.maxOfOrNull { it.bytes } ?: 1L
+                    items(top) { app ->
+                        val label = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(app.packageName.substringBefore(':'), label, size = 34.dp)
+                            Spacer(Modifier.width(10.dp))
+                            UsageBar(
+                                label = label,
+                                bytes = app.bytes,
+                                fraction = app.bytes.toFloat() / max,
+                                persian = persian,
+                                trailing = LiveMonitor.formatHourMinute(app.lastTimestamp, persian),
+                                color = marble.chart[top.indexOf(app).coerceAtLeast(0) % marble.chart.size],
+                            )
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(Modifier.height(8.dp)) }
+        }
+        } else {
+            item {
+                OperatorRangeCard(
+                    vm = vm,
+                    persian = persian,
+                    onOpenOperatorDetail = onOpenOperatorDetail,
+                )
+            }
             if (settings.dataCapBytes > 0) {
                 item {
                     val used = dashboard.monthMobileBytes
@@ -354,42 +394,26 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                     }
                 }
             }
-
-            if (dashboard.hasUsageAccess) {
+            } else {
                 item {
-                    SectionTitle(
-                        text = context.getString(R.string.per_app),
-                        action = {
-                            TextButton(onClick = { vm.refreshAll() }) {
-                                Text(context.getString(R.string.refresh_label))
-                            }
-                        },
-                    )
-                }
-                if (usage.mobile.isEmpty()) {
-                    item { EmptyState(context.getString(R.string.no_data_yet)) }
-                } else {
-                    val top = usage.mobile.take(5)
-                    val max = top.maxOfOrNull { it.bytes } ?: 1L
-                    items(top) { app ->
-                        val label = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            AppIcon(app.packageName.substringBefore(':'), label, size = 34.dp)
-                            Spacer(Modifier.width(10.dp))
-                            UsageBar(
-                                label = label,
-                                bytes = app.bytes,
-                                fraction = app.bytes.toFloat() / max,
-                                persian = persian,
-                                trailing = LiveMonitor.formatHourMinute(app.lastTimestamp, persian),
-                                color = marble.chart[top.indexOf(app).coerceAtLeast(0) % marble.chart.size],
-                            )
-                        }
+                    MarbleCard {
+                        CardHeader(
+                            title = if (persian) "سقف مصرف" else "Data cap",
+                            icon = MIcons.Shield,
+                            tint = scheme.primary,
+                        )
+                        Text(
+                            text = if (persian) {
+                                "برای دیدن پیشرفت بسته، پیش‌بینی روزهای باقی‌مانده و هزینه‌ی آن، سقف مصرف را در تنظیمات تعیین کن."
+                            } else {
+                                "Set a data cap in Settings to see plan progress, a runway forecast and cost."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
-
-            item { Spacer(Modifier.height(8.dp)) }
         }
     }        }
 

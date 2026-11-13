@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
                     },
                     dynamicColor = settings.dynamicColor,
                     palette = ThemePalette.of(settings.palette),
+                    textScale = settings.textSize.scale,
                 ) {
                     AppRoot(
                         vm = vm,

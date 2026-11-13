@@ -65,7 +65,6 @@ import ir.marbledu.datausage.data.OperatorTraffic
 import ir.marbledu.datausage.data.TimeMath
 import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.data.SimIdentity
-import ir.marbledu.datausage.data.UsageSession
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.ui.AppIcon
 import ir.marbledu.datausage.ui.BarEntry
@@ -77,6 +76,7 @@ import ir.marbledu.datausage.ui.EmptyState
 import ir.marbledu.datausage.ui.FloatingBarClearance
 import ir.marbledu.datausage.ui.HeroCard
 import ir.marbledu.datausage.ui.InfoChip
+import ir.marbledu.datausage.ui.LargeTitleScaffold
 import ir.marbledu.datausage.ui.LegendDot
 import ir.marbledu.datausage.ui.MIcons
 import ir.marbledu.datausage.ui.MainViewModel
@@ -100,7 +100,12 @@ import kotlinx.coroutines.launch
  * با بقیه‌ی روزها. تاریخ‌ها هم شمسی و هم میلادی نوشته می‌شوند.
  */
 @Composable
-fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
+fun ReportsScreen(
+    vm: MainViewModel,
+    settings: AppSettings,
+    persian: Boolean,
+    onOpenOperatorDetail: (operatorId: String, sim: SimIdentity?) -> Unit,
+) {
     val context = LocalContext.current
     val history by vm.history.collectAsState()
     val dayUi by vm.dayReport.collectAsState()
@@ -120,7 +125,6 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     var hourMode by rememberSaveable { mutableStateOf(0) }
     var showAllApps by remember(dayUi.dayStart) { mutableStateOf(false) }
     var appSelection by remember(dayUi.dayStart) { mutableStateOf<Int?>(null) }
-    var selectedOperator by remember(dayUi.dayStart) { mutableStateOf<OperatorTraffic?>(null) }
 
     val monthMobile = days.fold(0L) { acc, d -> acc + d.mobile.total }
     val monthWifi = days.fold(0L) { acc, d -> acc + d.wifi.total }
@@ -134,25 +138,21 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
 
     LaunchedEffect(Unit) { vm.loadHistory() }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(top = 8.dp, bottom = FloatingBarClearance),
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val reportTabs = if (persian) listOf("روند", "جزئیات روز") else listOf("Trend", "This day")
+    LargeTitleScaffold(
+        title = if (persian) "گزارش ۳۰ روز" else "30-day report",
+        listState = listState,
+        tabs = reportTabs,
+        selectedTab = selectedTab,
+        onTabSelected = { selectedTab = it },
+        actions = {
+            TextButton(onClick = { vm.loadHistory(force = true) }) {
+                Icon(MIcons.Refresh, null, Modifier.size(15.dp))
+                Text(context.getString(R.string.refresh_label))
+            }
+        },
     ) {
-        item {
-            SectionTitle(
-                text = if (persian) "گزارش ۳۰ روز اخیر" else "Last 30 days",
-                action = {
-                    TextButton(onClick = { vm.loadHistory(force = true) }) {
-                        Icon(MIcons.Refresh, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(context.getString(R.string.refresh_label))
-                    }
-                },
-            )
-        }
-
         if (!dashboard.hasUsageAccess) {
             item {
                 MarbleCard(container = scheme.errorContainer) {
@@ -179,6 +179,7 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 if (history.loading) LoadingBox() else EmptyState(context.getString(R.string.no_data_yet))
             }
         } else {
+            if (selectedTab == 0) {
             // ------------------------------------------------ خلاصه‌ی ۳۰ روز
             item {
                 HeroCard {
@@ -268,7 +269,10 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         colors = listOf(marble.mobile, marble.wifi),
                         height = 166.dp,
                         selected = selectedIndex,
-                        onSelect = { index -> days.getOrNull(index)?.let { vm.selectDay(it.startMillis) } },
+                        onSelect = { index ->
+                            days.getOrNull(index)?.let { vm.selectDay(it.startMillis) }
+                            selectedTab = 1
+                        },
                         labelEvery = 5,
                         maxLabel = Formats.bytes(days.maxOf { it.total }, persian),
                         averageLabel = (if (persian) "میانگین " else "avg ") +
@@ -278,66 +282,6 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         LegendDot(context.getString(R.string.cellular), marble.mobile)
                         LegendDot(context.getString(R.string.wifi), marble.wifi)
                         LegendDot(if (persian) "میانگین" else "Average", scheme.tertiary)
-                    }
-                }
-            }
-
-            // ------------------------------------------------ روز انتخاب‌شده
-            if (selectedDay != null && selectedIndex != null) {
-                item {
-                    DayHeaderCard(
-                        day = selectedDay,
-                        persian = persian,
-                        isToday = selectedDay.startMillis == todayStart,
-                        canOlder = selectedIndex > 0,
-                        canNewer = selectedIndex < days.lastIndex,
-                        onOlder = { vm.selectDay(days[selectedIndex - 1].startMillis) },
-                        onNewer = { vm.selectDay(days[selectedIndex + 1].startMillis) },
-                        rank = days.count { it.total > selectedDay.total } + 1,
-                        dayCount = days.size,
-                        average = dailyAverage,
-                        monthTotal = monthTotal,
-                        loading = dayUi.loading,
-                    )
-                }
-
-                if (report == null) {
-                    item { LoadingBox() }
-                } else {
-                    item { SessionAuditCard(report, persian) }
-                    item { OperatorsCard(report, persian, onSelect = { selectedOperator = it }) }
-                    item {
-                        HoursCard(
-                            report = report,
-                            persian = persian,
-                            selection = hourSelection,
-                            onSelect = { hourSelection = if (hourSelection == it) null else it },
-                            mode = hourMode,
-                            onMode = { hourMode = it },
-                        )
-                    }
-                    item {
-                        AppsCard(
-                            report = report,
-                            persian = persian,
-                            showAll = showAllApps,
-                            onToggleAll = { showAllApps = !showAllApps },
-                            selection = appSelection,
-                            onSelect = { appSelection = it },
-                        )
-                    }
-
-                    // ------------------------------------------------ ۲۴ ساعت اپراتور انتخاب‌شده
-                    selectedOperator?.let { operatorRow ->
-                        item {
-                            OperatorHourlyCard(
-                                vm = vm,
-                                dayStart = dayUi.dayStart,
-                                operatorRow = operatorRow,
-                                persian = persian,
-                                onDismiss = { selectedOperator = null },
-                            )
-                        }
                     }
                 }
             }
@@ -401,18 +345,6 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 }
             }
 
-            item {
-                StatCard(
-                    title = context.getString(R.string.billing_cycle),
-                    value = (if (persian) "روز " else "Day ") +
-                        Formats.integer(settings.billingCycleDay.toLong(), persian),
-                    subtitle = if (persian) "شروع دوره‌ی صورتحساب شما" else "Your cycle start day",
-                    icon = MIcons.Calendar,
-                    accent = scheme.tertiary,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
             // -------------------------------------------------- همه‌ی روزها
             item { SectionTitle(text = if (persian) "همه‌ی روزها" else "All days") }
             val maxDay = days.maxOf { it.total }.coerceAtLeast(1L)
@@ -425,9 +357,60 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     isToday = day.startMillis == todayStart,
                     onClick = {
                         vm.selectDay(day.startMillis)
-                        scope.launch { listState.animateScrollToItem(2) }
+                        selectedTab = 1
                     },
                 )
+            }
+            } else {
+            // ------------------------------------------------ روز انتخاب‌شده
+            if (selectedDay != null && selectedIndex != null) {
+                item {
+                    DayHeaderCard(
+                        day = selectedDay,
+                        persian = persian,
+                        isToday = selectedDay.startMillis == todayStart,
+                        canOlder = selectedIndex > 0,
+                        canNewer = selectedIndex < days.lastIndex,
+                        onOlder = { vm.selectDay(days[selectedIndex - 1].startMillis) },
+                        onNewer = { vm.selectDay(days[selectedIndex + 1].startMillis) },
+                        rank = days.count { it.total > selectedDay.total } + 1,
+                        dayCount = days.size,
+                        average = dailyAverage,
+                        monthTotal = monthTotal,
+                        loading = dayUi.loading,
+                    )
+                }
+
+                if (report == null) {
+                    item { LoadingBox() }
+                } else {
+                    item { OperatorsCard(report, persian, onSelect = { onOpenOperatorDetail(it.operatorId, it.sim) }) }
+                    item {
+                        HoursCard(
+                            report = report,
+                            persian = persian,
+                            selection = hourSelection,
+                            onSelect = { hourSelection = if (hourSelection == it) null else it },
+                            mode = hourMode,
+                            onMode = { hourMode = it },
+                        )
+                    }
+                    item {
+                        AppsCard(
+                            report = report,
+                            persian = persian,
+                            showAll = showAllApps,
+                            onToggleAll = { showAllApps = !showAllApps },
+                            selection = appSelection,
+                            onSelect = { appSelection = it },
+                        )
+                    }
+
+                }
+            } else {
+                item { LoadingBox() }
+            }
+
             }
         }
     }
@@ -611,221 +594,6 @@ private fun DayHeaderCard(
             style = MaterialTheme.typography.labelMedium,
             color = scheme.onPrimaryContainer.copy(alpha = 0.85f),
         )
-    }
-}
-
-@Composable
-private fun SessionAuditCard(report: DayReport, persian: Boolean) {
-    val scheme = MaterialTheme.colorScheme
-    val marble = LocalMarbleColors.current
-    var selectedSim by remember(report.summary.startMillis) { mutableStateOf<SimIdentity?>(null) }
-    var filterBySim by remember(report.summary.startMillis) { mutableStateOf(false) }
-    var showAll by remember(report.summary.startMillis) { mutableStateOf(false) }
-    val sessions = report.sessions.sortedByDescending { it.startMillis }
-    val sims = sessions.mapNotNull { it.sim }.distinct()
-    val hasUnknownSim = sessions.any { it.sim == null }
-    val visibleSessions = if (filterBySim) sessions.filter { it.sim == selectedSim } else sessions
-    val system = report.summary.mobile
-    val observed = report.observedMobile
-    val difference = Traffic(
-        rx = kotlin.math.abs(system.rx - observed.rx),
-        tx = kotlin.math.abs(system.tx - observed.tx),
-    )
-    val notObserved = Traffic(
-        rx = (system.rx - observed.rx).coerceAtLeast(0L),
-        tx = (system.tx - observed.tx).coerceAtLeast(0L),
-    )
-    val overage = Traffic(
-        rx = (observed.rx - system.rx).coerceAtLeast(0L),
-        tx = (observed.tx - system.tx).coerceAtLeast(0L),
-    )
-    val observedExceedsSystem = overage.total > 0L
-
-    MarbleCard(modifier = Modifier.animateContentSize(), padding = 14.dp) {
-        CardHeader(
-            title = if (persian) "جلسه‌ها و تطبیق دیتای سیم‌کارت" else "SIM sessions & data check",
-            icon = MIcons.Signal,
-            tint = scheme.primary,
-            trailing = Formats.bytes(system.total, persian),
-            subtitle = if (persian) "جمع روز از آمار خود Android" else "Android device total for this day",
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Metric(
-                if (persian) "ثبت‌شده هنگام پایش" else "Observed by monitor",
-                Formats.bytes(observed.total, persian),
-                marble.mobile,
-                Modifier.weight(1f),
-                MIcons.Download,
-            )
-            Metric(
-                if (persian) "اختلاف شمارنده‌ها" else "Counter difference",
-                Formats.bytes(difference.total, persian),
-                if (observedExceedsSystem) scheme.error else scheme.tertiary,
-                Modifier.weight(1f),
-                MIcons.Chart,
-            )
-        }
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(scheme.secondaryContainer.copy(alpha = 0.58f))
-                .padding(11.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = if (observedExceedsSystem) {
-                    if (persian) {
-                        "نمونه‌ها از جمع Android بیشترند: دانلود ${Formats.bytes(overage.rx, persian)} و آپلود ${Formats.bytes(overage.tx, persian)} اختلاف؛ مقدار خام دست‌نخورده مانده است."
-                    } else {
-                        "Samples exceed Android by ${Formats.bytes(overage.rx, persian)} download and ${Formats.bytes(overage.tx, persian)} upload; raw values are preserved."
-                    }
-                } else {
-                    (if (persian) "ثبت‌نشده/نامنتسب: " else "Not observed / unassigned: ") +
-                        Formats.bytes(notObserved.total, persian) +
-                        (if (persian) " (دانلود ${Formats.bytes(notObserved.rx, persian)}، آپلود ${Formats.bytes(notObserved.tx, persian)})؛ "
-                        else " (download ${Formats.bytes(notObserved.rx, persian)}, upload ${Formats.bytes(notObserved.tx, persian)}); ") +
-                        if (persian) "ممکن است پایش خاموش بوده یا دقت تجمیع Android متفاوت باشد."
-                        else "monitoring may have been paused or Android may aggregate counters differently."
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = scheme.onSecondaryContainer,
-            )
-            Text(
-                text = if (persian) {
-                    "در گوشی دوسیم‌کارته، شمارنده‌ی موبایل Android ممکن است تجمیعی باشد؛ به سیم‌کارت پیش‌فرض داده در هر نمونه نسبت داده می‌شود و تغییر بین نمونه‌ها تقریبی است."
-                } else {
-                    "On dual-SIM phones Android may expose one aggregate mobile counter. Bytes are attributed to the default data SIM at each sample; a SIM switch between samples is approximate."
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSecondaryContainer.copy(alpha = 0.86f),
-            )
-            Text(
-                text = if (persian) {
-                    "این داده، شمارنده‌ی خود گوشی است؛ اپ‌های عادی به صورتحساب/ریزثبت اپراتور دسترسی ندارند. برای بررسی کسر حجم، همین بازه را با گزارش رسمی اپراتور مقایسه کن."
-                } else {
-                    "This is device-side accounting. Regular apps cannot read a carrier's billing ledger; compare the same time range with the carrier's official usage report."
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSecondaryContainer.copy(alpha = 0.86f),
-            )
-        }
-
-        if (sims.size > 1 || (sims.isNotEmpty() && hasUnknownSim)) {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                FilterChip(
-                    selected = !filterBySim,
-                    onClick = { filterBySim = false },
-                    label = { Text(if (persian) "همه‌ی سیم‌ها" else "All SIMs") },
-                )
-                sims.forEach { sim ->
-                    FilterChip(
-                        selected = filterBySim && selectedSim == sim,
-                        onClick = {
-                            selectedSim = sim
-                            filterBySim = true
-                        },
-                        label = { Text(simSlotName(sim.slotIndex, sim.displayName, persian)) },
-                    )
-                }
-                if (hasUnknownSim) {
-                    FilterChip(
-                        selected = filterBySim && selectedSim == null,
-                        onClick = {
-                            selectedSim = null
-                            filterBySim = true
-                        },
-                        label = { Text(if (persian) "سیم نامشخص" else "Unknown SIM") },
-                    )
-                }
-            }
-        }
-
-        if (visibleSessions.isEmpty()) {
-            Text(
-                text = if (persian) {
-                    "برای این روز جلسه‌ای نمونه‌برداری نشده؛ پایش پس‌زمینه را روشن نگه دار تا دفعات بعد زمان شروع و پایان ثبت شود."
-                } else {
-                    "No sampled sessions for this day. Keep background monitoring on to capture session start/end times next time."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-            )
-        } else {
-            visibleSessions.take(if (showAll) 30 else 5).forEach { session ->
-                SessionAuditRow(session, persian)
-            }
-            if (visibleSessions.size > 5) {
-                TextButton(onClick = { showAll = !showAll }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text(
-                        if (showAll) {
-                            if (persian) "نمایش کمتر" else "Show less"
-                        } else {
-                            if (persian) "نمایش همه‌ی ${Formats.integer(visibleSessions.size.toLong(), true)} جلسه‌ها" else "Show all ${visibleSessions.size} sessions"
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SessionAuditRow(session: UsageSession, persian: Boolean) {
-    val scheme = MaterialTheme.colorScheme
-    val operator = OperatorCatalog.byId(session.operatorId)
-    val from = LiveMonitor.formatHourMinute(session.startMillis, persian)
-    val to = session.endMillis?.let { LiveMonitor.formatHourMinute(it, persian) }
-        ?: if (persian) "اکنون" else "now"
-    val approximate = session.startEstimated || session.endEstimated || session.samplingGaps > 0
-    val startPrefix = if (session.startEstimated) "≈ " else ""
-    val endPrefix = if (session.endEstimated && to != (if (persian) "اکنون" else "now")) "≈ " else ""
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(scheme.surfaceContainerLow)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OperatorBadge(operator, size = 34.dp, transportIcon = MIcons.Signal)
-        Spacer(Modifier.width(9.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                "${simSlotName(session.sim?.slotIndex, session.sim?.displayName, persian)} · ${operator.name(persian)}",
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                "$startPrefix$from – $endPrefix$to",
-                style = MaterialTheme.typography.labelMedium,
-                color = scheme.primary,
-            )
-            Text(
-                "↓ ${Formats.bytes(session.rxBytes, persian)}  ·  ↑ ${Formats.bytes(session.txBytes, persian)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-            )
-            if (approximate) {
-                Text(
-                    if (session.samplingGaps > 0) {
-                        if (persian) "مرز تقریبی · وقفه‌ی پایش ${Formats.integer(session.samplingGaps.toLong(), true)} بار"
-                        else "Approximate boundary · ${session.samplingGaps} monitoring gap(s)"
-                    } else if (persian) "زمان برآوردی تا فاصله‌ی نمونه‌برداری" else "Time boundary is within the sampling interval",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (session.isOpen) {
-            InfoChip(if (persian) "اکنون" else "LIVE", color = scheme.secondary)
-        }
     }
 }
 
@@ -1329,116 +1097,6 @@ private fun DayRow(
                 color = marble.upload,
                 maxLines = 1,
             )
-        }
-    }
-}
-
-@Composable
-private fun OperatorHourlyCard(
-    vm: MainViewModel,
-    dayStart: Long,
-    operatorRow: OperatorTraffic,
-    persian: Boolean,
-    onDismiss: () -> Unit,
-) {
-    val context = LocalContext.current
-    val scheme = MaterialTheme.colorScheme
-    val marble = LocalMarbleColors.current
-    val operatorId = operatorRow.operatorId
-    val sim = operatorRow.sim
-    val operator = OperatorCatalog.byId(operatorId)
-    val hourly by vm.operatorHourly.collectAsState()
-    val matchesSelection = hourly.dayStart == dayStart &&
-        hourly.operatorId == operatorId && hourly.sim == sim
-    val loading = matchesSelection && hourly.loading
-
-    LaunchedEffect(dayStart, operatorId, sim) {
-        vm.loadOperatorHourly(dayStart, operatorId, sim)
-    }
-
-    MarbleCard(padding = 14.dp) {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(MIcons.ArrowForward, null, Modifier.size(18.dp), tint = scheme.primary)
-                    Spacer(Modifier.size(8.dp))
-                    Column {
-                        Text(
-                            text = (if (persian) "۲۴ ساعت: " else "24h: ") + operator.name(persian) +
-                                " · " + simSlotName(sim?.slotIndex, sim?.displayName, persian),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = scheme.onSurface,
-                        )
-                        Text(
-                            text = operator.mark,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = scheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                TextButton(onClick = onDismiss) {
-                    Text(if (persian) "بسته شود" else "Dismiss")
-                }
-            }
-
-            val hours = if (matchesSelection) hourly.hours else emptyList()
-            if (!matchesSelection || loading) {
-                CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), strokeWidth = 4.dp)
-            } else if (hours.isEmpty()) {
-                Text(
-                    text = if (persian) "داده‌ی ساعتی برای این اپراتور ثبت نشده" else "No hourly data for this operator",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    val max = (hours.maxOfOrNull { it.total } ?: 1L).coerceAtLeast(1L)
-                    hours.forEach { hour ->
-                        Column(
-                            modifier = Modifier.width(42.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = Formats.bytes(hour.total, persian),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = scheme.onSurfaceVariant,
-                                maxLines = 1,
-                            )
-                            Box(
-                                Modifier
-                                    .fillMaxWidth(0.62f)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .background(scheme.surfaceVariant),
-                                contentAlignment = Alignment.BottomCenter,
-                            ) {
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .fillMaxHeight(
-                                            if (hour.total > 0L) (hour.total.toFloat() / max).coerceIn(0.08f, 1f) else 0f,
-                                        )
-                                        .clip(RoundedCornerShape(7.dp))
-                                        .background(marble.mobile),
-                                )
-                            }
-                            Text(
-                                text = hourText(hour.hour, persian),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = scheme.onSurfaceVariant,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
