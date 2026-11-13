@@ -23,7 +23,7 @@ object MIcons {
                 fill = SolidColor(Color.Black),
                 pathFillType = androidx.compose.ui.graphics.PathFillType.NonZero,
             ) {
-                addPathNodes(pathData)
+                addPathNodes(androidx.compose.ui.graphics.vector.PathParser().parsePathString(pathData).toNodes())
             }
         }.build()
 
