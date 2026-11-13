@@ -122,7 +122,6 @@
     <string name="widget_usage_desc">Today\'s mobile and Wi-Fi usage, current operator and data left</string>
     <string name="widget_today">Today</string>
     <string name="widget_mobile">Mobile</string>
-</resources>
 
     <string name="ui_mode">UI mode</string>
     <string name="ui_mode_desc">Simple UI for beginners or advanced for pros</string>
@@ -140,3 +139,5 @@
 
     <string name="about_view_repo">View on GitHub</string>
 
+
+</resources>

@@ -1,7 +1,9 @@
 package ir.marbledu.datausage.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -40,6 +42,8 @@ import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.data.DaySummary
+import ir.marbledu.datausage.ui.DashboardUi
+import ir.marbledu.datausage.ui.HistoryUi
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.JalaliDate

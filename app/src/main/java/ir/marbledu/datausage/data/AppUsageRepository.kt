@@ -372,7 +372,7 @@ class AppUsageRepository(private val context: Context) {
     suspend fun hourlyOperatorTraffic(
         dayStart: Long,
         operatorId: String,
-    ): List<UsageLedger.HourOperatorTraffic> = withContext(Dispatchers.IO) {
+    ): List<HourOperatorTraffic> = withContext(Dispatchers.IO) {
         UsageLedger.hourlyForDay(context, dayStart).filter { it.operatorId == operatorId }
     }
 

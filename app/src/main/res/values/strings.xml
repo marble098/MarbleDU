@@ -122,7 +122,6 @@
     <string name="widget_usage_desc">مصرف امروزِ موبایل و وای‌فای، اپراتور فعلی و باقی‌مانده‌ی بسته</string>
     <string name="widget_today">مصرف امروز</string>
     <string name="widget_mobile">موبایل</string>
-</resources>
 
     <string name="ui_mode">حالت نمایش</string>
     <string name="ui_mode_desc">رابطی ساده برای مبتدیان یا پیشرفته برای حرفه‌ای‌ها</string>
@@ -140,3 +139,5 @@
 
     <string name="about_view_repo">مشاهده در گیت‌هاب</string>
 
+
+</resources>

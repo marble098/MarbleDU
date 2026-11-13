@@ -21,6 +21,7 @@ import ir.marbledu.datausage.data.NotificationPreset
 import ir.marbledu.datausage.data.PingResult
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.data.TimeMath
+import ir.marbledu.datausage.data.HourOperatorTraffic
 import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.TimeRange
@@ -80,7 +81,7 @@ data class DayReportUi(
 data class OperatorHourlyUi(
     val dayStart: Long = 0L,
     val operatorId: String = "",
-    val hours: List<UsageLedger.HourOperatorTraffic> = emptyList(),
+    val hours: List<HourOperatorTraffic> = emptyList(),
     val loading: Boolean = false,
 )
 

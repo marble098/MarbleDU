@@ -294,7 +294,7 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 if (report == null) {
                     item { LoadingBox() }
                 } else {
-                    item { OperatorsCard(report, persian) }
+                    item { OperatorsCard(report, persian, onSelect = { selectedOperatorId = it }) }
                     item {
                         HoursCard(
                             report = report,
@@ -604,7 +604,7 @@ private fun DayHeaderCard(
 }
 
 @Composable
-private fun OperatorsCard(report: DayReport, persian: Boolean) {
+private fun OperatorsCard(report: DayReport, persian: Boolean, onSelect: (String) -> Unit = {}) {
     val context = LocalContext.current
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
@@ -624,7 +624,7 @@ private fun OperatorsCard(report: DayReport, persian: Boolean) {
                 color = scheme.onSurfaceVariant,
             )
         }
-        rows.forEach { row -> OperatorRow(row, total, persian, onSelect = { selectedOperatorId = it }) }
+        rows.forEach { row -> OperatorRow(row, total, persian, onSelect = onSelect) }
         if (rows.any { it.estimated && it.transport == UsageLedger.WIFI }) {
             Text(
                 text = if (persian) {
@@ -1138,7 +1138,7 @@ private fun OperatorHourlyCard(
 
             val hours = if (hourly.dayStart == dayStart && hourly.operatorId == operatorId) hourly.hours else emptyList()
             if (hourly.loading && hours.isEmpty()) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center), strokeWidth = 4.dp)
+                CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), strokeWidth = 4.dp)
             } else if (hours.isEmpty()) {
                 Text(
                     text = if (persian) "داده‌ی ساعتی برای این اپراتور ثبت نشده" else "No hourly data for this operator",

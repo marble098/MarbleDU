@@ -67,7 +67,7 @@ object UsageLedger {
     }
 
     private fun key(day: Int, transport: String, operatorId: String, hour: Int) =
-        "$day\t$transport\t$operatorId\t$hour"
+        if (hour == -1) "$day\t$transport\t$operatorId" else "$day\t$transport\t$operatorId\t$hour"
 
     private fun ensureLoaded(context: Context) {
         if (loaded) return
@@ -97,7 +97,11 @@ object UsageLedger {
 
     fun serialize(map: Map<String, LongArray>): String = buildString {
         map.forEach { (k, v) ->
-            append(k).append('\t').append(v[0]).append('\t').append(v[1]).append('\n')
+            val parts = k.split('\t')
+            val hour = parts.getOrNull(3)?.toIntOrNull()
+            // divisão: ان_entries روزانه (ساعت=-۱) بدون ساعت ذخیره می‌شوند تا با فرمت قدیمی سازگار باشند
+            val keyOut = if (hour == -1) parts.take(3).joinToString("\t") else k
+            append(keyOut).append('\t').append(v[0]).append('\t').append(v[1]).append('\n')
         }
     }
 
