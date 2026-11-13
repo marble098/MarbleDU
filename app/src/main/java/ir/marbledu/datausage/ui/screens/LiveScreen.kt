@@ -346,12 +346,18 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
 }
 
 @Composable
-private fun gradeColor(grade: ConnectionQuality.Grade?): Color = when (grade) {
-    ConnectionQuality.Grade.EXCELLENT -> Color(0xFF16A34A)
-    ConnectionQuality.Grade.GOOD -> Color(0xFF65A30D)
-    ConnectionQuality.Grade.FAIR -> Color(0xFFD97706)
-    ConnectionQuality.Grade.POOR -> MaterialTheme.colorScheme.error
-    null -> MaterialTheme.colorScheme.onSurfaceVariant
+private fun gradeColor(grade: ConnectionQuality.Grade?): Color {
+    // رنگ‌های ثابت قبلی روی کارت روشن کنتراست کافی نداشتند (حدود ۳:۱)؛
+    // حالا روی پس‌زمینه‌ی کارت (surfaceContainerLow) به ۴٫۵:۱ تنظیم می‌شوند.
+    val cardBg = MaterialTheme.colorScheme.surfaceContainerLow
+    val base = when (grade) {
+        ConnectionQuality.Grade.EXCELLENT -> Color(0xFF16A34A)
+        ConnectionQuality.Grade.GOOD -> Color(0xFF65A30D)
+        ConnectionQuality.Grade.FAIR -> Color(0xFFD97706)
+        ConnectionQuality.Grade.POOR -> return MaterialTheme.colorScheme.error
+        null -> return MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    return ir.marbledu.datausage.ui.theme.accessibleColor(base, cardBg)
 }
 
 private fun gradeLabel(grade: ConnectionQuality.Grade, persian: Boolean): String = when (grade) {

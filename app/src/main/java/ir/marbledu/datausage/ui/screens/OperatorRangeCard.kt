@@ -63,7 +63,6 @@ fun OperatorRangeCard(
     persian: Boolean,
     onOpenOperatorDetail: (operatorId: String, sim: SimIdentity?) -> Unit,
     /** نمایش ردیف‌های تخمینی/ناشناخته هم (حالت «سفر»). */
-    showUnknown: Boolean = false,
 ) {
     val context = LocalContext.current
     val range by vm.operatorRange.collectAsState()
@@ -141,16 +140,9 @@ fun OperatorRangeCard(
                 color = scheme.onSurfaceVariant,
             )
         } else {
-            // حالت «فقط اپراتورهای ایران» (پیش‌فرض): ردیف‌های ناشناخته که فقط
-            // اختلاف شمارنده‌ی سیستم‌اند، در این نما پنهان می‌شوند تا عددها
-            // شفاف بمانند. در تنظیمات می‌توان همه را دید.
-            val visibleRows = if (showUnknown) {
-                range.rows
-            } else {
-                // اپراتورهای کاملاً ناشناخته فقط وقتی دیده می‌شوند که مصرفی داشته باشند.
-                range.rows.filter {
-                    it.operatorId != OperatorCatalog.ID_UNKNOWN || it.total.total > 0L
-                }
+            // Keep measured unknown traffic visible; omit empty placeholder rows.
+            val visibleRows = range.rows.filter {
+                it.operatorId != OperatorCatalog.ID_UNKNOWN || it.total.total > 0L
             }
             if (visibleRows.isEmpty()) {
                 Text(

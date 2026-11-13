@@ -67,18 +67,6 @@ fun LargeTitleScaffold(
 ) {
     val scheme = MaterialTheme.colorScheme
     val marble = LocalMarbleColors.current
-    // هرچه محتوا بالاتر اسکرول شود، سربرگ مات‌تر (شیشه‌ای) می‌شود. با
-    // derivedStateOf فقط هنگام عبور از مرز «اسکرول‌شده / نشده» recomposition رخ می‌دهد.
-    val scrolled by remember(listState) {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
-        }
-    }
-    val scrim by animateFloatAsState(
-        targetValue = if (scrolled) 1f else 0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "header-scrim",
-    )
     Box(modifier.fillMaxSize().background(scheme.background)) {
         // هاله‌ی رنگی نرم پشت سربرگ؛ در تم AMOLED کاملاً محو می‌شود.
         if (!marble.amoled) {
@@ -98,21 +86,7 @@ fun LargeTitleScaffold(
             )
         }
         Column(Modifier.fillMaxSize()) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (scrim > 0.01f) {
-                            Modifier
-                                .clipToBounds()
-                                .background(
-                                    scheme.background.copy(alpha = 0.72f * scrim),
-                                )
-                        } else {
-                            Modifier
-                        },
-                    ),
-            ) {
+            Column(Modifier.fillMaxWidth()) {
                 Row(
                     Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -261,8 +235,10 @@ private fun LargeTitleBlock(
 }
 
 /**
- * تب‌های ثانویه‌ی صفحه: مینیمال، کپسولی و با انیمیشن نرم؛
- * همیشه زیر نوار فشرده دیده می‌شود تا کاربر یک‌ضربه‌ای به بخش خودش برود.
+ * تب‌های ثانویه‌ی صفحه: شیشه‌ای مثل نوار پایین، کپسولی و با انیمیشن نرم؛
+ * همیشه زیر سربرگ دیده می‌شود تا کاربر یک‌ضربه‌ای به بخش خودش برود.
+ * پس‌زمینه‌ی مات قبلی حذف شده و به‌جایش همان شیشه‌ی نیمه‌شفاف با هاله‌ی
+ * رنگ پالت و خط لبه‌ی نورانی آمده است.
  */
 @Composable
 fun TopTabs(
@@ -272,35 +248,23 @@ fun TopTabs(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    val marble = LocalMarbleColors.current
+    Box(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(
             Modifier
                 .horizontalScroll(rememberScrollState())
-                .clip(RoundedCornerShape(20.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            scheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                            scheme.surfaceContainerHigh.copy(alpha = 0.55f),
-                        ),
-                    ),
-                )
-                .border(
-                    1.dp,
-                    Color.White.copy(alpha = 0.18f),
-                    RoundedCornerShape(20.dp),
+                .glassSurface(
+                    shape = RoundedCornerShape(20.dp),
+                    tint = scheme.primary,
+                    alpha = if (marble.amoled) 0.94f else 0.80f,
                 )
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             tabs.forEachIndexed { index, tab ->
                 val isSelected = index == selected
-                val container by animateColorAsState(
-                    targetValue = if (isSelected) scheme.primaryContainer else Color.Transparent,
-                    label = "top-tab-container",
-                )
                 val tint by animateColorAsState(
-                    targetValue = if (isSelected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                    targetValue = if (isSelected) scheme.primary else scheme.onSurfaceVariant,
                     label = "top-tab-tint",
                 )
                 val scale by animateFloatAsState(
@@ -318,7 +282,7 @@ fun TopTabs(
                         scaleY = scale
                     }
                     .clip(RoundedCornerShape(14.dp))
-                    .background(container)
+                    .background(if (isSelected) scheme.primary.copy(alpha = 0.12f) else Color.Transparent)
                     .semantics { this.selected = isSelected }
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },

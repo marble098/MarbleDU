@@ -178,7 +178,14 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(MIcons.Palette, null, Modifier.size(17.dp), tint = Color.White)
+                        Icon(
+                            MIcons.Palette,
+                            null,
+                            Modifier.size(17.dp),
+                            tint = ir.marbledu.datausage.ui.theme.bestOnColor(
+                                Color(ThemePalette.of(settings.palette).primary),
+                            ),
+                        )
                     }
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -194,7 +201,12 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         )
                     }
                     if (settings.themeMode == ThemeMode.AMOLED) {
-                        Icon(MIcons.Check, null, Modifier.size(20.dp), tint = Color(ThemePalette.of(settings.palette).primary))
+                        Icon(
+                            MIcons.Check,
+                            null,
+                            Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
                     }
                 }
             }
@@ -752,22 +764,6 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             }
         }
 
-        // ------------------------------------------------ حالت سفر / اپراتور خارجی
-        item {
-            SettingsCard(
-                title = context.getString(R.string.travel_mode),
-                description = context.getString(R.string.travel_mode_desc),
-                icon = MIcons.Globe,
-            ) {
-                SwitchRow(
-                    label = context.getString(R.string.travel_mode_toggle),
-                    description = context.getString(R.string.travel_mode_toggle_desc),
-                    checked = settings.showForeignOperators,
-                    onCheckedChange = { vm.setShowForeignOperators(it) },
-                )
-            }
-        }
-
         // ------------------------------------------- پشتیبان‌گیری تنظیمات
         item {
             SettingsCard(
@@ -1260,7 +1256,14 @@ private fun PaletteSwatch(name: String, colors: List<Color>, selected: Boolean, 
             contentAlignment = Alignment.Center,
         ) {
             if (selected) {
-                Icon(MIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                // تیک روی گرادیان رنگی: سیاه یا سفید، هرکدام خواناتر (روی سبز نئونی سفید گم می‌شد).
+                val avg = colors.reduce { a, b -> androidx.compose.ui.graphics.lerp(a, b, 0.5f) }
+                Icon(
+                    MIcons.Check,
+                    contentDescription = null,
+                    tint = ir.marbledu.datausage.ui.theme.bestOnColor(avg),
+                    modifier = Modifier.size(22.dp),
+                )
             }
         }
         Text(

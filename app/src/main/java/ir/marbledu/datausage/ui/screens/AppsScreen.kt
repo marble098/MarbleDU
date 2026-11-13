@@ -78,6 +78,8 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         vm.loadUsage()
     }
 
+    var query by rememberSaveable { mutableStateOf("") }
+    var network by rememberSaveable { mutableStateOf(0) }
     var selectedTab by rememberSaveable { mutableStateOf(0) }
     val appsTabs = if (persian) listOf("نمودار", "همه‌ی اپ‌ها") else listOf("Chart", "All apps")
     val listState = rememberLazyListState()
@@ -156,6 +158,36 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         }
 
         val combined = mergeByPackage(usage.mobile, usage.wifi)
+        val filteredApps = mergeByPackage(
+            if (network == 2) emptyList() else usage.mobile,
+            if (network == 1) emptyList() else usage.wifi,
+        ).filter { (_, app) ->
+            ir.marbledu.datausage.data.AppListFilter.matches(
+                OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label,
+                app.packageName, query,
+            )
+        }
+        if (selectedTab == 1) {
+            item {
+                androidx.compose.material3.OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text(context.getString(R.string.apps_search)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listOf(R.string.apps_network_all, R.string.cellular, R.string.wifi).withIndex().toList()) { (index, label) ->
+                        FilterChip(selected = network == index, onClick = { network = index },
+                            label = { Text(context.getString(label)) })
+                    }
+                }
+                if (!usage.loading && filteredApps.isEmpty()) {
+                    Text(context.getString(R.string.apps_no_match))
+                }
+            }
+        }
+
         if (usage.loading) {
             item {
                 Box(
@@ -168,7 +200,6 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         } else if (combined.isEmpty()) {
             item { EmptyState(context.getString(R.string.no_data_yet)) }
         } else {
-            val max = combined.maxOf { it.first }
             if (selectedTab == 0) {
             item {
                 val top = combined.take(5)
@@ -229,7 +260,7 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 }
             }
             } else {
-            items(combined) { (bytes, app) ->
+            items(filteredApps, key = { it.second.packageName }) { (bytes, app) ->
                 val displayName = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
                 val subLabel = if (app.packageName.startsWith("uid:")) {
                     if (persian) "سرویس سیستم" else "System service"
@@ -272,7 +303,7 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         UsageBar(
                             label = subLabel,
                             bytes = bytes,
-                            fraction = bytes.toFloat() / max,
+                            fraction = bytes.toFloat() / (filteredApps.maxOfOrNull { it.first } ?: 1L).coerceAtLeast(1L),
                             persian = persian,
                             color = marble.chart[(combined.indexOfFirst { it.second.packageName == app.packageName }
                                 .coerceAtLeast(0)) % marble.chart.size],

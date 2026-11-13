@@ -74,7 +74,6 @@ object SettingsBackup {
             put("sessionsVisibleCount", settings.sessionsVisibleCount)
             put("speedOverlay", settings.speedOverlay)
             put("speedOverlayChart", settings.speedOverlayChart)
-            put("showForeignOperators", settings.showForeignOperators)
             put("notification", JSONObject().apply {
                 put("style", n.style.name)
                 put("titleMode", n.titleMode.name)
@@ -171,7 +170,6 @@ object SettingsBackup {
                 .coerceIn(2, 10),
             speedOverlay = root.optBoolean("speedOverlay", base.speedOverlay),
             speedOverlayChart = root.optBoolean("speedOverlayChart", base.speedOverlayChart),
-            showForeignOperators = root.optBoolean("showForeignOperators", base.showForeignOperators),
             notification = notification,
         )
     }.getOrNull()
