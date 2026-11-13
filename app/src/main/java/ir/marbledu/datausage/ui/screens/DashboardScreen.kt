@@ -393,7 +393,6 @@ fun DashboardScreen(
                         }
                     }
                 }
-            }
             } else {
                 item {
                     MarbleCard {

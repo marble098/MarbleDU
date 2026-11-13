@@ -42,7 +42,7 @@ object UsageSpikeNotifier {
         if (alerted.contains(hourKey)) return
         val updated = LinkedHashSet(alerted) + hourKey
         // فقط کلیدهای همان روز نگه داشته می‌شوند تا پیر نشوند.
-        prefs.edit().putStringSet(KEY_ALERTED, updated.takeLast(8).toSet()).apply()
+        prefs.edit().putStringSet(KEY_ALERTED, updated.toList().takeLast(8).toSet()).apply()
         ensureChannel(context, persian)
         val title = if (persian) "مصرف غیرعادی در این ساعت" else "Unusual usage this hour"
         val text = if (persian) {
