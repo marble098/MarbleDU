@@ -27,7 +27,9 @@ import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.data.AppTextSize
 import ir.marbledu.datausage.data.OperatorDayStat
 import ir.marbledu.datausage.data.OperatorRangeRow
+import ir.marbledu.datausage.data.UsageInsights
 import ir.marbledu.datausage.data.UsageLedger
+import ir.marbledu.datausage.data.UsagePlanner
 import ir.marbledu.datausage.data.TimeRange
 import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.widget.UsageWidgetProvider
@@ -107,6 +109,21 @@ data class OperatorRangeUi(
     val loadedOnce: Boolean = false,
 )
 
+/**
+ * «بینش مصرف»: تحلیل الگوی ۳۰ روز اخیر برای صفحه‌ی خانه.
+ * کلاس خالص [UsageInsights] محاسبات را انجام می‌دهد و اینجا فقط داده جمع می‌شود.
+ */
+data class InsightsUi(
+    val loading: Boolean = false,
+    val loadedAt: Long = 0L,
+    val snapshot: ir.marbledu.datausage.data.UsageInsights.Snapshot? = null,
+    val verdict: ir.marbledu.datausage.data.UsageInsights.DayVerdict =
+        ir.marbledu.datausage.data.UsageInsights.DayVerdict.NORMAL,
+    val todayPercentOfAverage: Int = 0,
+    val budget: ir.marbledu.datausage.data.UsageInsights.Budget? = null,
+    val daysUntilCap: Int = -1,
+)
+
 private const val HISTORY_CACHE_MS = 2L * 60 * 1000
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -151,6 +168,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _operatorDetail = MutableStateFlow(OperatorDetailUi())
     val operatorDetail: StateFlow<OperatorDetailUi> = _operatorDetail.asStateFlow()
+
+    private val _insights = MutableStateFlow(InsightsUi())
+    val insights: StateFlow<InsightsUi> = _insights.asStateFlow()
+
+    private var insightsJob: Job? = null
 
     private val _operatorRange = MutableStateFlow(OperatorRangeUi())
     val operatorRange: StateFlow<OperatorRangeUi> = _operatorRange.asStateFlow()
@@ -217,6 +239,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (lastRefreshAllAt != 0L && now - lastRefreshAllAt < 750L) return
         lastRefreshAllAt = now
         refreshDashboard()
+        loadInsights()
         loadUsage(_usage.value.range)
         // تاریخچه‌ی ۳۰روزه فقط بعد از باز شدن تب گزارش خوانده می‌شود؛ بار اول
         // ورود به خانه نباید ده‌ها query تاریخی را هم‌زمان اجرا کند.
@@ -263,6 +286,79 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _dayReport.value = DayReportUi(dayStart = dayStart, report = report, loading = false)
         }
     }
+
+    /**
+     * تحلیل الگوی مصرف ۳۰ روز اخیر: سنگین‌ترین روز هفته، ساعت اوج، سهم موبایل
+     * و این‌که امروز نسبت به یک روز عادی چقدر است. نتیجه برای کارت «بینش» در
+     * خانه استفاده می‌شود و با هر تازه‌سازی داشبورد فقط اگر لازم باشد دوباره
+     * محاسبه می‌شود (کش ۵ دقیقه‌ای).
+     */
+    fun loadInsights(force: Boolean = false) {
+        if (!repository.hasUsageAccess()) return
+        if (insightsJob?.isActive == true) return
+        val loaded = _insights.value.loadedAt
+        if (!force && loaded > 0L && System.currentTimeMillis() - loaded < 5 * 60 * 1000L) return
+        insightsJob = viewModelScope.launch(Dispatchers.IO) {
+            _insights.value = _insights.value.copy(loading = true)
+            val epoch = settings.value.statsEpochMillis
+            val summaries = repository.daySummaries(30, epoch)
+            val days = summaries.map {
+                UsageInsights.Day(it.startMillis, it.mobile.total, it.wifi.total)
+            }
+            val hours = runCatching {
+                repository.hourlyTotals(
+                    fromMillis = System.currentTimeMillis() - 14L * 24 * 60 * 60 * 1000,
+                    toMillis = System.currentTimeMillis(),
+                    type = ConnectionType.CELLULAR,
+                    maxBuckets = 24 * 14,
+                ).let { list ->
+                    val totals = LongArray(24)
+                    list.forEach { totals[it.hour.coerceIn(0, 23)] += it.bytes }
+                    totals.toList()
+                }
+            }.getOrDefault(emptyList())
+
+            val snapshot = UsageInsights.build(days, hours)
+            val now = System.currentTimeMillis()
+            val todayStart = TimeMath.dayStart(now)
+            val today = summaries.firstOrNull { it.startMillis == todayStart }
+            val todayBytes = (today?.mobile?.total ?: 0L) + (today?.wifi?.total ?: 0L)
+            val elapsedFraction = (((now - todayStart).toFloat()) / (24f * 60 * 60 * 1000f))
+                .coerceIn(0.05f, 1f)
+            val verdict = UsageInsights.classify(todayBytes, snapshot.averageDailyBytes, elapsedFraction)
+            val cap = settings.value.dataCapBytes
+            val usedMobile = summaries.sumOf { it.mobile.total }
+            val forecast = if (cap > 0L) {
+                UsagePlanner.forecast(
+                    capBytes = cap,
+                    usedBytes = usedMobile,
+                    recentDailyBytes = summaries.takeLast(7).map { it.mobile.total },
+                    nowMillis = now,
+                    billingDay = settings.value.billingCycleDay,
+                )
+            } else null
+            _insights.value = InsightsUi(
+                loading = false,
+                loadedAt = now,
+                snapshot = snapshot,
+                verdict = verdict,
+                todayPercentOfAverage = UsageInsights.todayPercentOfAverage(
+                    todayBytes,
+                    snapshot.averageDailyBytes,
+                ),
+                budget = forecast?.let { UsageInsights.budget(todayBytes, it.dailyBudgetBytes) },
+                daysUntilCap = forecast?.daysUntilUnlimited()
+                    ?: UsageInsights.daysUntilCap(
+                        (cap - usedMobile).coerceAtLeast(0L),
+                        snapshot.averageMobileBytes,
+                    ),
+            )
+        }
+    }
+
+    /** میان‌بر محاسبه‌ی روزهای مانده تا پر شدن سقف از پیش‌بینی موجود. */
+    private fun UsagePlanner.Forecast.daysUntilUnlimited(): Int =
+        if (remainingBytes <= 0L) 0 else daysUntilEmpty
 
     /** دوباره پیدا کردنِ اپراتور وای‌فای (دکمه‌ی «بررسی دوباره»). */
     fun refreshWifiOperator() {
@@ -409,6 +505,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setWidgetBigText(value: Boolean) = viewModelScope.launch {
         settingsRepo.setWidgetBigText(value)
         refreshWidget()
+    }
+
+    fun setWidgetFollowTheme(value: Boolean) = viewModelScope.launch {
+        settingsRepo.setWidgetFollowTheme(value)
+        refreshWidget()
+    }
+    fun setWidgetQuickActions(value: Boolean) = viewModelScope.launch {
+        settingsRepo.setWidgetQuickActions(value)
+        refreshWidget()
+    }
+    fun setSessionsCard(value: Boolean) = viewModelScope.launch { settingsRepo.setSessionsCard(value) }
+    fun setSessionsTabs(value: Boolean) = viewModelScope.launch { settingsRepo.setSessionsTabs(value) }
+    fun setSessionsVisible(value: Int) = viewModelScope.launch { settingsRepo.setSessionsVisible(value) }
+
+    /** عینک مصرف (حباب شناور): با روشن شدن، سرویس اجرا و با خاموش شدن متوقف می‌شود. */
+    fun setSpeedOverlay(value: Boolean) = viewModelScope.launch {
+        settingsRepo.setSpeedOverlay(value)
+        val app = getApplication<Application>()
+        if (value) {
+            if (ir.marbledu.datausage.util.UsageAccess.canDrawOverlays(app)) {
+                ir.marbledu.datausage.service.SpeedOverlayService.start(app)
+            }
+        } else {
+            ir.marbledu.datausage.service.SpeedOverlayService.stop(app)
+        }
+    }
+
+    fun setSpeedOverlayChart(value: Boolean) = viewModelScope.launch { settingsRepo.setSpeedOverlayChart(value) }
+    fun setShowForeignOperators(value: Boolean) = viewModelScope.launch { settingsRepo.setShowForeignOperators(value) }
+
+    /** بازیابی تنظیمات از فایل پشتیبان و تازه‌سازی فوری ویجت. */
+    fun applyBackup(restored: AppSettings) = viewModelScope.launch {
+        settingsRepo.applyBackup(restored)
+        refreshWidget()
+        refreshDashboard()
     }
 
     fun setTextSize(size: AppTextSize) = viewModelScope.launch { settingsRepo.setTextSize(size) }

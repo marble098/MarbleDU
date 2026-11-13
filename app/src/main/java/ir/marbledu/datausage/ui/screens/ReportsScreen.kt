@@ -209,7 +209,7 @@ fun ReportsScreen(
                         Formats.integer(sessions.size.toLong(), persian) + if (persian) " نشست" else " sessions",
                         color = scheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
                 }
-                SessionsCard(sessions, persian)
+                SessionsCard(sessions, persian, maxVisible = 6, tall = true)
             }
         } else if (days.isEmpty()) {
             item {

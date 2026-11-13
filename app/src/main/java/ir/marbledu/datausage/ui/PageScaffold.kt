@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import ir.marbledu.datausage.ui.theme.LocalTextScale
 
 /**
@@ -63,23 +66,82 @@ fun LargeTitleScaffold(
     content: LazyListScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Column(modifier.fillMaxSize().background(scheme.background)) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold,
-                    color = scheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant, maxLines = 2)
+    val marble = LocalMarbleColors.current
+    // هرچه محتوا بالاتر اسکرول شود، سربرگ مات‌تر (شیشه‌ای) می‌شود. با
+    // derivedStateOf فقط هنگام عبور از مرز «اسکرول‌شده / نشده» recomposition رخ می‌دهد.
+    val scrolled by remember(listState) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+        }
+    }
+    val scrim by animateFloatAsState(
+        targetValue = if (scrolled) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "header-scrim",
+    )
+    Box(modifier.fillMaxSize().background(scheme.background)) {
+        // هاله‌ی رنگی نرم پشت سربرگ؛ در تم AMOLED کاملاً محو می‌شود.
+        if (!marble.amoled) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(190.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                scheme.primary.copy(alpha = 0.10f),
+                                scheme.tertiary.copy(alpha = 0.045f),
+                                Color.Transparent,
+                            ),
+                        ),
+                    ),
+            )
+        }
+        Column(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (scrim > 0.01f) {
+                            Modifier
+                                .clipToBounds()
+                                .background(
+                                    scheme.background.copy(alpha = 0.72f * scrim),
+                                )
+                        } else {
+                            Modifier
+                        },
+                    ),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = scheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (subtitle != null) {
+                            Text(
+                                subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                    if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+                }
+                if (tabs != null && onTabSelected != null) {
+                    TopTabs(tabs = tabs, selected = selectedTab, onSelect = onTabSelected)
+                }
             }
-            if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
-        }
-        if (tabs != null && onTabSelected != null) {
-            TopTabs(tabs = tabs, selected = selectedTab, onSelect = onTabSelected)
-        }
-        LazyColumn(
+            LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -88,6 +150,7 @@ fun LargeTitleScaffold(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             content = content,
         )
+        }
     }
 }
 
@@ -209,37 +272,48 @@ fun TopTabs(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .horizontalScroll(rememberScrollState())
-            .clip(RoundedCornerShape(18.dp))
-            .background(scheme.surfaceContainerHigh.copy(alpha = 0.9f))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        tabs.forEachIndexed { index, tab ->
-            val isSelected = index == selected
-            val container by animateColorAsState(
-                targetValue = if (isSelected) scheme.primaryContainer else scheme.surfaceContainerHigh,
-                label = "top-tab-container",
-            )
-            val tint by animateColorAsState(
-                targetValue = if (isSelected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-                label = "top-tab-tint",
-            )
-            val scale by animateFloatAsState(
-                targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow,
-                ),
-                label = "top-tab-scale",
-            )
-            Box(
-                Modifier
-                    .graphicsLayer {
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Row(
+            Modifier
+                .horizontalScroll(rememberScrollState())
+                .clip(RoundedCornerShape(20.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            scheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                            scheme.surfaceContainerHigh.copy(alpha = 0.55f),
+                        ),
+                    ),
+                )
+                .border(
+                    1.dp,
+                    Color.White.copy(alpha = 0.18f),
+                    RoundedCornerShape(20.dp),
+                )
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            tabs.forEachIndexed { index, tab ->
+                val isSelected = index == selected
+                val container by animateColorAsState(
+                    targetValue = if (isSelected) scheme.primaryContainer else Color.Transparent,
+                    label = "top-tab-container",
+                )
+                val tint by animateColorAsState(
+                    targetValue = if (isSelected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                    label = "top-tab-tint",
+                )
+                val scale by animateFloatAsState(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    label = "top-tab-scale",
+                )
+                Box(
+                    Modifier
+                        .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                     }
@@ -252,14 +326,15 @@ fun TopTabs(
                         role = androidx.compose.ui.semantics.Role.Tab,
                     ) { onSelect(index) }
                     .padding(horizontal = 15.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    text = tab,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = tint,
-                    maxLines = 1,
-                )
+                ) {
+                    Text(
+                        text = tab,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = tint,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }

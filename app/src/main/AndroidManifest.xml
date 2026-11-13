@@ -21,6 +21,9 @@
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+    <!-- حباب شناور «عینک مصرف»: نمایش سرعت زنده روی بقیه‌ی برنامه‌ها -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:name=".MarbleDuApp"
@@ -61,6 +64,16 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
+
+        <!-- عینک مصرف: حباب شیشه‌ای شناور سرعت -->
+        <service
+            android:name=".service.SpeedOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating live data-speed bubble requested by the user" />
+        </service>
 
         <!-- ویجت صفحه‌ی اصلی: مصرف امروز -->
         <receiver

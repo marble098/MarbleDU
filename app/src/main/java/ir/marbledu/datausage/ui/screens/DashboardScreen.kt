@@ -44,6 +44,7 @@ import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.UsagePlanner
 import ir.marbledu.datausage.data.AppSettings
+import ir.marbledu.datausage.ui.InsightsUi
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.data.DaySummary
@@ -63,6 +64,7 @@ import ir.marbledu.datausage.ui.BarEntry
 import ir.marbledu.datausage.ui.CardHeader
 import ir.marbledu.datausage.ui.EmptyState
 import ir.marbledu.datausage.ui.FloatingBarClearance
+import ir.marbledu.datausage.ui.GlassPanel
 import ir.marbledu.datausage.ui.HeroCard
 import ir.marbledu.datausage.ui.InfoChip
 import ir.marbledu.datausage.ui.LegendDot
@@ -119,35 +121,30 @@ fun DashboardScreen(
         }
 
         if (!dashboard.hasUsageAccess) {
-            item {
-                Card(
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = scheme.errorContainer),
-                ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            context.getString(R.string.grant_usage_access),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = scheme.onErrorContainer,
-                        )
-                        Text(
-                            context.getString(R.string.grant_usage_access_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onErrorContainer,
-                        )
-                        TextButton(onClick = { UsageAccess.openSettings(context) }) {
-                            Text(context.getString(R.string.open))
-                        }
-                    }
-                }
-            }
+            item { UsageAccessBanner(persian = persian) }
         }
 
-        item {
-            val since = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -29); set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.timeInMillis
-            val recent = remember(sessionTick?.timestamp, since) { UsageLedger.recentSessions(context, since).take(5) }
-            SessionsCard(recent, persian, showDate = true)
+        if (settings.sessionsCardEnabled) {
+            item {
+                val since = java.util.Calendar.getInstance().apply {
+                    add(java.util.Calendar.DAY_OF_YEAR, -29)
+                    set(java.util.Calendar.HOUR_OF_DAY, 0)
+                    set(java.util.Calendar.MINUTE, 0)
+                    set(java.util.Calendar.SECOND, 0)
+                    set(java.util.Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                // فقط چند نشست اول خوانده می‌شود؛ بقیه با اسکرول داخل خود کارت دیده می‌شوند.
+                val recent = remember(sessionTick?.timestamp, since, settings.sessionsVisibleCount) {
+                    UsageLedger.recentSessions(context, since).take(40)
+                }
+                SessionsCard(
+                    sessions = recent,
+                    persian = persian,
+                    showDate = true,
+                    tabbed = settings.sessionsTabsEnabled,
+                    maxVisible = settings.sessionsVisibleCount,
+                )
+            }
         }
 
         if (settings.uiMode == UiMode.MINIMAL) {
@@ -232,6 +229,12 @@ fun DashboardScreen(
                 CompactMetricsCard(dashboard = dashboard, vm = vm, persian = persian)
             }
 
+            // بینش مصرف: تحلیل الگوی ۳۰ روز اخیر و بودجه‌ی امروز.
+            item {
+                val insightState: InsightsUi by vm.insights.collectAsState()
+                InsightsCard(insights = insightState, persian = persian)
+            }
+
             if (history.days.takeLast(7).any { it.total > 0 }) {
                 item {
                     WeeklyTrendCard(history.days.takeLast(7), persian)
@@ -280,8 +283,10 @@ fun DashboardScreen(
                     vm = vm,
                     persian = persian,
                     onOpenOperatorDetail = onOpenOperatorDetail,
+                    showUnknown = settings.showForeignOperators,
                 )
             }
+
             if (settings.dataCapBytes > 0) {
                 item {
                     val used = dashboard.monthMobileBytes
@@ -461,7 +466,16 @@ private fun ConnectionCard(
         }
     }
 
-    MarbleCard(padding = 14.dp) {
+    // کارت «اینترنت فعلی» با پنل شیشه‌ای: هاله‌ی رنگ اپراتور پشت شیشه می‌درخشد.
+    GlassPanel(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        tint = Color(operator.brandColor),
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OperatorBadge(
                 operator,
@@ -591,6 +605,7 @@ private fun ConnectionCard(
                     )
                 }
             }
+        }
         }
     }
 }
@@ -832,4 +847,52 @@ fun networkLabel(type: String?, persian: Boolean): String = when (type) {
     "VPN" -> "VPN"
     "OFFLINE" -> if (persian) "آفلاین" else "Offline"
     else -> if (persian) "نامشخص" else "Unknown"
+}
+
+/**
+ * بنر «اجازه‌ی دسترسی به مصرف اپ‌ها» — یکدست با بقیه‌ی کارت‌ها.
+ *
+ * قبلاً این بنر کارت قرمزِ پررنگ با دکمه‌ی متنی بی‌قاعده بود و کنارش آیکون
+ * کوچکی می‌نشست که ناهماهنگ دیده می‌شد. حالا آیکون داخل نشان رنگی است و
+ * دکمه‌ی اقدام، دکمه‌ی پرِ هم‌خانواده‌ی بقیه‌ی صفحه‌هاست.
+ */
+@Composable
+private fun UsageAccessBanner(persian: Boolean) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    MarbleCard(padding = 14.dp) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
+                    .background(scheme.error.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(MIcons.Shield, null, Modifier.size(19.dp), tint = scheme.error)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    context.getString(R.string.grant_usage_access),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    context.getString(R.string.grant_usage_access_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+        androidx.compose.material3.FilledTonalButton(
+            onClick = { UsageAccess.openSettings(context) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(MIcons.OpenInNew, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(if (persian) "فعال کردن دسترسی" else "Enable access")
+        }
+    }
 }

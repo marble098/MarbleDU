@@ -38,9 +38,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -412,50 +414,64 @@ fun NotificationPreviewCard(
         appMonitoringTitle = context.getString(R.string.notif_title),
     )
 
+    // پیش‌نمایش، دقیقاً همان زبان بصری اعلان واقعی را دارد: سربرگ با ساعت،
+    // آیکون رنگی، سرعت‌های درشت و خطوط ساختاریافته.
     Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerHighest),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerHigh),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // ---- سربرگ اعلان
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(20.dp).clip(CircleShape).background(scheme.primary),
+                    Modifier
+                        .size(26.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(scheme.primary, scheme.tertiary),
+                            ),
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(MIcons.Bell, null, Modifier.size(12.dp), tint = scheme.onPrimary)
+                    Icon(MIcons.Bell, null, Modifier.size(15.dp), tint = Color.White)
                 }
-                Text(
-                    text = context.getString(R.string.app_name),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = scheme.primary,
-                )
-                if (!preview.subText.isNullOrBlank()) {
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = "• ${preview.subText}",
+                        text = context.getString(R.string.app_name),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.primary,
+                    )
+                    Text(
+                        text = preview.subText?.takeIf { it.isNotBlank() }
+                            ?: (if (persian) "پایش مصرف" else "Usage monitor"),
                         style = MaterialTheme.typography.labelSmall,
                         color = scheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(Modifier.weight(1f))
                 Text(
-                    text = if (persian) "پیش‌نمایش اعلان" else "Preview",
+                    text = remember {
+                        java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+                            .format(java.util.Date())
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurfaceVariant,
                 )
             }
 
+            // ---- عنوان و خلاصه
             Text(
                 text = preview.title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-
             Text(
                 text = preview.summaryText,
                 style = MaterialTheme.typography.bodySmall,
@@ -464,44 +480,96 @@ fun NotificationPreviewCard(
                 overflow = TextOverflow.Ellipsis,
             )
 
+            // ---- خطوط ساختاریافته
             if (preview.expandedLines.isNotEmpty()) {
-                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.5f))
-                preview.expandedLines.forEach { line ->
+                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    preview.expandedLines.take(5).forEach { line ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier
+                                    .size(4.dp)
+                                    .clip(CircleShape)
+                                    .background(scheme.primary.copy(alpha = 0.7f)),
+                            )
+                            Spacer(Modifier.width(7.dp))
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = scheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    val extra = preview.expandedLines.size - 5
+                    if (extra > 0) {
+                        Text(
+                            text = if (persian) "و ${Formats.integer(extra.toLong(), true)} خط دیگر"
+                            else "and ${Formats.integer(extra.toLong(), false)} more",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 11.dp),
+                        )
+                    }
+                }
+            }
+
+            // ---- نوار پیشرفت با رنگ پالت
+            if (preview.progressPercent != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(7.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(scheme.primary.copy(alpha = 0.14f)),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth((preview.progressPercent / 100f).coerceIn(0f, 1f))
+                                .height(7.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(scheme.primary, scheme.tertiary),
+                                    ),
+                                ),
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = line,
+                        text = Formats.integer(preview.progressPercent.toLong(), persian) +
+                            (if (persian) "٪" else "%"),
                         style = MaterialTheme.typography.labelSmall,
-                        color = scheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.primary,
                     )
                 }
             }
 
-            if (preview.progressPercent != null) {
-                LinearProgressIndicator(
-                    progress = { (preview.progressPercent / 100f).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                )
-            }
-
+            // ---- دکمه‌های روی اعلان
             val actionLabels = buildList {
                 if (config.actionRecheckIsp) add(context.getString(R.string.notif_action_recheck))
                 if (config.actionOpenReports) add(context.getString(R.string.notif_action_reports))
                 if (config.actionStop) add(context.getString(R.string.notif_action_stop))
             }
             if (actionLabels.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 2.dp)) {
-                    actionLabels.forEach { label ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    actionLabels.take(3).forEach { label ->
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = scheme.primary.copy(alpha = 0.12f),
+                            color = scheme.secondaryContainer,
+                            modifier = Modifier.weight(1f, fill = false),
                         ) {
                             Text(
                                 text = label,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = scheme.primary,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                color = scheme.onSecondaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                             )
                         }
                     }

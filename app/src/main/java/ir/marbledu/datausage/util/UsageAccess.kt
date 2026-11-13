@@ -50,6 +50,31 @@ object UsageAccess {
         }
     }
 
+    /** آیا اجازه‌ی «نمایش روی برنامه‌های دیگر» داده شده است؟ */
+    fun canDrawOverlays(context: Context): Boolean = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(context) else true
+    }.getOrDefault(true)
+
+    /** صفحه‌ی اجازه‌ی «نمایش روی برنامه‌های دیگر» (برای حباب شناور سرعت). */
+    fun openOverlaySettings(context: Context) {
+        val candidates = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                add(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}"),
+                    ),
+                )
+                add(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+            }
+            add(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(Uri.parse("package:${context.packageName}")))
+        }
+        for (intent in candidates) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (runCatching { context.startActivity(intent) }.isSuccess) return
+        }
+    }
+
     /** باز کردن صفحه‌ی جزئیات اپ در تنظیمات سیستم (مجوزها و اعلان‌ها از این‌جا قابل تغییرند). */
     fun openAppDetails(context: Context) {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)

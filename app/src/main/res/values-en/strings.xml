@@ -152,4 +152,46 @@
     <string name="about_view_repo">View on GitHub</string>
 
 
+
+    <!-- AMOLED theme, session settings and speed overlay (1.5) -->
+    <string name="theme_amoled">Full AMOLED theme</string>
+    <string name="theme_amoled_desc">True black for OLED panels — saves battery and looks deep</string>
+    <string name="sessions_settings">Connection sessions</string>
+    <string name="sessions_settings_desc">Sessions card on Home, per-operator tabs and how many rows are shown</string>
+    <string name="sessions_show_card">Show the “Connection sessions” card on Home</string>
+    <string name="sessions_tabs">Tabs inside the sessions card</string>
+    <string name="sessions_tabs_desc">All / mobile data / Wi-Fi, plus a separate tab for every operator</string>
+    <string name="sessions_visible_count">Rows shown</string>
+    <string name="sessions_visible_hint">If there are more sessions, the list scrolls inside the card.</string>
+    <string name="overlay_title">Usage lens (floating speed)</string>
+    <string name="overlay_desc">A small glass bubble on screen showing live speed and today’s usage</string>
+    <string name="overlay_enable">Show the floating speed bubble</string>
+    <string name="overlay_enable_desc">Needs the “display over other apps” permission to be visible</string>
+    <string name="overlay_chart">Show the small speed chart</string>
+    <string name="overlay_help">Drag the bubble anywhere; tap it to open the app and use ✕ to close it.</string>
+    <string name="overlay_notification_title">Usage lens is running</string>
+    <string name="overlay_notification_text">Live speed and today’s usage are shown on screen</string>
+    <string name="overlay_stop">Close bubble</string>
+    <string name="widget_follow_theme">Follow the app theme</string>
+    <string name="widget_follow_theme_desc">Widget numbers and buttons take the colors of your theme</string>
+    <string name="widget_quick_actions">Widget shortcuts</string>
+    <string name="widget_quick_actions_desc">Pause/resume monitoring and 30-day reports buttons</string>
+    <string name="insights_title">Usage insight</string>
+    <string name="insights_desc">Know your pattern: heaviest day, peak hour and today’s budget</string>
+
+    <!-- Settings backup (1.5) -->
+    <string name="backup_title">Back up settings</string>
+    <string name="backup_desc">Save your settings to a file and restore them on another phone</string>
+    <string name="backup_hint">Only settings are saved; no usage data or personal details are in the file.</string>
+    <string name="backup_export">Save file</string>
+    <string name="backup_import">Restore from file</string>
+    <string name="backup_share">Share the backup file</string>
+    <string name="backup_restored">Settings restored successfully.</string>
+    <string name="backup_invalid">That file is not a valid MarbleDU backup.</string>
+
+    <!-- Travel mode (1.5) -->
+    <string name="travel_mode">Travel mode</string>
+    <string name="travel_mode_desc">Show estimated/unknown rows too when you use the internet outside Iran</string>
+    <string name="travel_mode_toggle">Show estimated and unknown rows</string>
+    <string name="travel_mode_toggle_desc">Handy while travelling; local carriers that aren't recognized are kept visible</string>
 </resources>

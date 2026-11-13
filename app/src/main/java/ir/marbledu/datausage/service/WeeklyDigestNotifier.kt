@@ -2,11 +2,7 @@ package ir.marbledu.datausage.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
-import ir.marbledu.datausage.MainActivity
 import ir.marbledu.datausage.MarbleDuApp
 import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.Formats
@@ -107,7 +103,7 @@ object WeeklyDigestNotifier {
         val body = line1 + "\n" + line2
 
         ensureChannel(context, persian)
-        post(context, ID_DIGEST, title, body)
+        post(context, ID_DIGEST, title, body, persian)
         prefs.edit().putLong(KEY_LAST_SENT, now).apply()
     }
 
@@ -123,26 +119,19 @@ object WeeklyDigestNotifier {
         manager.createNotificationChannel(channel)
     }
 
-    private fun post(context: Context, id: Int, title: String, text: String) {
+    private fun post(context: Context, id: Int, title: String, text: String, persian: Boolean) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        val open = PendingIntent.getActivity(
-            context,
-            id,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
+        val notification = AlertNotificationStyle.build(
+            context = context,
+            channelId = CHANNEL_ID,
+            title = title,
+            text = text,
+            persian = persian,
+            tone = AlertNotificationStyle.Tone.INFO,
+            footer = if (persian) "جمع‌بندی هفتگی MarbleDU" else "MarbleDU weekly digest",
+            actionLabel = if (persian) "دیدن گزارش‌ها" else "Open reports",
+            notificationId = id,
+        ).build()
         runCatching { manager.notify(id, notification) }
     }
 }

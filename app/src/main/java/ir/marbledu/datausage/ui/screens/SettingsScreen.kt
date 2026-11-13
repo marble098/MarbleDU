@@ -36,14 +36,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -54,6 +57,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ir.marbledu.datausage.BuildConfig
 import ir.marbledu.datausage.R
@@ -75,6 +79,7 @@ import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.OperatorBadge
 import ir.marbledu.datausage.ui.SectionTitle
 import ir.marbledu.datausage.ui.theme.ThemePalette
+import ir.marbledu.datausage.util.SettingsBackup
 import ir.marbledu.datausage.util.UsageAccess
 
 @Composable
@@ -93,6 +98,9 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     var showTariffDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showEpochPicker by remember { mutableStateOf(false) }
+    var showRestorePicker by remember { mutableStateOf(false) }
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     var selectedTab by rememberSaveable { mutableStateOf(0) }
     val settingsTabs = if (persian) listOf("ظاهری", "پایش و اعلان‌ها", "داده‌ها و درباره")
@@ -142,6 +150,50 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     }
                     OptionChip(context.getString(R.string.theme_dark), settings.themeMode == ThemeMode.DARK) {
                         vm.setTheme(ThemeMode.DARK)
+                    }
+                }
+                // تم کامل AMOLED: سیاه مطلق، مناسب پنل‌های OLED
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (settings.themeMode == ThemeMode.AMOLED) Color(0xFF0B0B0F) else MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .clickable { vm.setTheme(ThemeMode.AMOLED) }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color(ThemePalette.of(settings.palette).primary),
+                                        Color.Black,
+                                    ),
+                                ),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(MIcons.Palette, null, Modifier.size(17.dp), tint = Color.White)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = context.getString(R.string.theme_amoled),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (settings.themeMode == ThemeMode.AMOLED) Color.White else MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = context.getString(R.string.theme_amoled_desc),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (settings.themeMode == ThemeMode.AMOLED) Color(0xFFB7BBC6) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (settings.themeMode == ThemeMode.AMOLED) {
+                        Icon(MIcons.Check, null, Modifier.size(20.dp), tint = Color(ThemePalette.of(settings.palette).primary))
                     }
                 }
             }
@@ -499,6 +551,102 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     checked = settings.widgetBigText,
                     onCheckedChange = { vm.setWidgetBigText(it) },
                 )
+                SwitchRow(
+                    label = context.getString(R.string.widget_follow_theme),
+                    description = context.getString(R.string.widget_follow_theme_desc),
+                    checked = settings.widgetFollowTheme,
+                    onCheckedChange = { vm.setWidgetFollowTheme(it) },
+                )
+                SwitchRow(
+                    label = context.getString(R.string.widget_quick_actions),
+                    description = context.getString(R.string.widget_quick_actions_desc),
+                    checked = settings.widgetQuickActions,
+                    onCheckedChange = { vm.setWidgetQuickActions(it) },
+                )
+            }
+        }
+
+        // --------------------------------------------- نشست‌های اتصال در خانه
+        item {
+            SettingsCard(
+                title = context.getString(R.string.sessions_settings),
+                description = context.getString(R.string.sessions_settings_desc),
+                icon = MIcons.Clock,
+                accent = MaterialTheme.colorScheme.secondary,
+            ) {
+                SwitchRow(
+                    label = context.getString(R.string.sessions_show_card),
+                    checked = settings.sessionsCardEnabled,
+                    onCheckedChange = { vm.setSessionsCard(it) },
+                )
+                SwitchRow(
+                    label = context.getString(R.string.sessions_tabs),
+                    description = context.getString(R.string.sessions_tabs_desc),
+                    checked = settings.sessionsTabsEnabled,
+                    onCheckedChange = { vm.setSessionsTabs(it) },
+                )
+                Text(
+                    text = context.getString(R.string.sessions_visible_count),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listOf(2, 3, 4, 5, 6, 8)) { count ->
+                        OptionChip(
+                            label = Formats.integer(count.toLong(), persian),
+                            selected = settings.sessionsVisibleCount == count,
+                        ) { vm.setSessionsVisible(count) }
+                    }
+                }
+                Text(
+                    text = context.getString(R.string.sessions_visible_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        // ------------------------------------------------ عینک مصرف (overlay)
+        item {
+            SettingsCard(
+                title = context.getString(R.string.overlay_title),
+                description = context.getString(R.string.overlay_desc),
+                icon = MIcons.Speed,
+                accent = MaterialTheme.colorScheme.tertiary,
+            ) {
+                val overlayGranted = UsageAccess.canDrawOverlays(context)
+                SwitchRow(
+                    label = context.getString(R.string.overlay_enable),
+                    description = context.getString(R.string.overlay_enable_desc),
+                    checked = settings.speedOverlay,
+                    onCheckedChange = { enabled ->
+                        if (enabled && !overlayGranted) {
+                            // اول اجازه‌ی «نمایش روی برنامه‌های دیگر» را بخواه؛
+                            // کاربر بعد از برگشتن، کلید را دوباره می‌زند.
+                            UsageAccess.openOverlaySettings(context)
+                        } else {
+                            vm.setSpeedOverlay(enabled)
+                        }
+                    },
+                )
+                if (!overlayGranted) {
+                    TextButton(onClick = { UsageAccess.openOverlaySettings(context) }) {
+                        Text(
+                            if (persian) "دادن اجازه‌ی نمایش روی برنامه‌های دیگر"
+                            else "Grant “display over other apps”",
+                        )
+                    }
+                }
+                SwitchRow(
+                    label = context.getString(R.string.overlay_chart),
+                    checked = settings.speedOverlayChart,
+                    onCheckedChange = { vm.setSpeedOverlayChart(it) },
+                )
+                Text(
+                    text = context.getString(R.string.overlay_help),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -598,6 +746,81 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     Text(
                         text = if (persian) "حذف همه‌ی آمار و شروع دوباره" else "Erase all stats and start over",
                         color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+
+        // ------------------------------------------------ حالت سفر / اپراتور خارجی
+        item {
+            SettingsCard(
+                title = context.getString(R.string.travel_mode),
+                description = context.getString(R.string.travel_mode_desc),
+                icon = MIcons.Globe,
+            ) {
+                SwitchRow(
+                    label = context.getString(R.string.travel_mode_toggle),
+                    description = context.getString(R.string.travel_mode_toggle_desc),
+                    checked = settings.showForeignOperators,
+                    onCheckedChange = { vm.setShowForeignOperators(it) },
+                )
+            }
+        }
+
+        // ------------------------------------------- پشتیبان‌گیری تنظیمات
+        item {
+            SettingsCard(
+                title = context.getString(R.string.backup_title),
+                description = context.getString(R.string.backup_desc),
+                icon = MIcons.Share,
+                accent = MaterialTheme.colorScheme.secondary,
+            ) {
+                Text(
+                    text = context.getString(R.string.backup_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            scope.launch {
+                                runCatching {
+                                    val uri = SettingsBackup.export(context, settings)
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/json"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.backup_title))
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(intent, context.getString(R.string.backup_share)),
+                                    )
+                                }.onFailure { backupMessage = it.message }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(MIcons.Share, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(context.getString(R.string.backup_export), maxLines = 1)
+                    }
+                    FilledTonalButton(
+                        onClick = { showRestorePicker = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(MIcons.Refresh, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(context.getString(R.string.backup_import), maxLines = 1)
+                    }
+                }
+                backupMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -839,6 +1062,27 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         )
     }
 
+    if (showRestorePicker) {
+        val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            showRestorePicker = false
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                val restored = SettingsBackup.readFrom(context, uri, settings)
+                if (restored == null) {
+                    backupMessage = context.getString(R.string.backup_invalid)
+                } else {
+                    vm.applyBackup(restored)
+                    backupMessage = context.getString(R.string.backup_restored)
+                }
+            }
+        }
+        LaunchedEffect(Unit) {
+            picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+        }
+    }
+
     if (showChangelog) {
         AlertDialog(
             onDismissRequest = { showChangelog = false },
@@ -942,36 +1186,50 @@ private fun PermissionStatusRow(label: String, granted: Boolean, onOpen: () -> U
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.width(8.dp))
+        // «وضعیت» به‌شکل یک نشانِ کپسولیِ رنگی؛ بدون آیکون سرگردان کنار تیتر.
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = if (granted) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHighest
+            },
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            // آیکون پنجره به بیرون یعنی صفحه‌ی تنظیمات سیستم باز می‌شود
-            Icon(
-                imageVector = MIcons.OpenInNew,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = if (granted) MIcons.Check else MIcons.Clock,
-                contentDescription = if (granted) "granted" else "denied",
-                modifier = Modifier.size(18.dp),
-                tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = if (granted) ctx.getString(R.string.perm_status_granted)
-                else ctx.getString(R.string.perm_status_denied),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = if (granted) MIcons.Check else MIcons.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp),
+                    tint = if (granted) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                Text(
+                    text = if (granted) ctx.getString(R.string.perm_status_granted)
+                    else ctx.getString(R.string.perm_status_denied),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (granted) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
         }
     }
 }
@@ -1019,6 +1277,17 @@ private fun OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 private fun changelogText(persian: Boolean): String = if (persian) {
+    "۱.۵.۰ – نوار شیشه‌ای، تم AMOLED، نشست‌های تب‌دار و چهار قابلیت تازه\n" +
+        "• نوار تب شیشه‌ای و شفاف با هاله‌ی رنگی و انیمیشن فنری؛ سربرگ صفحه‌ها هم با اسکرول شیشه‌ای می‌شود\n" +
+        "• کارت نشست‌ها با ارتفاع محدود، اسکرول داخلی و تب‌بندی «همه / داده موبایل / وای‌فای / هر اپراتور» (قابل خاموش کردن از تنظیمات)\n" +
+        "• ۱۱ پالت رنگی شادتر + تم کامل AMOLED با پس‌زمینه‌ی مشکی مطلق\n" +
+        "• رفع علامت نامرتب جلوی تیترهای کارت اجازه‌ها: نشان‌های کپسولی رنگی\n" +
+        "• ویجت تازه: سربرگ، عدد بزرگ، دو ستون موبایل/وای‌فای، نوار بسته و دو میان‌بر\n" +
+        "• اعلان پایش و هشدارها با ساختار و رنگ تازه: سربرگ، خطوط جدا، نوار پیشرفت و دکمه‌ی آیکون‌دار\n" +
+        "• بینش مصرف: الگوی روزانه، سنگین‌ترین و سبک‌ترین روز هفته، ساعت اوج و بودجه‌ی امروز\n" +
+        "• عینک مصرف: حباب شیشه‌ای سرعت و مصرف روی همه‌ی اپ‌ها (قابل جابه‌جایی)\n" +
+        "• پشتیبان‌گیری و بازیابی تنظیمات در یک فایل JSON\n" +
+        "• حالت سفر: نمایش ردیف‌های تخمینی و اپراتورهای ناشناخته\n\n" +
     "۱.۴.۰ – صفحه‌ی اپراتور تمام‌صفحه، هشدار جهش مصرف و خلاصه‌ی هفتگی\n" +
         "• صفحه‌ی کامل جزئیات هر اپراتور: روند ۳۰ روزه، ساعت‌های اوج و تفکیک موبایل/وای‌فای؛ روی هر ستون روز بزن تا ۲۴ ساعت همان روز باز شود\n" +
         "• کارت «اپراتورها و نوع اتصال» در خانه: امروز / ۷ روز اخیر / انتخاب تاریخ شمسی\n" +
@@ -1068,6 +1337,17 @@ private fun changelogText(persian: Boolean): String = if (persian) {
         "• فارسی/انگلیسی با چیدمان راست‌چین و چپ‌چین\n" +
         "• طراحی Material 3 Expressive"
 } else {
+    "1.5.0 – Glass tab bar, AMOLED theme, tabbed sessions & four new features\n" +
+        "• Glassy translucent tab bar with a soft colour glow, springy pill indicator; page headers turn glassy as you scroll\n" +
+        "• Sessions card is height-capped with inner scrolling and tabs: All / Mobile data / Wi-Fi / each operator (all switchable in Settings)\n" +
+        "• 11 livelier colour palettes + a true-black AMOLED theme\n" +
+        "• Fixed the stray glyph in front of the permissions card titles — statuses are now tidy coloured pills\n" +
+        "• Redesigned home-screen widget: header, big number, mobile/Wi-Fi columns, plan bar and two quick actions\n" +
+        "• Redesigned monitoring + alert notifications: structure, separators, progress bar and icon buttons\n" +
+        "• Usage insights: daily pattern, heaviest & lightest weekday, peak hour and today's budget\n" +
+        "• Speed lens: a draggable glass bubble showing live speed and today's usage over any app\n" +
+        "• Settings backup & restore as a single JSON file\n" +
+        "• Travel mode: show estimated rows and unrecognised carriers\n\n" +
     "1.4.0 – Full-screen operator page, spike alerts & weekly digest\n" +
         "• Full operator details page: 30-day trend, peak hours, mobile/Wi-Fi split; tap any day bar for its 24 hours\n" +
         "• \"Operators & transport\" card on Home: today / last 7 days / pick a Jalali date\n" +
