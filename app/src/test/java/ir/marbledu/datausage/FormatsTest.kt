@@ -10,21 +10,28 @@ class FormatsTest {
     @Test
     fun bytes_uses_binary_units() {
         assertEquals("0 B", Formats.bytes(0, false))
+        assertEquals("۰ بایت", Formats.bytes(0, true))
         assertTrue(Formats.bytes(1024, false).startsWith("1"))
         assertTrue(Formats.bytes(1024L * 1024 * 1024, false).contains("GB"))
+        assertTrue(Formats.bytes(1024L * 1024, true).contains("مگابایت"))
     }
 
     @Test
-    fun persian_digits_are_converted() {
+    fun persian_digits_are_converted_and_normalized() {
         assertEquals("۱۲۳", Formats.toPersianDigits("123"))
+        assertEquals("123456", Formats.normalizeDigits("۱۲۳٤٥٦"))
         assertEquals("1,024", Formats.integer(1024, false))
         assertEquals("۱,۰۲۴", Formats.integer(1024, true))
     }
 
     @Test
-    fun speed_is_formatted() {
+    fun speed_and_compact_formats_are_localized() {
         assertTrue(Formats.speed(2048.0, false).contains("/s"))
         assertTrue(Formats.speed(2048.0, true).contains("بر ثانیه"))
+        assertEquals("۰ ب/ث", Formats.compactSpeed(0.0, true))
+        assertEquals("0 B/s", Formats.compactSpeed(0.0, false))
+        assertTrue(Formats.compactBytes(2L * 1024 * 1024, true).contains("م.ب"))
+        assertTrue(Formats.compactSpeed(512.0 * 1024, true).contains("ک.ب/ث"))
     }
 
     @Test

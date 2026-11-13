@@ -101,7 +101,6 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val scheme = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val iran = settings.iran
 
     val days = history.days
     val selectedIndex = days.indexOfFirst { it.startMillis == dayUi.dayStart }.takeIf { it >= 0 }
@@ -293,32 +292,26 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 if (report == null) {
                     item { LoadingBox() }
                 } else {
-                    if (iran.detectOperator) {
-                        item { OperatorsCard(report, persian) }
+                    item { OperatorsCard(report, persian) }
+                    item {
+                        HoursCard(
+                            report = report,
+                            persian = persian,
+                            selection = hourSelection,
+                            onSelect = { hourSelection = if (hourSelection == it) null else it },
+                            mode = hourMode,
+                            onMode = { hourMode = it },
+                        )
                     }
-                    if (iran.showPeakHours) {
-                        item {
-                            HoursCard(
-                                report = report,
-                                persian = persian,
-                                selection = hourSelection,
-                                onSelect = { hourSelection = if (hourSelection == it) null else it },
-                                mode = hourMode,
-                                onMode = { hourMode = it },
-                            )
-                        }
-                    }
-                    if (iran.showPerAppBreakdown) {
-                        item {
-                            AppsCard(
-                                report = report,
-                                persian = persian,
-                                showAll = showAllApps,
-                                onToggleAll = { showAllApps = !showAllApps },
-                                selection = appSelection,
-                                onSelect = { appSelection = it },
-                            )
-                        }
+                    item {
+                        AppsCard(
+                            report = report,
+                            persian = persian,
+                            showAll = showAllApps,
+                            onToggleAll = { showAllApps = !showAllApps },
+                            selection = appSelection,
+                            onSelect = { appSelection = it },
+                        )
                     }
                 }
             }
@@ -343,7 +336,7 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     ) {
                         Icon(MIcons.Share, null, Modifier.size(16.dp))
                         Spacer(Modifier.size(6.dp))
-                        Text(if (persian) "CSV ۳۰ روز" else "30-day CSV", maxLines = 1)
+                        Text(if (persian) "خروجی ۳۰ روز" else "30-day CSV", maxLines = 1)
                     }
                     FilledTonalButton(
                         onClick = {
@@ -366,7 +359,7 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     ) {
                         Icon(MIcons.Reports, null, Modifier.size(16.dp))
                         Spacer(Modifier.size(6.dp))
-                        Text(if (persian) "CSV این روز" else "This day CSV", maxLines = 1)
+                        Text(if (persian) "خروجی این روز" else "This day CSV", maxLines = 1)
                     }
                 }
             }
@@ -382,18 +375,16 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 }
             }
 
-            if (iran.showBillingCycle) {
-                item {
-                    StatCard(
-                        title = context.getString(R.string.billing_cycle),
-                        value = (if (persian) "روز " else "Day ") +
-                            Formats.integer(settings.billingCycleDay.toLong(), persian),
-                        subtitle = if (persian) "شروع دوره‌ی صورتحساب شما" else "Your cycle start day",
-                        icon = MIcons.Calendar,
-                        accent = scheme.tertiary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+            item {
+                StatCard(
+                    title = context.getString(R.string.billing_cycle),
+                    value = (if (persian) "روز " else "Day ") +
+                        Formats.integer(settings.billingCycleDay.toLong(), persian),
+                    subtitle = if (persian) "شروع دوره‌ی صورتحساب شما" else "Your cycle start day",
+                    icon = MIcons.Calendar,
+                    accent = scheme.tertiary,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             // -------------------------------------------------- همه‌ی روزها
@@ -858,13 +849,8 @@ private fun HoursCard(
 }
 
 /** نام بومیِ ردیف‌های ویژه (سیستم، هات‌اسپات، اپ‌های حذف‌شده). */
-fun appDisplayName(app: AppTraffic, persian: Boolean): String = when (app.uid) {
-    android.app.usage.NetworkStats.Bucket.UID_REMOVED -> if (persian) "اپ‌های حذف‌شده" else "Removed apps"
-    android.app.usage.NetworkStats.Bucket.UID_TETHERING -> if (persian) "هات‌اسپات" else "Hotspot / tethering"
-    0 -> if (persian) "هسته‌ی سیستم" else "System core"
-    1000 -> if (persian) "سیستم اندروید" else "Android system"
-    else -> app.label
-}
+fun appDisplayName(app: AppTraffic, persian: Boolean): String =
+    OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
 
 @Composable
 private fun AppsCard(

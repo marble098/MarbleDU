@@ -194,7 +194,6 @@ private val VazirTypography = Typography().let { base ->
 fun MarbleDuTheme(
     persian: Boolean,
     darkTheme: Boolean = isSystemInDarkTheme(),
-    expressive: Boolean = true,
     dynamicColor: Boolean = true,
     palette: ThemePalette = ThemePalette.MARBLE,
     content: @Composable () -> Unit,
@@ -224,19 +223,11 @@ fun MarbleDuTheme(
         LocalLayoutDirection provides layoutDirection,
         LocalMarbleColors provides marble,
     ) {
-        if (expressive) {
-            MaterialExpressiveTheme(
-                colorScheme = scheme,
-                motionScheme = MotionScheme.expressive(),
-                typography = VazirTypography,
-                content = content,
-            )
-        } else {
-            MaterialTheme(
-                colorScheme = scheme,
-                typography = VazirTypography,
-                content = content,
-            )
-        }
+        MaterialExpressiveTheme(
+            colorScheme = scheme,
+            motionScheme = MotionScheme.expressive(),
+            typography = VazirTypography,
+            content = content,
+        )
     }
 }

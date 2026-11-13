@@ -108,12 +108,19 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             icon = MIcons.Upload,
                         )
                         val network = t?.network
-                        if (network != null && settings.iran.detectOperator) {
+                        if (network != null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 OperatorBadge(network.operator, size = 26.dp)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    network.operator.name(persian),
+                                    text = if (network.type == ir.marbledu.datausage.data.ConnectionType.WIFI &&
+                                        !network.wifiOperatorResolved &&
+                                        network.wifiLookupStatus == ir.marbledu.datausage.data.IspResolver.LookupStatus.SEARCHING
+                                    ) {
+                                        if (persian) "در حال شناسایی اپراتور…" else "Detecting ISP…"
+                                    } else {
+                                        network.operator.name(persian)
+                                    },
                                     style = MaterialTheme.typography.labelMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -192,10 +199,10 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         item {
             StatCard(
                 title = context.getString(R.string.session_timeline),
-                value = if (t == null) "--" else context.getString(
+                value = if (t == null) "—" else context.getString(
                     R.string.from_to,
-                    LiveMonitor.formatHourMinute(t.sessionStart),
-                    LiveMonitor.formatHourMinute(t.timestamp),
+                    LiveMonitor.formatHourMinute(t.sessionStart, persian),
+                    LiveMonitor.formatHourMinute(t.timestamp, persian),
                 ),
                 subtitle = if (t == null) null else
                     "${Formats.bytes(t.sessionRxBytes + t.sessionTxBytes, persian)} " +
@@ -242,7 +249,7 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                                     Formats.integer(result.jitterMs, persian)
                                 } ${context.getString(R.string.ms)}   •   ${
                                     context.getString(R.string.packet_loss)
-                                }: ${Formats.integer(result.lossPercent.toLong(), persian)}%",
+                                }: ${Formats.integer(result.lossPercent.toLong(), persian)}${if (persian) "٪" else "%"}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -250,7 +257,7 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         Text(
                             text = if (result.averageMs > 0) {
                                 "${Formats.number(result.averageMs, persian, 0)} ${context.getString(R.string.ms)}"
-                            } else "--",
+                            } else "—",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (result.averageMs in 1.0..120.0) {

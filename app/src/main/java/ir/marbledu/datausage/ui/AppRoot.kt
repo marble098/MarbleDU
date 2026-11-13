@@ -29,10 +29,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import ir.marbledu.datausage.MainActivity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,7 +74,13 @@ private enum class Tab(val labelRes: Int, val icon: ImageVector) {
 }
 
 @Composable
-fun AppRoot(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
+fun AppRoot(
+    vm: MainViewModel,
+    settings: AppSettings,
+    persian: Boolean,
+    requestedTab: String? = null,
+    onConsumeRequestedTab: () -> Unit = {},
+) {
     val context = LocalContext.current
     val dashboard by vm.dashboard.collectAsState()
     val scope = rememberCoroutineScope()
@@ -97,6 +105,13 @@ fun AppRoot(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     // لمس تب؛ نشانگرِ نوار پایین دقیقاً همراه انگشت حرکت می‌کند.
     val pagerState = rememberPagerState(initialPage = 0) { tabs.size }
     val scheme = MaterialTheme.colorScheme
+
+    LaunchedEffect(requestedTab) {
+        if (requestedTab == MainActivity.TAB_REPORTS) {
+            pagerState.animateScrollToPage(Tab.REPORTS.ordinal)
+            onConsumeRequestedTab()
+        }
+    }
 
     Box(
         Modifier

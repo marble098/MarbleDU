@@ -61,4 +61,12 @@ object MIcons {
     val ChevronEnd = icon("chevron-end", "M8.6 5.4L10 4l8 8-8 8-1.4-1.4L15.2 12z")
     val Vpn = icon("vpn", "M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5zM12 7a3 3 0 0 0-1 5.8V17h2v-4.2A3 3 0 0 0 12 7z")
     val ArrowForward = icon("arrow", "M12 4l8 8-8 8-1.4-1.4L16.2 13H4v-2h12.2L10.6 5.4z")
+    val Bell = icon(
+        "bell",
+        "M12 22c1.1 0 2-0.9 2-2h-4c0 1.1 0.9 2 2 2zM18 16v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-0.83-0.67-1.5-1.5-1.5s-1.5 0.67-1.5 1.5v0.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z",
+    )
+    val Tune = icon(
+        "tune",
+        "M3 17v2h6v-2H3zM3 5v2h10V5H3zM13 21v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zM21 13v-2H11v2h10zM15 9h2V7h4V5h-4V3h-2v6z",
+    )
 }

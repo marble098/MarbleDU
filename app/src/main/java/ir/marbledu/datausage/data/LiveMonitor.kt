@@ -21,7 +21,10 @@ import kotlin.math.max
 class LiveMonitor(private val context: Context) {
 
     /** جریانِ سرعت لحظه‌ای و پینگ، هر ثانیه. */
-    fun stream(intervalMillis: Long = 1000): Flow<LiveTick> = flow {
+    fun stream(
+        intervalMillis: Long = 1000,
+        persianProvider: () -> Boolean = { true },
+    ): Flow<LiveTick> = flow {
         var lastRx = 0L
         var lastTx = 0L
         var lastTime = 0L
@@ -38,8 +41,6 @@ class LiveMonitor(private val context: Context) {
                 lastRx = rx; lastTx = tx; lastTime = now; started = true
                 sessionStart = now
             }
-            // سرعت را با زمان واقعی سپری‌شده حساب می‌کنیم، نه فاصله‌ی ثابت؛
-            // وگرنه وقتی delay دیرتر از حد معمول اجرا شود سرعت اشتباه می‌شود.
             val elapsed = (now - lastTime).coerceAtLeast(1)
             val dRx = max(0L, rx - lastRx)
             val dTx = max(0L, tx - lastTx)
@@ -50,10 +51,8 @@ class LiveMonitor(private val context: Context) {
             speedHistory.addLast(down + up)
             if (speedHistory.size > 30) speedHistory.removeFirst()
             peak = max(peak, down + up)
-            // اپراتور وای‌فای (در صورت نیاز) در پس‌زمینه پیدا می‌شود و مصرف همین
-            // لحظه در دفترِ «مصرف به تفکیک اپراتور» ثبت می‌شود.
             IspResolver.ensureFresh(context)
-            val snapshot = NetworkStatsReader.currentNetwork(context)
+            val snapshot = NetworkStatsReader.currentNetwork(context, persianProvider())
             UsageLedger.sample(context, rx, tx, snapshot, now)
             emit(
                 LiveTick(
@@ -69,7 +68,7 @@ class LiveMonitor(private val context: Context) {
                     peakSpeed = peak,
                     network = snapshot,
                     uptimeMillis = SystemClock.elapsedRealtime(),
-                )
+                ),
             )
             delay(intervalMillis)
         }
@@ -93,7 +92,7 @@ class LiveMonitor(private val context: Context) {
                     maxMs = samples.maxOrNull() ?: -1,
                     jitterMs = if (samples.size > 1) samples.max() - samples.min() else 0,
                     lossPercent = ((4 - samples.size) * 100) / 4,
-                )
+                ),
             )
         }
     }.flowOn(Dispatchers.IO)
@@ -109,15 +108,11 @@ class LiveMonitor(private val context: Context) {
         }.getOrDefault(-1L)
     }
 
-    /**
-     * پایش لحظه‌ای تغییر شبکه. یک flow ساده با polling است؛ نسخه‌ی قبلی از
-     * channelFlow + launch داخلی استفاده می‌کرد که awaitClose را دوبار صدا می‌زد
-     * و flow را می‌بست.
-     */
-    fun observeNetwork(): Flow<NetworkSnapshot> = flow {
+    /** پایش لحظه‌ای تغییر شبکه. */
+    fun observeNetwork(persianProvider: () -> Boolean = { true }): Flow<NetworkSnapshot> = flow {
         var last: NetworkSnapshot? = null
         while (true) {
-            val snapshot = NetworkStatsReader.currentNetwork(context)
+            val snapshot = NetworkStatsReader.currentNetwork(context, persianProvider())
             if (snapshot.type != last?.type || snapshot.operator.id != last?.operator?.id) {
                 last = snapshot
                 emit(snapshot)
@@ -130,8 +125,17 @@ class LiveMonitor(private val context: Context) {
         fun formatHourMinute(millis: Long): String =
             SimpleDateFormat("HH:mm", Locale.US).format(Date(millis))
 
+        fun formatHourMinute(millis: Long, persian: Boolean): String {
+            val raw = formatHourMinute(millis)
+            return if (persian) Formats.toPersianDigits(raw) else raw
+        }
+
         fun formatDate(millis: Long): String =
             SimpleDateFormat("yyyy/MM/dd", Locale.US).format(Date(millis))
+
+        fun formatDate(millis: Long, persian: Boolean): String =
+            if (persian) JalaliDate.fromMillis(millis).numeric(true)
+            else formatDate(millis)
     }
 }
 

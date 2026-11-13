@@ -33,6 +33,7 @@ import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.LiveMonitor
+import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.TimeRange
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableStateOf
@@ -148,7 +149,8 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 val top = combined.take(5)
                 val rest = combined.drop(5).fold(0L) { acc, pair -> acc + pair.first }
                 val slices = top.mapIndexed { i, (bytes, app) ->
-                    DonutSlice(app.label, bytes.toFloat(), marble.chart[i % marble.chart.size], Formats.bytes(bytes, persian))
+                    val displayName = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
+                    DonutSlice(displayName, bytes.toFloat(), marble.chart[i % marble.chart.size], Formats.bytes(bytes, persian))
                 } + if (rest > 0) listOf(
                     DonutSlice(
                         if (persian) "بقیه" else "Others",
@@ -202,6 +204,10 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 }
             }
             items(combined) { (bytes, app) ->
+                val displayName = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
+                val subLabel = if (app.packageName.startsWith("uid:")) {
+                    if (persian) "سرویس سیستم" else "System service"
+                } else app.packageName
                 Card(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
@@ -211,10 +217,10 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 ) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            AppIcon(app.packageName.substringBefore(':'), app.label, size = 34.dp)
+                            AppIcon(app.packageName.substringBefore(':'), displayName, size = 34.dp)
                             Spacer(Modifier.width(10.dp))
                             Text(
-                                text = app.label,
+                                text = displayName,
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f),
@@ -227,15 +233,18 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             )
                         }
                         Text(
-                            text = "${LiveMonitor.formatDate(app.firstTimestamp)} • ${
-                                LiveMonitor.formatHourMinute(app.firstTimestamp)
-                            } → ${LiveMonitor.formatHourMinute(app.lastTimestamp)}",
+                            text = "${LiveMonitor.formatDate(app.firstTimestamp, persian)} • " +
+                                context.getString(
+                                    R.string.from_to,
+                                    LiveMonitor.formatHourMinute(app.firstTimestamp, persian),
+                                    LiveMonitor.formatHourMinute(app.lastTimestamp, persian),
+                                ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(6.dp))
                         UsageBar(
-                            label = app.packageName,
+                            label = subLabel,
                             bytes = bytes,
                             fraction = bytes.toFloat() / max,
                             persian = persian,

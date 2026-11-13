@@ -98,9 +98,16 @@
     <string name="gb">گیگابایت</string>
     <string name="mb">مگابایت</string>
     <string name="notif_channel_name">پایش مصرف</string>
-    <string name="notif_channel_desc">نمایش سرعت و مصرف در نوار اعلان</string>
+    <string name="notif_channel_desc">نمایش سرعت، اپراتور و مصرف اینترنت در نوار اعلان</string>
     <string name="notif_title">MarbleDU در حال پایش است</string>
     <string name="notif_text">%1$s • %2$s</string>
+    <string name="notif_action_recheck">بررسی اپراتور</string>
+    <string name="notif_action_reports">گزارش ۳۰ روز</string>
+    <string name="notif_action_stop">توقف پایش</string>
+    <string name="notif_customization">شخصی‌سازی اعلان</string>
+    <string name="notif_customization_desc">انتخاب دقیق اطلاعات، سبک نمایش، نوار پیشرفت و دکمه‌های روی اعلان</string>
+    <string name="notif_open_customizer">سفارشی‌سازی کامل اعلان</string>
+    <string name="notif_system_settings">تنظیمات اعلان در سیستم</string>
     <string name="reports_title">گزارش‌ها</string>
     <string name="share_csv_title">گزارش مصرف MarbleDU</string>
     <string name="no_apps">برای دیدن مصرف اپ‌ها اجازه‌ی دسترسی بدهید.</string>

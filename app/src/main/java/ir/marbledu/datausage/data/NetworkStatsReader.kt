@@ -1,24 +1,21 @@
 package ir.marbledu.datausage.data
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.TrafficStats
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
+import ir.marbledu.datausage.R
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
 /**
- * خواندن شمارنده‌های شبکه‌ی سیستم از /sys/class/net/<iface>/statistics.
- *
- * کل ایده (همان روشی که Xray/NekoBox بدون VPN استفاده می‌کند):
- *  ۱) شمارنده‌های شبکه‌ی سیستم را می‌خوانیم (کل مصرف دستگاه).
- *  ۲) با NetworkStatsManager مصرف هر اپ را جدا می‌کنیم.
- *  ۳) اختلاف دو نمونه = مصرف بازه‌ی زمانی؛ که با سرعت لحظه‌ای و پینگ ترکیب می‌شود.
- * هیچ VPN، هیچ دسترسی root و هیچ سرویس پس‌زمینه‌ی همیشه‌روشن لازم نیست.
+ * خواندن شمارنده‌های شبکه‌ی سیستم و وضعیت اتصال فعلی بدون VPN و بدون root.
  */
 object NetworkStatsReader {
 
@@ -53,34 +50,48 @@ object NetworkStatsReader {
         if (file.canRead()) file.readText().trim().toLong() else 0L
     }.getOrDefault(0L)
 
-    /** وضعیت فعلی شبکه: نوع، اپراتورِ اینترنت (حتی روی وای‌فای)، سیم‌کارت و IP. */
+    /** وضعیت فعلی شبکه: نوع، اپراتورِ اینترنت (حتی روی وای‌فای/هات‌اسپات)، سیم‌کارت و IP. */
     @SuppressLint("MissingPermission")
-    fun currentNetwork(context: Context): NetworkSnapshot {
+    @Suppress("DEPRECATION")
+    fun currentNetwork(context: Context, persian: Boolean = isPersian(context)): NetworkSnapshot {
         val cm = context.getSystemService(ConnectivityManager::class.java)
         val caps = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+        val vpn = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+
         val type = when {
             caps == null -> ConnectionType.OFFLINE
             caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> ConnectionType.WIFI
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> ConnectionType.CELLULAR
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> ConnectionType.ETHERNET
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> ConnectionType.VPN
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> ConnectionType.CELLULAR
+            vpn -> resolveUnderlyingTransport(context, cm)
             else -> ConnectionType.OTHER
         }
-        val vpn = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
         val sim = simOperator(context)
 
         var ispRaw = ""
         var ispAsn = 0
+        var publicIp = ""
         var wifiResolved = false
+        var wifiSourceKind = IspResolver.WifiSourceKind.UNKNOWN
+        var wifiStatus = IspResolver.LookupStatus.IDLE
+        var wifiMethod = IspResolver.DetectionMethod.NONE
+        var wifiSsid = ""
+
         val operator: OperatorCatalog.Operator = when (type) {
             ConnectionType.CELLULAR -> sim ?: OperatorCatalog.byId(OperatorCatalog.ID_MOBILE)
             ConnectionType.WIFI, ConnectionType.ETHERNET -> {
-                // اپراتورِ اینترنت وای‌فای از روی IP عمومی پیدا می‌شود (IspResolver).
-                val key = IspResolver.physicalFixedNetwork(context)?.networkHandle
-                val result = if (key != null) IspResolver.current(key) else null
+                val fixedNet = IspResolver.physicalFixedNetwork(context)
+                val key = fixedNet?.networkHandle ?: 0L
+                val state = IspResolver.stateFor(key)
+                val result = IspResolver.current(key)
+                wifiSourceKind = state.sourceKind
+                wifiStatus = state.status
+                wifiSsid = state.wifiSsid
                 if (result != null) {
                     ispRaw = result.rawIsp
                     ispAsn = result.asn
+                    publicIp = result.publicIp
+                    wifiMethod = result.detectionMethod
                     wifiResolved = true
                     result.operator
                 } else {
@@ -90,11 +101,14 @@ object NetworkStatsReader {
             ConnectionType.OFFLINE -> OperatorCatalog.byId(OperatorCatalog.ID_UNKNOWN)
             else -> sim ?: OperatorCatalog.byId(OperatorCatalog.ID_UNKNOWN)
         }
-        val persian = isPersian(context)
+
+        val localizedUnknown = if (persian) "نامشخص" else "Unknown"
+        val mobileTech = if (type == ConnectionType.CELLULAR) mobileTechName(context, persian) else ""
+
         return NetworkSnapshot(
             type = type,
             carrierName = if (operator.id == OperatorCatalog.ID_UNKNOWN) {
-                context.getString(ir.marbledu.datausage.R.string.network_unknown)
+                runCatching { context.getString(R.string.network_unknown) }.getOrDefault(localizedUnknown)
             } else operator.name(persian),
             ipAddress = localIpAddress(),
             isValidated = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true,
@@ -106,7 +120,51 @@ object NetworkStatsReader {
             ispName = ispRaw,
             ispAsn = ispAsn,
             wifiOperatorResolved = wifiResolved,
+            wifiSourceKind = wifiSourceKind,
+            wifiLookupStatus = wifiStatus,
+            wifiDetectionMethod = wifiMethod,
+            wifiSsid = wifiSsid,
+            publicIp = publicIp,
+            mobileTech = mobileTech,
         )
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveUnderlyingTransport(context: Context, cm: ConnectivityManager?): ConnectionType {
+        if (cm == null) return ConnectionType.VPN
+        val fixed = IspResolver.physicalFixedNetwork(context)
+        if (fixed != null) {
+            val fixedCaps = runCatching { cm.getNetworkCapabilities(fixed) }.getOrNull()
+            return if (fixedCaps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true) {
+                ConnectionType.ETHERNET
+            } else {
+                ConnectionType.WIFI
+            }
+        }
+        val hasCellular = runCatching {
+            cm.allNetworks.any { net ->
+                val c = cm.getNetworkCapabilities(net) ?: return@any false
+                !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+            }
+        }.getOrDefault(false)
+        return if (hasCellular) ConnectionType.CELLULAR else ConnectionType.VPN
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun mobileTechName(context: Context, persian: Boolean): String {
+        if (context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return ""
+        return runCatching {
+            val base = context.getSystemService(TelephonyManager::class.java) ?: return ""
+            val subId = SubscriptionManager.getDefaultDataSubscriptionId()
+            val tm = if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                base.createForSubscriptionId(subId)
+            } else base
+            val label = OperatorCatalog.networkTypeName(persian, tm.dataNetworkType)
+            if (label == "—" || label == "نامشخص" || label == "Unknown") "" else label
+        }.getOrDefault("")
     }
 
     private fun isPersian(context: Context): Boolean = runCatching {
@@ -127,8 +185,6 @@ object NetworkStatsReader {
         val simName = runCatching<String?> { tm.simOperatorName }.getOrNull().orEmpty()
         val netNumeric = runCatching<String?> { tm.networkOperator }.getOrNull().orEmpty()
         val netName = runCatching<String?> { tm.networkOperatorName }.getOrNull().orEmpty()
-        // اپراتورهای مجازی (شاتل موبایل، آپتل و …) روی شبکه‌ی میزبان می‌نشینند؛
-        // برای همین نامِ سیم‌کارت به کد شبکه اولویت دارد.
         return OperatorCatalog.fromName(simName)
             ?: OperatorCatalog.fromNumeric(simNumeric)
             ?: OperatorCatalog.fromName(netName)
@@ -157,7 +213,7 @@ data class NetworkSnapshot(
     val isValidated: Boolean,
     val linkDownKbps: Int,
     val linkUpKbps: Int,
-    /** اپراتوری که همین حالا اینترنت از آن می‌آید (روی وای‌فای = اپراتور مودم). */
+    /** اپراتوری که همین حالا اینترنت از آن می‌آید (روی وای‌فای = اپراتور مودم/هات‌اسپات). */
     val operator: OperatorCatalog.Operator = OperatorCatalog.byId(OperatorCatalog.ID_UNKNOWN),
     /** اپراتور سیم‌کارتِ داده؛ روی وای‌فای هم پر است. */
     val simOperator: OperatorCatalog.Operator? = null,
@@ -166,6 +222,12 @@ data class NetworkSnapshot(
     val ispName: String = "",
     val ispAsn: Int = 0,
     val wifiOperatorResolved: Boolean = false,
+    val wifiSourceKind: IspResolver.WifiSourceKind = IspResolver.WifiSourceKind.UNKNOWN,
+    val wifiLookupStatus: IspResolver.LookupStatus = IspResolver.LookupStatus.IDLE,
+    val wifiDetectionMethod: IspResolver.DetectionMethod = IspResolver.DetectionMethod.NONE,
+    val wifiSsid: String = "",
+    val publicIp: String = "",
+    val mobileTech: String = "",
 )
 
 enum class ConnectionType { WIFI, CELLULAR, ETHERNET, VPN, OTHER, OFFLINE }

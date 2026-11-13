@@ -2,36 +2,37 @@ package ir.marbledu.datausage
 
 import android.Manifest
 import android.content.Context
-import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.Configuration
-import android.content.res.Resources
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import ir.marbledu.datausage.data.AppLanguage
-import ir.marbledu.datausage.data.AppSettings
+import ir.marbledu.datausage.data.LocaleHelper
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.service.MonitorService
 import ir.marbledu.datausage.ui.AppRoot
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.theme.MarbleDuTheme
 import ir.marbledu.datausage.ui.theme.ThemePalette
-import java.util.Locale
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    private var viewModelRef: MainViewModel? = null
+    private var requestedTab by mutableStateOf<String?>(null)
 
     /** ثبت قبل از STARTED و به‌صورت همیشگی (نه شرطی داخل onCreate). */
     private val permissionLauncher = registerForActivityResult(
@@ -42,18 +43,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestRuntimePermissions()
+        requestedTab = intent?.getStringExtra(EXTRA_START_TAB)
+
         setContent {
             val vm: MainViewModel = viewModel()
-            viewModelRef = vm
             val settings by vm.settings.collectAsState()
 
-            // زبان، جهت چیدمان و منابع باید همگی از یک تصمیم واحد بیایند.
-            // حالت SYSTEM دیگر روی تنظیمات قبلی گیر نمی‌کند و زبان‌های دیگر
-            // سیستم هم به انگلیسی (نه فارسیِ پیش‌فرض resources) سقوط می‌کنند.
-            val languageTag = remember(settings.language) { resolveLanguageTag(settings.language) }
+            // زبان، جهت چیدمان و منابع همگی از یک تصمیم واحد می‌آیند.
+            val languageTag = remember(settings.language) {
+                LocaleHelper.resolveLanguageTag(settings.language)
+            }
             val persian = languageTag == "fa"
             val localized = remember(languageTag) {
-                localizedContext(this@MainActivity, languageTag)
+                LocaleHelper.localizedContext(this@MainActivity, languageTag)
             }
 
             CompositionLocalProvider(LocalContext provides localized) {
@@ -64,14 +66,25 @@ class MainActivity : ComponentActivity() {
                         ThemeMode.LIGHT -> false
                         ThemeMode.DARK -> true
                     },
-                    expressive = settings.expressiveDesign,
                     dynamicColor = settings.dynamicColor,
                     palette = ThemePalette.of(settings.palette),
                 ) {
-                    AppRoot(vm = vm, settings = settings, persian = persian)
+                    AppRoot(
+                        vm = vm,
+                        settings = settings,
+                        persian = persian,
+                        requestedTab = requestedTab,
+                        onConsumeRequestedTab = { requestedTab = null },
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_START_TAB)?.let { requestedTab = it }
     }
 
     /** اعلان (اندروید ۱۳+) و شناسه‌ی سیم‌کارت برای آمار موبایل روی اندروید قدیمی. */
@@ -94,31 +107,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // اگر کاربر پایش پس‌زمینه را خاموش کرده، با باز کردن اپ دوباره روشن نشود.
-        val enabled = viewModelRef?.settings?.value?.monitorInBackground ?: true
-        if (enabled) MonitorService.start(this) else MonitorService.stop(this)
+        lifecycleScope.launch {
+            val enabled = app().settingsRepository.settings.first().monitorInBackground
+            if (enabled) MonitorService.start(this@MainActivity) else MonitorService.stop(this@MainActivity)
+        }
     }
-}
 
-private fun resolveLanguageTag(language: AppLanguage): String = when (language) {
-    AppLanguage.PERSIAN -> "fa"
-    AppLanguage.ENGLISH -> "en"
-    AppLanguage.SYSTEM -> if (Locale.getDefault().language == "fa") "fa" else "en"
-}
-
-/**
- * منابعِ بومی‌شده بدون دستکاری سراسری Resources.updateConfiguration().
- * getString/getText در Context نهایی هستند و از getResources() می‌خوانند،
- * پس overriding آن کافی است؛ ضمن اینکه ContextWrapper همچنان به Activity
- * وصل می‌ماند و findActivity() کار می‌کند.
- */
-private fun localizedContext(base: Context, tag: String): Context {
-    val config = Configuration(base.resources.configuration)
-    config.setLocale(Locale.forLanguageTag(tag))
-    val localized = base.createConfigurationContext(config)
-    return object : ContextWrapper(base) {
-        private val localizedResources: Resources = localized.resources
-        override fun getResources(): Resources = localizedResources
+    companion object {
+        const val EXTRA_START_TAB = "start_tab"
+        const val TAB_REPORTS = "reports"
     }
 }
 
