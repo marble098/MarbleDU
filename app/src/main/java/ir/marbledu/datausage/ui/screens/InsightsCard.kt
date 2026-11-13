@@ -212,6 +212,7 @@ fun InsightsCard(
                         if (persian) "سقف بسته پر شده است." else "Your data plan is used up."
                     insights.daysUntilCap == 1 ->
                         if (persian) "با این روند، سقف بسته فردا پر می‌شود."
+                        else "At this pace the plan fills up tomorrow."
                     persian ->
                         "با این روند، سقف بسته حدوداً " +
                             Formats.integer(insights.daysUntilCap.toLong(), true) +
