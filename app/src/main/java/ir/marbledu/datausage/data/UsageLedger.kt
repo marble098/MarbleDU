@@ -1,0 +1,198 @@
+package ir.marbledu.datausage.data
+
+import android.content.Context
+import java.io.File
+import java.util.Calendar
+import java.util.TimeZone
+import kotlin.math.max
+
+/** حجم دریافت/ارسال. */
+data class Traffic(val rx: Long = 0L, val tx: Long = 0L) {
+    val total: Long get() = rx + tx
+    operator fun plus(other: Traffic): Traffic = Traffic(rx + other.rx, tx + other.tx)
+}
+
+/** مصرف یک اپراتور روی یک نوع اتصال در یک روز. */
+data class OperatorTraffic(
+    val operatorId: String,
+    /** [UsageLedger.MOBILE] یا [UsageLedger.WIFI] */
+    val transport: String,
+    val traffic: Traffic,
+    /** true یعنی این ردیف از روی ثبت دقیق نیست و تخمینی/باقی‌مانده است. */
+    val estimated: Boolean = false,
+)
+
+/**
+ * دفتر مصرف به تفکیک اپراتور.
+ *
+ * اندروید تاریخچه‌ی مصرف را فقط به تفکیک «موبایل / وای‌فای» نگه می‌دارد، نه به
+ * تفکیک اپراتور. برای این‌که بگوییم «دیروز روی وای‌فای چقدر از ایرانسل و چقدر
+ * از مخابرات مصرف شد» باید خودمان همان لحظه یادداشت کنیم که اینترنت مال کدام
+ * اپراتور بود. این کلاس همان یادداشت‌هاست: یک فایل متنی ساده روی خود گوشی.
+ */
+object UsageLedger {
+
+    const val MOBILE = "mobile"
+    const val WIFI = "wifi"
+    private const val KEEP_DAYS = 40
+    private const val FLUSH_INTERVAL_MS = 20_000L
+
+    private val lock = Any()
+    private val entries = HashMap<String, LongArray>()
+    private var file: File? = null
+    private var loaded = false
+    private var dirty = false
+    private var lastFlush = 0L
+    private var lastRx = -1L
+    private var lastTx = -1L
+
+    fun dayKey(millis: Long, zone: TimeZone = TimeZone.getDefault()): Int {
+        val cal = Calendar.getInstance(zone).apply { timeInMillis = millis }
+        return cal.get(Calendar.YEAR) * 10000 + (cal.get(Calendar.MONTH) + 1) * 100 +
+            cal.get(Calendar.DAY_OF_MONTH)
+    }
+
+    private fun key(day: Int, operatorId: String, transport: String) = "$day\t$transport\t$operatorId"
+
+    private fun ensureLoaded(context: Context) {
+        if (loaded) return
+        loaded = true
+        val f = File(context.applicationContext.filesDir, "operator_ledger.tsv")
+        file = f
+        runCatching {
+            if (f.exists()) parse(f.readText()).forEach { (k, v) -> entries[k] = v }
+        }
+    }
+
+    /** متن فایل → نقشه. خط‌های خراب نادیده گرفته می‌شوند. */
+    fun parse(text: String): Map<String, LongArray> {
+        val out = HashMap<String, LongArray>()
+        text.lineSequence().forEach { line ->
+            val parts = line.split('\t')
+            if (parts.size < 5) return@forEach
+            val day = parts[0].toIntOrNull() ?: return@forEach
+            val rx = parts[3].toLongOrNull() ?: return@forEach
+            val tx = parts[4].toLongOrNull() ?: return@forEach
+            out["$day\t${parts[1]}\t${parts[2]}"] = longArrayOf(rx, tx)
+        }
+        return out
+    }
+
+    fun serialize(map: Map<String, LongArray>): String = buildString {
+        map.forEach { (k, v) -> append(k).append('\t').append(v[0]).append('\t').append(v[1]).append('\n') }
+    }
+
+    /**
+     * یک نمونه‌برداری: اختلاف شمارنده‌ها با نمونه‌ی قبلی به اپراتور فعلی نسبت
+     * داده می‌شود. وضعیتِ «آخرین شمارنده» مشترک است، پس اگر هم اپ و هم سرویس
+     * پس‌زمینه صدا بزنند چیزی دوبار شمرده نمی‌شود.
+     */
+    fun sample(context: Context, rx: Long, tx: Long, snapshot: NetworkSnapshot, now: Long = System.currentTimeMillis()) {
+        synchronized(lock) {
+            ensureLoaded(context)
+            val previousRx = lastRx
+            val previousTx = lastTx
+            lastRx = rx
+            lastTx = tx
+            if (previousRx < 0 || previousTx < 0) return
+            val dRx = max(0L, rx - previousRx)
+            val dTx = max(0L, tx - previousTx)
+            if (dRx + dTx > 0) {
+                val transport = when (snapshot.type) {
+                    ConnectionType.CELLULAR -> MOBILE
+                    ConnectionType.WIFI, ConnectionType.ETHERNET -> WIFI
+                    else -> null
+                }
+                if (transport != null) {
+                    val k = key(dayKey(now), snapshot.operator.id, transport)
+                    val slot = entries.getOrPut(k) { LongArray(2) }
+                    slot[0] += dRx
+                    slot[1] += dTx
+                    dirty = true
+                }
+            }
+            if (dirty && now - lastFlush >= FLUSH_INTERVAL_MS) flushLocked(now)
+        }
+    }
+
+    private fun flushLocked(now: Long) {
+        val f = file ?: return
+        val cutoff = dayKey(now - KEEP_DAYS * 24L * 60 * 60 * 1000)
+        entries.keys.filter { (it.substringBefore('\t').toIntOrNull() ?: 0) < cutoff }
+            .forEach { entries.remove(it) }
+        runCatching {
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(serialize(entries))
+            if (!tmp.renameTo(f)) {
+                f.writeText(serialize(entries))
+                tmp.delete()
+            }
+        }
+        dirty = false
+        lastFlush = now
+    }
+
+    /** یادداشت‌های یک روز. */
+    fun forDay(context: Context, dayStartMillis: Long): List<OperatorTraffic> = synchronized(lock) {
+        ensureLoaded(context)
+        val prefix = "${dayKey(dayStartMillis)}\t"
+        entries.filterKeys { it.startsWith(prefix) }.map { (k, v) ->
+            val parts = k.split('\t')
+            OperatorTraffic(parts[2], parts[1], Traffic(v[0], v[1]))
+        }
+    }
+
+    /**
+     * یادداشت‌های خودمان را با عدد واقعی سیستم تطبیق می‌دهد.
+     *
+     *  - اگر یادداشت‌ها از عدد سیستم بیشتر شد (مثلاً VPN ترافیک را دوبار
+     *    شمرده)، به نسبت کوچک می‌شوند تا جمعشان دقیقاً عدد سیستم شود.
+     *  - اگر کمتر شد (اپ مدتی بسته بوده)، باقی‌مانده به اپراتور پیش‌فرض همان
+     *    اتصال می‌رسد و «تخمینی» علامت می‌خورد.
+     */
+    fun reconcile(
+        recorded: List<OperatorTraffic>,
+        systemMobile: Traffic,
+        systemWifi: Traffic,
+        defaultMobileId: String,
+        defaultWifiId: String = OperatorCatalog.ID_WIFI,
+    ): List<OperatorTraffic> {
+        val out = ArrayList<OperatorTraffic>()
+        fun one(transport: String, system: Traffic, defaultId: String) {
+            val rows = recorded.filter { it.transport == transport && it.traffic.total > 0 }
+            val sumRx = rows.sumOf { it.traffic.rx }
+            val sumTx = rows.sumOf { it.traffic.tx }
+            val scaleRx = if (sumRx > system.rx && sumRx > 0) system.rx.toDouble() / sumRx else 1.0
+            val scaleTx = if (sumTx > system.tx && sumTx > 0) system.tx.toDouble() / sumTx else 1.0
+            val merged = LinkedHashMap<String, Traffic>()
+            rows.forEach { row ->
+                val scaled = Traffic((row.traffic.rx * scaleRx).toLong(), (row.traffic.tx * scaleTx).toLong())
+                merged[row.operatorId] = (merged[row.operatorId] ?: Traffic()) + scaled
+            }
+            val usedRx = merged.values.sumOf { it.rx }
+            val usedTx = merged.values.sumOf { it.tx }
+            val rest = Traffic(max(0L, system.rx - usedRx), max(0L, system.tx - usedTx))
+            var restAdded = false
+            merged.forEach { (id, traffic) ->
+                if (id == defaultId) {
+                    // باقی‌مانده با ردیفِ اپراتور پیش‌فرضِ همین اتصال جمع می‌شود.
+                    out.add(OperatorTraffic(id, transport, traffic + rest, estimated = transport == WIFI))
+                    restAdded = true
+                } else if (traffic.total > 0) {
+                    out.add(OperatorTraffic(id, transport, traffic, estimated = false))
+                }
+            }
+            if (!restAdded && rest.total > 0) {
+                out.add(
+                    OperatorTraffic(
+                        defaultId, transport, rest,
+                        estimated = transport == WIFI || defaultId == OperatorCatalog.ID_MOBILE,
+                    ),
+                )
+            }
+        }
+        one(MOBILE, systemMobile, defaultMobileId)
+        one(WIFI, systemWifi, defaultWifiId)
+        return out.sortedByDescending { it.traffic.total }
+    }
+}

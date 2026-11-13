@@ -1,9 +1,13 @@
 package ir.marbledu.datausage.data
 
 /**
- * دیتابیس اپراتورهای ایرانی + بین‌المللی.
- * نام خام اپراتور (که سیستم یا سیم‌کارت برمی‌گرداند) به نام تمیز فارسی/انگلیسی
- * و رنگ برند تبدیل می‌شود؛ همین‌طور پیشوندهای MCC/MNC رایج ایران.
+ * دیتابیس اپراتورهای ایرانی (سیم‌کارت + اینترنت ثابت).
+ *
+ * سه راه برای شناسایی داریم:
+ *  ۱) MCC/MNC سیم‌کارت (بدون هیچ مجوزی)،
+ *  ۲) نام خام اپراتور که سیستم برمی‌گرداند،
+ *  ۳) شماره‌ی AS و نام ISP از روی IP عمومی – همین است که روی وای‌فای هم
+ *     می‌فهمیم اینترنت مودم مال کدام اپراتور است.
  */
 object OperatorCatalog {
 
@@ -11,45 +15,235 @@ object OperatorCatalog {
         val id: String,
         val fa: String,
         val en: String,
-        val mnc: String,
+        /** حروف کوتاه روی نشان اپراتور. */
+        val mark: String,
         val brandColor: Long,
+        val accentColor: Long = brandColor,
+        val mncs: List<String> = emptyList(),
+        val asns: List<Int> = emptyList(),
+        val keywords: List<String> = emptyList(),
+        val isMobile: Boolean = false,
         val isIranian: Boolean = true,
+    ) {
+        val mnc: String get() = mncs.firstOrNull().orEmpty()
+        fun name(persian: Boolean): String = if (persian) fa else en
+    }
+
+    const val ID_WIFI = "wifi"
+    const val ID_MOBILE = "mobile"
+    const val ID_UNKNOWN = "unknown"
+    private const val CUSTOM_PREFIX = "x:"
+
+    /** اپراتورهای موبایل. ترتیب مهم است: نام‌های خاص‌تر جلوتر. */
+    val iranian: List<Operator> = listOf(
+        Operator(
+            "mci", "همراه اول", "MCI", "MCI", 0xFF00A6C8, 0xFF0B4F8A,
+            mncs = listOf("11"), asns = listOf(197207),
+            keywords = listOf("mci", "hamrah", "همراه", "mobilecommunicationcompanyofiran", "irmci"),
+            isMobile = true,
+        ),
+        Operator(
+            "irancell", "ایرانسل", "Irancell", "MTN", 0xFFFFC61A, 0xFFF39200,
+            mncs = listOf("35"), asns = listOf(44244),
+            keywords = listOf("irancell", "ایرانسل", "mtn"),
+            isMobile = true,
+        ),
+        Operator(
+            "rightel", "رایتل", "Rightel", "RTL", 0xFF9B2FD6, 0xFFE0218A,
+            mncs = listOf("20"), asns = listOf(57218),
+            keywords = listOf("rightel", "رایتل"),
+            isMobile = true,
+        ),
+        Operator(
+            "shatel_mobile", "شاتل موبایل", "Shatel Mobile", "SHM", 0xFFE4002B, 0xFFFF6B4A,
+            mncs = listOf("08", "50"),
+            keywords = listOf("shatelmobile", "شاتلموبایل"),
+            isMobile = true,
+        ),
+        Operator(
+            "taliya", "تالیا", "Taliya", "TAL", 0xFF8D6E63, 0xFFBF8F6B,
+            mncs = listOf("32"),
+            keywords = listOf("taliya", "تالیا"),
+            isMobile = true,
+        ),
+        Operator(
+            "aptel", "آپتل", "ApTel", "APT", 0xFF00838F, 0xFF26C6DA,
+            keywords = listOf("aptel", "آپتل"),
+            isMobile = true,
+        ),
+        Operator(
+            "samantel", "سامانتل", "SamanTel", "SMT", 0xFF2E7D32, 0xFF66BB6A,
+            keywords = listOf("samantel", "سامانتل"),
+            isMobile = true,
+        ),
+        Operator(
+            "telekish", "تله‌کیش", "TeleKish", "TKC", 0xFF00897B, 0xFF4DB6AC,
+            mncs = listOf("14"),
+            keywords = listOf("telekish", "tkc", "kifzo"),
+            isMobile = true,
+        ),
+        Operator(
+            "mtce", "اسپادان", "MTCE (Espadan)", "MTC", 0xFF5D4037, 0xFFA1887F,
+            mncs = listOf("19"),
+            keywords = listOf("mtce", "espadan", "اسپادان"),
+            isMobile = true,
+        ),
     )
 
-    val iranian = listOf(
-        Operator("mci", "همراه اول", "MCI", "11", 0xFF0A6ABF),
-        Operator("irancell", "ایرانسل", "Irancell", "35", 0xFFFFC400),
-        Operator("rightel", "رایتل", "Rightel", "20", 0xFF7B2FBE),
-        Operator("shatel", "شاتل موبایل", "Shatel Mobile", "32", 0xFFE4002B),
-        Operator("aptel", "آپتل", "ApTel", "14", 0xFF00838F),
-        Operator("samanTel", "سامانتل", "SamanTel", "98", 0xFF2E7D32),
-        Operator("taliya", "تالیا", "Taliya", "19", 0xFF8D6E63),
-        Operator("kishTc", "کیش‌تل", "Kish TC", "93", 0xFF00897B),
-        Operator("asiatech", "آسیاتک", "Asiatech", "99", 0xFF1E88E5),
-        Operator("parsTel", "پارس‌تل", "ParsTel", "94", 0xFF6A1B9A),
+    /** اپراتورهای اینترنت ثابت / ISP ها (برای وای‌فای). */
+    val fixed: List<Operator> = listOf(
+        Operator(
+            "tci", "مخابرات", "TCI", "TCI", 0xFF1565C0, 0xFF42A5F5,
+            mncs = listOf("70", "99"), asns = listOf(58224),
+            keywords = listOf(
+                "tci", "mokhaberat", "مخابرات",
+                "irantelecommunicationcompany", "telecommunicationcompanyofiran",
+            ),
+        ),
+        Operator(
+            "shatel", "شاتل", "Shatel", "SHT", 0xFFD81B36, 0xFF1E4FA3,
+            asns = listOf(31549),
+            keywords = listOf("shatel", "شاتل"),
+        ),
+        Operator(
+            "asiatech", "آسیاتک", "Asiatech", "AST", 0xFF1E88E5, 0xFF00B8D4,
+            asns = listOf(43754),
+            keywords = listOf("asiatech", "آسیاتک"),
+        ),
+        Operator(
+            "hiweb", "های‌وب", "HiWEB", "HiW", 0xFFF57C00, 0xFFFFB300,
+            asns = listOf(56402),
+            keywords = listOf("hiweb", "dadehgostar", "avacell", "هایوب"),
+        ),
+        Operator(
+            "parsonline", "پارس‌آنلاین", "Pars Online", "POL", 0xFF00796B, 0xFF26A69A,
+            asns = listOf(16322),
+            keywords = listOf("parsonline", "پارسآنلاین", "پارسانلاین"),
+        ),
+        Operator(
+            "mobinnet", "مبین‌نت", "MobinNet", "MBN", 0xFF6A1B9A, 0xFFAB47BC,
+            asns = listOf(50810),
+            keywords = listOf("mobinnet", "مبیننت"),
+        ),
+        Operator(
+            "sabanet", "صبانت", "SabaNet", "SBN", 0xFF2E7D32, 0xFF9CCC65,
+            asns = listOf(39501),
+            keywords = listOf("sabanet", "nedagostarsaba", "صبانت"),
+        ),
+        Operator(
+            "respina", "رسپینا", "Respina", "RSP", 0xFFC62828, 0xFFEF5350,
+            asns = listOf(42337),
+            keywords = listOf("respina", "رسپینا"),
+        ),
+        Operator(
+            "datak", "داتک", "Datak", "DTK", 0xFF283593, 0xFF5C6BC0,
+            asns = listOf(25124),
+            keywords = listOf("datak", "داتک"),
+        ),
+        Operator(
+            "pishgaman", "پیشگامان", "Pishgaman", "PSH", 0xFF00838F, 0xFF4DD0E1,
+            asns = listOf(49100),
+            keywords = listOf("pishgaman", "پیشگامان"),
+        ),
+        Operator(
+            "fanava", "فن‌آوا", "Fanava", "FNV", 0xFF4527A0, 0xFF7E57C2,
+            asns = listOf(24631, 41881),
+            keywords = listOf("fanava", "فنآوا"),
+        ),
+        Operator(
+            "zitel", "زی‌تل", "Zi-Tel", "ZTL", 0xFFAD1457, 0xFFEC407A,
+            keywords = listOf("zitel", "زیتل"),
+        ),
+        Operator(
+            "tic", "زیرساخت", "TIC", "TIC", 0xFF455A64, 0xFF90A4AE,
+            asns = listOf(48159, 12880),
+            keywords = listOf("telecommunicationinfrastructure", "informationtechnologycompany"),
+        ),
     )
 
-    // MCC ایران 432 است؛ MNCهای دو رقمی بالا داخل 432 معنی دارند.
+    val all: List<Operator> = iranian + fixed
+
+    private val wifi = Operator(ID_WIFI, "وای‌فای", "Wi-Fi", "WiFi", 0xFF00A99D, 0xFF2F6FED, isIranian = false)
+    private val mobile = Operator(ID_MOBILE, "داده موبایل", "Mobile data", "SIM", 0xFF2F6FED, 0xFF7B5CFA, isIranian = false)
+    private val unknown = Operator(ID_UNKNOWN, "نامشخص", "Unknown", "?", 0xFF78909C, 0xFFB0BEC5, isIranian = false)
+
+    // MCC ایران 432 است.
     private const val IRAN_MCC = "432"
 
-    /** نام نمایشی اپراتور از روی متن خام سیستم. */
-    fun normalizeDisplay(raw: String): String {
-        val key = raw.lowercase().replace(" ", "").replace("-", "")
-        return when {
-            key.contains("irancell") || key.contains("mtn") -> iranian[1].fa
-            key.contains("mci") || key.contains("hamrahe") || key.contains("همراه") -> iranian[0].fa
-            key.contains("rightel") || key.contains("رایتل") -> iranian[2].fa
-            key.contains("taliya") -> iranian[6].fa
-            key.contains("shatel") -> iranian[3].fa
-            else -> raw
+    private val genericColors = longArrayOf(
+        0xFF5C6BC0, 0xFF26A69A, 0xFFEF6C00, 0xFFAB47BC, 0xFF29B6F6, 0xFFEC407A, 0xFF7CB342, 0xFF8D6E63,
+    )
+
+    private fun collapse(raw: String): String =
+        raw.lowercase().filter { it.isLetterOrDigit() }
+
+    private fun words(raw: String): List<String> =
+        raw.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+
+    /**
+     * اپراتور از روی نام خام. کلیدواژه‌های کوتاه (تا ۳ حرف مثل mci/tci/mtn) فقط
+     * وقتی قبول می‌شوند که یک «کلمه‌ی کامل» باشند تا اشتباهی داخل اسم‌های دیگر
+     * پیدا نشوند.
+     */
+    fun fromName(raw: String?): Operator? {
+        if (raw.isNullOrBlank()) return null
+        val collapsed = collapse(raw)
+        val tokens = words(raw)
+        if (collapsed.isEmpty()) return null
+        for (op in all) {
+            for (kw in op.keywords) {
+                val hit = if (kw.length <= 3) tokens.contains(kw) || collapsed == kw
+                else collapsed.contains(kw)
+                if (hit) return op
+            }
         }
+        return null
     }
 
-    /** اپراتور از روی MCC+MNC (اگر دسترسی داده شود). */
+    /** نام نمایشی فارسی اپراتور از روی متن خام سیستم. */
+    fun normalizeDisplay(raw: String): String = fromName(raw)?.fa ?: raw
+
+    /** اپراتور از روی MCC+MNC. */
     fun fromMccMnc(mcc: String?, mnc: String?): Operator? {
-        if (mcc != IRAN_MCC) return null
-        return iranian.firstOrNull { it.mnc == mnc }
+        if (mcc != IRAN_MCC || mnc.isNullOrBlank()) return null
+        val normalized = mnc.trim().let { if (it.length == 1) "0$it" else it }
+        return all.firstOrNull { op -> op.mncs.contains(normalized) }
     }
+
+    /** اپراتور از روی رشته‌ی عددی MCC+MNC (مثل "43235"). */
+    fun fromNumeric(numeric: String?): Operator? {
+        if (numeric == null || numeric.length < 5) return null
+        return fromMccMnc(numeric.substring(0, 3), numeric.substring(3))
+    }
+
+    /** اپراتور از روی شماره‌ی AS و نام سازمان/ISP. */
+    fun fromAsn(asn: Int, org: String?): Operator? {
+        if (asn > 0) all.firstOrNull { it.asns.contains(asn) }?.let { return it }
+        return fromName(org)
+    }
+
+    /** اپراتور ناشناس با نام دلخواه (مثلاً ISP خارجی). */
+    fun custom(name: String): Operator {
+        val clean = name.trim()
+        if (clean.isBlank()) return unknown
+        val letters = clean.filter { it.isLetterOrDigit() }
+        val mark = letters.take(3).uppercase().ifBlank { "?" }
+        val color = genericColors[(clean.hashCode() and 0x7fffffff) % genericColors.size]
+        return Operator(CUSTOM_PREFIX + clean, clean, clean, mark, color, isIranian = false)
+    }
+
+    /** برعکس [Operator.id]: از شناسه‌ی ذخیره‌شده دوباره اپراتور می‌سازد. */
+    fun byId(id: String?): Operator = when {
+        id.isNullOrBlank() || id == ID_UNKNOWN -> unknown
+        id == ID_WIFI -> wifi
+        id == ID_MOBILE -> mobile
+        id.startsWith(CUSTOM_PREFIX) -> custom(id.removePrefix(CUSTOM_PREFIX))
+        else -> all.firstOrNull { it.id == id } ?: custom(id)
+    }
+
+    /** از روی نام خام: اگر شناخته‌شده بود همان، وگرنه یک اپراتور سفارشی. */
+    fun resolveName(raw: String?): Operator =
+        if (raw.isNullOrBlank()) unknown else fromName(raw) ?: custom(raw)
 
     fun networkTypeName(fa: Boolean, networkType: Int): String {
         return when (networkType) {

@@ -6,7 +6,7 @@
     <string name="nav_dashboard">Home</string>
     <string name="nav_live">Live</string>
     <string name="nav_apps">Apps</string>
-    <string name="nav_reports">Reports</string>
+    <string name="nav_reports">30 days</string>
     <string name="nav_settings">Settings</string>
 
     <string name="today_usage">Today\'s usage</string>

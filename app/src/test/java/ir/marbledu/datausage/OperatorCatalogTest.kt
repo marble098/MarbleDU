@@ -26,4 +26,36 @@ class OperatorCatalogTest {
         assertEquals("همراه اول", OperatorCatalog.normalizeDisplay("MCI"))
         assertNotNull(OperatorCatalog.normalizeDisplay("Unknown Carrier"))
     }
+
+    @Test
+    fun detects_operators_from_isp_names() {
+        assertEquals("irancell", OperatorCatalog.fromName("Iran Cell Service and Communication Company")?.id)
+        assertEquals("mci", OperatorCatalog.fromName("Mobile Communication Company of Iran PLC")?.id)
+        assertEquals("mci", OperatorCatalog.fromName("IR-MCI")?.id)
+        assertEquals("tci", OperatorCatalog.fromName("Iran Telecommunication Company PJS")?.id)
+        assertEquals("shatel", OperatorCatalog.fromName("Aria Shatel PJSC")?.id)
+        assertEquals("shatel_mobile", OperatorCatalog.fromName("Shatel Mobile")?.id)
+        assertEquals("asiatech", OperatorCatalog.fromName("Asiatech Data Transmission company")?.id)
+        // کلیدواژه‌های کوتاه فقط به‌صورت کلمه‌ی کامل قبول می‌شوند.
+        assertNull(OperatorCatalog.fromName("Netcity Broadband"))
+        assertNull(OperatorCatalog.fromName(""))
+    }
+
+    @Test
+    fun detects_wifi_operator_from_asn() {
+        assertEquals("mci", OperatorCatalog.fromAsn(197207, "anything")?.id)
+        assertEquals("irancell", OperatorCatalog.fromAsn(44244, null)?.id)
+        assertEquals("rightel", OperatorCatalog.fromAsn(0, "Rightel Communication Service Company PJS")?.id)
+        assertNull(OperatorCatalog.fromAsn(15169, "Google LLC"))
+    }
+
+    @Test
+    fun numeric_and_id_round_trip() {
+        assertEquals("irancell", OperatorCatalog.fromNumeric("43235")?.id)
+        assertNull(OperatorCatalog.fromNumeric("310260"))
+        val custom = OperatorCatalog.custom("Foo Net")
+        assertEquals("Foo Net", OperatorCatalog.byId(custom.id).fa)
+        assertEquals("mci", OperatorCatalog.byId("mci").id)
+        assertEquals(OperatorCatalog.ID_WIFI, OperatorCatalog.byId(OperatorCatalog.ID_WIFI).id)
+    }
 }

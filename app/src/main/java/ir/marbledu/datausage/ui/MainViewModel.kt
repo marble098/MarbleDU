@@ -8,6 +8,10 @@ import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.AppUsage
 import ir.marbledu.datausage.data.ConnectionType
+import ir.marbledu.datausage.data.DayReport
+import ir.marbledu.datausage.data.DaySummary
+import ir.marbledu.datausage.data.IspResolver
+import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.data.HourUsage
 import ir.marbledu.datausage.data.IranOptions
 import ir.marbledu.datausage.data.LiveMonitor
@@ -44,6 +48,25 @@ data class DashboardUi(
     val operatorName: String = "",
     val averagePingMs: Double = -1.0,
     val averageSpeed: Double = 0.0,
+    val todayMobile: Traffic = Traffic(),
+    val todayWifi: Traffic = Traffic(),
+)
+
+/** یک نقطه از نمودار سرعت زنده. */
+data class SpeedPoint(val down: Double, val up: Double)
+
+/** فهرست ۳۰ روز اخیر (قدیمی‌ترین اول). */
+data class HistoryUi(
+    val days: List<DaySummary> = emptyList(),
+    val loading: Boolean = false,
+    val loadedAt: Long = 0L,
+)
+
+/** گزارش کامل روز انتخاب‌شده. */
+data class DayReportUi(
+    val dayStart: Long = 0L,
+    val report: DayReport? = null,
+    val loading: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -70,10 +93,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _peakHours = MutableStateFlow<List<HourUsage>>(emptyList())
     val peakHours: StateFlow<List<HourUsage>> = _peakHours.asStateFlow()
 
+    private val _speedHistory = MutableStateFlow<List<SpeedPoint>>(emptyList())
+    val speedHistory: StateFlow<List<SpeedPoint>> = _speedHistory.asStateFlow()
+
+    private val _history = MutableStateFlow(HistoryUi())
+    val history: StateFlow<HistoryUi> = _history.asStateFlow()
+
+    private val _dayReport = MutableStateFlow(DayReportUi())
+    val dayReport: StateFlow<DayReportUi> = _dayReport.asStateFlow()
+
+    private var historyJob: Job? = null
+    private var dayJob: Job? = null
+
     private var liveJob: Job? = null
     private var pingJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            settings.collect { IspResolver.enabled = it.wifiIspLookup }
+        }
         startLive()
         // پیش از این فقط داشبورد لود می‌شد و لیست اپ‌ها/گزارش‌ها تا وقتی کاربر
         // دکمه‌ی «به‌روزرسانی» را می‌زد خالی می‌ماند.
@@ -88,13 +126,48 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshDashboard()
         loadUsage(_usage.value.range)
         loadPeakHours(_usage.value.range)
+        loadHistory()
+    }
+
+    // ------------------------------------------------------------- 30 days
+    /** فهرست ۳۰ روز اخیر؛ اگر هنوز روزی انتخاب نشده، «امروز» انتخاب می‌شود. */
+    fun loadHistory() {
+        if (historyJob?.isActive == true) return
+        historyJob = viewModelScope.launch {
+            _history.value = _history.value.copy(loading = true)
+            val days = repository.daySummaries(30)
+            _history.value = HistoryUi(days = days, loading = false, loadedAt = System.currentTimeMillis())
+            val selected = _dayReport.value.dayStart
+            val target = days.firstOrNull { it.startMillis == selected } ?: days.lastOrNull()
+            if (target != null) selectDay(target.startMillis)
+        }
+    }
+
+    fun selectDay(dayStart: Long) {
+        val summary = _history.value.days.firstOrNull { it.startMillis == dayStart } ?: return
+        dayJob?.cancel()
+        dayJob = viewModelScope.launch {
+            val keep = _dayReport.value.report?.takeIf { _dayReport.value.dayStart == dayStart }
+            _dayReport.value = DayReportUi(dayStart = dayStart, report = keep, loading = true)
+            val report = repository.dayReport(summary)
+            _dayReport.value = DayReportUi(dayStart = dayStart, report = report, loading = false)
+        }
+    }
+
+    /** دوباره پیدا کردنِ اپراتور وای‌فای (دکمه‌ی «بررسی دوباره»). */
+    fun refreshWifiOperator() {
+        IspResolver.ensureFresh(getApplication(), force = true)
     }
 
     // ----------------------------------------------------------------- live
     fun startLive() {
         if (liveJob?.isActive == true) return
         liveJob = viewModelScope.launch {
-            monitor.stream(1000).collect { value -> _tick.value = value }
+            monitor.stream(1000).collect { value ->
+                _tick.value = value
+                _speedHistory.value = (_speedHistory.value + SpeedPoint(value.downBytesPerSecond, value.upBytesPerSecond))
+                    .takeLast(60)
+            }
         }
     }
 
@@ -134,6 +207,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val snapshot = NetworkStatsReader.currentNetwork(getApplication())
             val averageSpeed = _tick.value?.averageSpeed ?: 0.0
 
+            val todaySummary = repository.daySummaries(1).lastOrNull()
             val week = repository.dailyTotals(7, ConnectionType.CELLULAR)
             val todayTotal = week.lastOrNull()?.bytes ?: 0L
             val yesterdayTotal = week.dropLast(1).lastOrNull()?.bytes ?: 0L
@@ -153,6 +227,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 operatorName = snapshot.carrierName,
                 averagePingMs = _dashboard.value.averagePingMs,
                 averageSpeed = averageSpeed,
+                todayMobile = todaySummary?.mobile ?: Traffic(),
+                todayWifi = todaySummary?.wifi ?: Traffic(),
             )
         }
     }
@@ -189,6 +265,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { settingsRepo.setTheme(mode) }
     fun setExpressive(on: Boolean) = viewModelScope.launch { settingsRepo.setExpressive(on) }
     fun setDynamicColor(on: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(on) }
+    fun setPalette(name: String, dynamic: Boolean) = viewModelScope.launch { settingsRepo.setPalette(name, dynamic) }
+    fun setWifiIspLookup(on: Boolean) = viewModelScope.launch { settingsRepo.setWifiIspLookup(on) }
     fun setDataCap(bytes: Long) = viewModelScope.launch { settingsRepo.setDataCap(bytes) }
     fun setBillingDay(day: Int) = viewModelScope.launch { settingsRepo.setBillingCycleDay(day.coerceIn(1, 28)) }
     fun setMonitorInterval(seconds: Int) = viewModelScope.launch {

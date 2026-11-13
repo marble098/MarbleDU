@@ -41,7 +41,19 @@ import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.ThemeMode
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import ir.marbledu.datausage.ui.MIcons
+import ir.marbledu.datausage.ui.OperatorBadge
+import ir.marbledu.datausage.ui.theme.ThemePalette
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.SectionTitle
 import ir.marbledu.datausage.util.UsageAccess
@@ -56,7 +68,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = ir.marbledu.datausage.ui.FloatingBarClearance),
     ) {
         item { SectionTitle(text = context.getString(R.string.settings)) }
 
@@ -101,23 +113,52 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             }
         }
 
+        // ------------------------------------------------------ پالت رنگی
         item {
             SettingsCard(
-                title = context.getString(R.string.appearance),
-                description = context.getString(R.string.expressive_desc),
-                icon = MIcons.Speed,
+                title = if (persian) "تم رنگی" else "Color theme",
+                description = if (persian) "یک رنگ انتخاب کن؛ کل اپ، نمودارها و نوار پایین همان رنگ می‌شوند"
+                else "Pick a color – the whole app, charts and the bottom bar follow it",
+                icon = MIcons.Palette,
             ) {
+                val current = ThemePalette.of(settings.palette)
+                val dynamicAvailable = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                val dynamicOn = settings.dynamicColor && dynamicAvailable
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(vertical = 6.dp),
+                ) {
+                    items(ThemePalette.entries.toList()) { palette ->
+                        PaletteSwatch(
+                            name = palette.name(persian),
+                            colors = listOf(Color(palette.primary), Color(palette.tertiary), Color(palette.secondary)),
+                            selected = !dynamicOn && current == palette,
+                            onClick = { vm.setPalette(palette.name, dynamic = false) },
+                        )
+                    }
+                    if (dynamicAvailable) {
+                        item {
+                            PaletteSwatch(
+                                name = if (persian) "والپیپر" else "Wallpaper",
+                                colors = listOf(Color(0xFF8AB4F8), Color(0xFFF28B82), Color(0xFF81C995)),
+                                selected = dynamicOn,
+                                onClick = { vm.setPalette(settings.palette, dynamic = true) },
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = (if (persian) "انتخاب فعلی: " else "Current: ") +
+                        (if (dynamicOn) context.getString(R.string.dynamic_color) else current.name(persian)),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                HorizontalDivider()
                 SwitchRow(
                     label = context.getString(R.string.expressive_design),
                     description = context.getString(R.string.expressive_desc),
                     checked = settings.expressiveDesign,
                     onCheckedChange = { vm.setExpressive(it) },
-                )
-                SwitchRow(
-                    label = context.getString(R.string.dynamic_color),
-                    description = context.getString(R.string.dynamic_desc),
-                    checked = settings.dynamicColor,
-                    onCheckedChange = { vm.setDynamicColor(it) },
                 )
             }
         }
@@ -134,6 +175,18 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 SwitchRow(context.getString(R.string.detect_operator), checked = iran.detectOperator) {
                     vm.updateIran { o -> o.copy(detectOperator = !o.detectOperator) }
                 }
+                SwitchRow(
+                    label = if (persian) "شناسایی اپراتور روی وای‌فای" else "Identify operator on Wi-Fi",
+                    description = if (persian) {
+                        "برای فهمیدن اپراتورِ مودم، یک درخواست کوچک به سرویس «IP من» فرستاده می‌شود (ipwho.is و مشابه). " +
+                            "هیچ آمار مصرفی ارسال نمی‌شود."
+                    } else {
+                        "Sends one small request to a “what is my IP” service (ipwho.is and similar) to learn the router's ISP. " +
+                            "No usage data is sent."
+                    },
+                    checked = settings.wifiIspLookup,
+                    onCheckedChange = { vm.setWifiIspLookup(it) },
+                )
                 HorizontalDivider()
                 SwitchRow(context.getString(R.string.show_usage_report), checked = iran.showDataUsageReport) {
                     vm.updateIran { o -> o.copy(showDataUsageReport = !o.showDataUsageReport) }
@@ -313,6 +366,8 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                                     showCarrierDialog = false
                                 },
                             )
+                            OperatorBadge(operator, size = 28.dp)
+                            Spacer(Modifier.size(10.dp))
                             Text(if (persian) operator.fa else operator.en)
                         }
                     }
@@ -405,12 +460,56 @@ private fun SwitchRow(
     }
 }
 
+/** نمونه‌ی رنگیِ یک پالت: دایره‌ی گرادیانی با تیک برای انتخاب فعلی. */
+@Composable
+private fun PaletteSwatch(name: String, colors: List<Color>, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+    ) {
+        Box(
+            Modifier
+                .size(52.dp)
+                .border(
+                    width = if (selected) 3.dp else 0.dp,
+                    color = if (selected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                    shape = CircleShape,
+                )
+                .padding(5.dp)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(colors)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(MIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+        }
+        Text(
+            name,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 private fun OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
 }
 
-private const val CHANGELOG = "۱.۰.۱ – رفع باگ‌ها\n" +
+private const val CHANGELOG = "۱.۱.۰ – گزارش ۳۰ روزه و تم‌های رنگی\n" +
+    "• شناسایی اپراتور حتی روی وای‌فای + نشان هر اپراتور\n" +
+    "• تب «۳۰ روز»: گزارش کامل هر روز با تاریخ شمسی و میلادی\n" +
+    "• مصرف هر اپراتور، هر اپ و نمودار ۲۴ ساعتِ هر روز\n" +
+    "• نمودارهای جدید، رنگی و قابل لمس\n" +
+    "• ۸ تم رنگی + رنگ والپیپر\n" +
+    "• نوار پایین شناور با انیمیشن\n\n" +
+    "۱.۰.۱ – رفع باگ‌ها\n" +
     "• دسترسی مصرف اپ‌ها حالا در تنظیمات دیده می‌شود\n" +
     "• نوار تب پایین درست کار می‌کند\n" +
     "• «امروز» از نیمه‌شب و دوره‌ی صورتحساب از روز انتخابی\n" +

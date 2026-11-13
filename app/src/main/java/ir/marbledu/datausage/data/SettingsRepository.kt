@@ -44,6 +44,10 @@ data class AppSettings(
     val monitorInBackground: Boolean = true,
     val monitorIntervalSeconds: Int = 5,
     val onboarded: Boolean = false,
+    /** نام پالت رنگی (ThemePalette). */
+    val palette: String = "MARBLE",
+    /** شناسایی آنلاینِ اپراتور وای‌فای از روی IP عمومی. */
+    val wifiIspLookup: Boolean = true,
 )
 
 class SettingsRepository(private val context: Context) {
@@ -59,6 +63,8 @@ class SettingsRepository(private val context: Context) {
         val BACKGROUND = booleanPreferencesKey("background")
         val INTERVAL = intPreferencesKey("interval")
         val ONBOARDED = booleanPreferencesKey("onboarded")
+        val PALETTE = stringPreferencesKey("palette")
+        val WIFI_ISP = booleanPreferencesKey("wifi_isp_lookup")
 
         val IR_OPERATOR = booleanPreferencesKey("ir_operator")
         val IR_REPORT = booleanPreferencesKey("ir_report")
@@ -85,6 +91,8 @@ class SettingsRepository(private val context: Context) {
             monitorInBackground = p[Keys.BACKGROUND] ?: true,
             monitorIntervalSeconds = p[Keys.INTERVAL] ?: 5,
             onboarded = p[Keys.ONBOARDED] ?: false,
+            palette = p[Keys.PALETTE] ?: "MARBLE",
+            wifiIspLookup = p[Keys.WIFI_ISP] ?: true,
             iran = IranOptions(
                 detectOperator = p[Keys.IR_OPERATOR] ?: true,
                 showDataUsageReport = p[Keys.IR_REPORT] ?: true,
@@ -107,6 +115,14 @@ class SettingsRepository(private val context: Context) {
     suspend fun setOperator(value: String) = context.dataStore.edit { it[Keys.OPERATOR] = value }
     suspend fun setMonitorBackground(value: Boolean) = context.dataStore.edit { it[Keys.BACKGROUND] = value }
     suspend fun setMonitorInterval(value: Int) = context.dataStore.edit { it[Keys.INTERVAL] = value }
+    suspend fun setWifiIspLookup(value: Boolean) = context.dataStore.edit { it[Keys.WIFI_ISP] = value }
+
+    /** انتخاب پالت؛ پالت «پویا» همان رنگ والپیپر است. */
+    suspend fun setPalette(name: String, dynamic: Boolean) = context.dataStore.edit {
+        it[Keys.PALETTE] = name
+        it[Keys.DYNAMIC] = dynamic
+    }
+
     suspend fun setOnboarded(value: Boolean) = context.dataStore.edit { it[Keys.ONBOARDED] = value }
 
     suspend fun updateIran(update: (IranOptions) -> IranOptions) {

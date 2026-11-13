@@ -1,5 +1,24 @@
 package ir.marbledu.datausage.ui
 
+import android.graphics.drawable.Drawable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.times
+import androidx.core.graphics.drawable.toBitmap
+import ir.marbledu.datausage.ui.theme.LocalMarbleColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -192,3 +211,223 @@ fun EmptyState(text: String, modifier: Modifier = Modifier) {
         Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+// ---------------------------------------------------------------------------
+// اجزای نسخه‌ی ۱.۱
+// ---------------------------------------------------------------------------
+
+/**
+ * نشان اپراتور: مربع گرد با گرادیانِ رنگ برند و حروف کوتاه اپراتور، به‌همراه
+ * یک نشانک کوچک که می‌گوید اینترنت از سیم‌کارت می‌آید یا وای‌فای.
+ */
+@Composable
+fun OperatorBadge(
+    operator: ir.marbledu.datausage.data.OperatorCatalog.Operator,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 44.dp,
+    transportIcon: ImageVector? = null,
+) {
+    val brand = Color(operator.brandColor)
+    val accent = Color(operator.accentColor)
+    val onBrand = if (brand.luminance() > 0.55f) Color(0xFF1B1B1F) else Color.White
+    Box(modifier.size(size)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(percent = 32))
+                .background(Brush.linearGradient(listOf(brand, accent))),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = operator.mark,
+                color = onBrand,
+                fontWeight = FontWeight.Bold,
+                fontSize = (size.value * (if (operator.mark.length > 3) 0.26f else 0.32f)).sp,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+        if (transportIcon != null) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 4.dp, y = 4.dp)
+                    .size(size * 0.44f)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    transportIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(size * 0.28f),
+                )
+            }
+        }
+    }
+}
+
+/** آیکون واقعی اپ از روی نام پکیج؛ اگر پیدا نشد یک دایره با حرف اول. */
+@Composable
+fun AppIcon(
+    packageName: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 38.dp,
+    fallbackColor: Color = MaterialTheme.colorScheme.primary,
+) {
+    val context = LocalContext.current
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, packageName) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                context.packageManager.getApplicationIcon(packageName).toBitmap(96, 96).asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    val image = bitmap
+    if (image != null) {
+        Image(
+            bitmap = image,
+            contentDescription = null,
+            modifier = modifier.size(size).clip(RoundedCornerShape(percent = 26)),
+        )
+    } else {
+        Box(
+            modifier
+                .size(size)
+                .clip(RoundedCornerShape(percent = 26))
+                .background(fallbackColor.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label.trim().take(1).uppercase().ifEmpty { "?" },
+                color = fallbackColor,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
+    }
+}
+
+/** کارت استاندارد اپ. */
+@Composable
+fun MarbleCard(
+    modifier: Modifier = Modifier,
+    container: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    padding: androidx.compose.ui.unit.Dp = 18.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = container),
+    ) {
+        Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+    }
+}
+
+/** کارت بزرگ گرادیانی بالای صفحه‌ها. */
+@Composable
+fun HeroCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colors = LocalMarbleColors.current
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(32.dp))
+            .background(Brush.linearGradient(listOf(colors.heroStart, colors.heroEnd))),
+    ) {
+        CompositionLocalProvider(LocalContentColor provides colors.onHero) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+        }
+    }
+}
+
+/** عنوان کارت با آیکون رنگی. */
+@Composable
+fun CardHeader(
+    title: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.primary,
+    trailing: String? = null,
+    subtitle: String? = null,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(32.dp).clip(CircleShape).background(tint.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (trailing != null) {
+            Text(
+                trailing,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = tint,
+            )
+        }
+    }
+}
+
+/** یک عدد با برچسب و نقطه‌ی رنگی (دانلود / آپلود / مجموع). */
+@Composable
+fun Metric(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+) {
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+            } else {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+            }
+            Spacer(Modifier.width(5.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = LocalContentColor.current.copy(alpha = 0.75f),
+                maxLines = 1,
+            )
+        }
+        Text(
+            value,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** راهنمای رنگ نمودار. */
+@Composable
+fun LegendDot(label: String, color: Color, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(9.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(5.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** فضای خالی پایین لیست‌ها تا محتوا زیر نوار شناور پنهان نماند. */
+val FloatingBarClearance = 112.dp

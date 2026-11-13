@@ -26,6 +26,7 @@ import ir.marbledu.datausage.service.MonitorService
 import ir.marbledu.datausage.ui.AppRoot
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.theme.MarbleDuTheme
+import ir.marbledu.datausage.ui.theme.ThemePalette
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
                     },
                     expressive = settings.expressiveDesign,
                     dynamicColor = settings.dynamicColor,
+                    palette = ThemePalette.of(settings.palette),
                 ) {
                     AppRoot(vm = vm, settings = settings, persian = persian)
                 }

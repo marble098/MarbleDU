@@ -50,7 +50,11 @@ class LiveMonitor(private val context: Context) {
             speedHistory.addLast(down + up)
             if (speedHistory.size > 30) speedHistory.removeFirst()
             peak = max(peak, down + up)
+            // اپراتور وای‌فای (در صورت نیاز) در پس‌زمینه پیدا می‌شود و مصرف همین
+            // لحظه در دفترِ «مصرف به تفکیک اپراتور» ثبت می‌شود.
+            IspResolver.ensureFresh(context)
             val snapshot = NetworkStatsReader.currentNetwork(context)
+            UsageLedger.sample(context, rx, tx, snapshot, now)
             emit(
                 LiveTick(
                     timestamp = now,
@@ -114,7 +118,7 @@ class LiveMonitor(private val context: Context) {
         var last: NetworkSnapshot? = null
         while (true) {
             val snapshot = NetworkStatsReader.currentNetwork(context)
-            if (snapshot.type != last?.type || snapshot.carrierName != last?.carrierName) {
+            if (snapshot.type != last?.type || snapshot.operator.id != last?.operator?.id) {
                 last = snapshot
                 emit(snapshot)
             }
