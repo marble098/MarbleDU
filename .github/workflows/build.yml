@@ -3,7 +3,7 @@ name: Build APK
 # بیلد خودکار APK برای همه‌ی معماری‌ها بعد از هر merge (push به main) یا تگ
 on:
   push:
-    branches: ['**']
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
