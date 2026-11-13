@@ -48,8 +48,8 @@ jobs:
           ./gradlew --no-daemon testDebugUnitTest --stacktrace > gradle-test.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
-            grep -nE "^e: |error:|Execution failed|FAILED|What went wrong" gradle-test.log | head -40 | while IFS= read -r line; do
-              echo "::error::$line"
+            awk '/What went wrong/{flag=1} flag' gradle-test.log | head -25 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
             done
           fi
           exit $code
@@ -61,8 +61,8 @@ jobs:
           ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace > gradle-build.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
-            grep -nE "^e: |error:|Execution failed|FAILED|What went wrong" gradle-build.log | head -40 | while IFS= read -r line; do
-              echo "::error::$line"
+            awk '/What went wrong/{flag=1} flag' gradle-build.log | head -25 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
             done
           fi
           exit $code
