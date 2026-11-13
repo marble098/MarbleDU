@@ -3,7 +3,7 @@ name: Build APK (all ABIs)
 # بعد از هر merge روی main (و هر تگ نسخه) APK همه‌ی معماری‌ها ساخته می‌شود
 on:
   push:
-    branches: [main, 'arena/**']
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
@@ -113,6 +113,9 @@ jobs:
   release:
     name: Attach APKs to GitHub Release
     needs: build
+    # اگر در تنظیمات ریپو اجازه‌ی نوشتن برای workflow فعال نباشد، بیلد APK
+    # همچنان موفق می‌ماند و فقط مرحله‌ی انتشار رد می‌شود.
+    continue-on-error: true
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
