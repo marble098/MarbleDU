@@ -118,4 +118,8 @@
     <string name="ir_operator_hint">اپراتورها: همراه اول، ایرانسل، رایتل و …</string>
     <string name="refresh_label">به‌روزرسانی</string>
     <string name="appearance">ظاهر</string>
+    <string name="widget_usage_label">مصرف امروز</string>
+    <string name="widget_usage_desc">مصرف امروزِ موبایل و وای‌فای، اپراتور فعلی و باقی‌مانده‌ی بسته</string>
+    <string name="widget_today">مصرف امروز</string>
+    <string name="widget_mobile">موبایل</string>
 </resources>

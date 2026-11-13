@@ -21,6 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -230,22 +233,47 @@ fun OperatorBadge(
     val brand = Color(operator.brandColor)
     val accent = Color(operator.accentColor)
     val onBrand = if (brand.luminance() > 0.55f) Color(0xFF1B1B1F) else Color.White
+    val logo = OperatorLogos.logoFor(operator.id)
     Box(modifier.size(size)) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(percent = 32))
-                .background(Brush.linearGradient(listOf(brand, accent))),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = operator.mark,
-                color = onBrand,
-                fontWeight = FontWeight.Bold,
-                fontSize = (size.value * (if (operator.mark.length > 3) 0.26f else 0.32f)).sp,
-                maxLines = 1,
-                softWrap = false,
-            )
+        if (logo != null) {
+            // لوگوی رسمی اپراتور روی کاشی سفید (یا رنگ برند برای لوگوهای سفید)
+            val tile = if (OperatorLogos.needsBrandTile(operator.id)) brand else Color.White
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(percent = 28))
+                    .background(tile)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(percent = 28),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(logo),
+                    contentDescription = operator.en,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(size * 0.11f),
+                )
+            }
+        } else {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(percent = 32))
+                    .background(Brush.linearGradient(listOf(brand, accent))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = operator.mark,
+                    color = onBrand,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = (size.value * (if (operator.mark.length > 3) 0.26f else 0.32f)).sp,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
         }
         if (transportIcon != null) {
             Box(

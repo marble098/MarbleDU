@@ -184,7 +184,13 @@ data class AppSettings(
     val palette: String = "MARBLE",
     /** تنظیمات شخصی‌سازی پیشرفته اعلان. */
     val notification: NotificationConfig = NotificationConfig(),
-)
+    /** هشدار مصرف (سقف روزانه و ۸۰٪/۱۰۰٪ بسته). */
+    val usageAlerts: Boolean = true,
+    /** سقف مصرف روزانه‌ی دیتای موبایل بر حسب مگابایت؛ ۰ یعنی خاموش. */
+    val dailyLimitMb: Int = 0,
+) {
+    val dailyLimitBytes: Long get() = dailyLimitMb.toLong() * 1024L * 1024L
+}
 
 class SettingsRepository(private val context: Context) {
 
@@ -199,6 +205,8 @@ class SettingsRepository(private val context: Context) {
         val INTERVAL = intPreferencesKey("interval")
         val ONBOARDED = booleanPreferencesKey("onboarded")
         val PALETTE = stringPreferencesKey("palette")
+        val USAGE_ALERTS = booleanPreferencesKey("usage_alerts")
+        val DAILY_LIMIT_MB = intPreferencesKey("daily_limit_mb")
 
         val NOTIF_STYLE = stringPreferencesKey("notif_style")
         val NOTIF_TITLE_MODE = stringPreferencesKey("notif_title_mode")
@@ -272,6 +280,8 @@ class SettingsRepository(private val context: Context) {
             onboarded = p[Keys.ONBOARDED] ?: false,
             palette = p[Keys.PALETTE] ?: "MARBLE",
             notification = readNotificationConfig(p),
+            usageAlerts = p[Keys.USAGE_ALERTS] ?: true,
+            dailyLimitMb = p[Keys.DAILY_LIMIT_MB] ?: 0,
         )
     }
 
@@ -289,6 +299,9 @@ class SettingsRepository(private val context: Context) {
         it[Keys.PALETTE] = name
         it[Keys.DYNAMIC] = dynamic
     }
+
+    suspend fun setUsageAlerts(value: Boolean) = context.dataStore.edit { it[Keys.USAGE_ALERTS] = value }
+    suspend fun setDailyLimitMb(value: Int) = context.dataStore.edit { it[Keys.DAILY_LIMIT_MB] = value.coerceIn(0, 1_000_000) }
 
     suspend fun setOnboarded(value: Boolean) = context.dataStore.edit { it[Keys.ONBOARDED] = value }
 

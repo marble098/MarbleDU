@@ -118,4 +118,8 @@
     <string name="ir_operator_hint">Carriers: MCI, Irancell, Rightel and more</string>
     <string name="refresh_label">Refresh</string>
     <string name="appearance">Appearance</string>
+    <string name="widget_usage_label">Today\'s usage</string>
+    <string name="widget_usage_desc">Today\'s mobile and Wi-Fi usage, current operator and data left</string>
+    <string name="widget_today">Today</string>
+    <string name="widget_mobile">Mobile</string>
 </resources>

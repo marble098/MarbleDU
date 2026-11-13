@@ -7,8 +7,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -74,51 +72,26 @@ class LiveMonitor(private val context: Context) {
         }
     }.flowOn(Dispatchers.IO)
 
-    /** پینگ چند بار پشت‌سرهم به چند مقصد – میانگین و آمار. */
-    fun ping(hosts: List<String> = listOf("1.1.1.1", "8.8.8.8", "4.2.2.4")): Flow<PingResult> = flow {
-        for (host in hosts) {
-            val samples = mutableListOf<Long>()
-            repeat(4) {
-                val ms = tcpPing(host)
-                if (ms > 0) samples.add(ms)
-                delay(120)
+    /**
+     * تست تأخیر واقعی به چند مقصد داخلی و بین‌المللی.
+     * اگر VPN روشن باشد، یک‌بار از مسیر VPN و یک‌بار مستقیم (روی شبکه‌ی فیزیکی)
+     * اندازه می‌گیرد تا تفاوت دو مسیر دیده شود. جزئیات روش در [PingEngine].
+     */
+    fun ping(): Flow<PingResult> = flow {
+        val vpn = PingEngine.isVpnActive(context)
+        val defaultRoute = if (vpn) PingRoute.VPN else PingRoute.DIRECT
+        for (target in PingEngine.targets) {
+            emit(PingEngine.measure(target, null, defaultRoute))
+        }
+        if (vpn) {
+            val physical = PingEngine.physicalNetwork(context)
+            if (physical != null) {
+                for (target in PingEngine.targets) {
+                    emit(PingEngine.measure(target, physical, PingRoute.DIRECT))
+                }
             }
-            emit(
-                PingResult(
-                    host = host,
-                    samples = samples,
-                    averageMs = if (samples.isEmpty()) -1.0 else samples.average(),
-                    minMs = samples.minOrNull() ?: -1,
-                    maxMs = samples.maxOrNull() ?: -1,
-                    jitterMs = if (samples.size > 1) samples.max() - samples.min() else 0,
-                    lossPercent = ((4 - samples.size) * 100) / 4,
-                ),
-            )
         }
     }.flowOn(Dispatchers.IO)
-
-    /**
-     * اندازه‌گیری RTT واقعی با ICMP echo. اتصال TCP به پورت 443 را به‌اشتباه
-     * به‌عنوان پینگ گزارش نمی‌کنیم؛ connect ممکن است به‌علت پاسخ سریعِ proxy/firewall
-     * چند میلی‌ثانیه باشد، حتی وقتی RTT واقعی اینترنت بسیار بیشتر است.
-     * در صورت نبود ابزار/مجوز، نتیجه ناموفق محسوب می‌شود و مقدار ساختگی نمایش داده نمی‌شود.
-     */
-    private fun tcpPing(host: String): Long {
-        return runCatching {
-            val process = ProcessBuilder("ping", "-n", "-c", "1", "-W", "2", host)
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().use { it.readText() }
-            if (!process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
-                process.destroyForcibly()
-                return -1L
-            }
-            if (process.exitValue() != 0) return -1L
-            val match = Regex("time[=<]([0-9]+(?:\\.[0-9]+)?)\\s*ms", RegexOption.IGNORE_CASE)
-                .find(output) ?: return -1L
-            match.groupValues[1].toDoubleOrNull()?.toLong()?.coerceAtLeast(1L) ?: -1L
-        }.getOrDefault(-1L)
-    }
 
     /** پایش لحظه‌ای تغییر شبکه. */
     fun observeNetwork(persianProvider: () -> Boolean = { true }): Flow<NetworkSnapshot> = flow {
@@ -164,14 +137,4 @@ data class LiveTick(
     val peakSpeed: Double,
     val network: NetworkSnapshot,
     val uptimeMillis: Long,
-)
-
-data class PingResult(
-    val host: String,
-    val samples: List<Long>,
-    val averageMs: Double,
-    val minMs: Long,
-    val maxMs: Long,
-    val jitterMs: Long,
-    val lossPercent: Int,
 )

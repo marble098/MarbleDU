@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ir.marbledu.datausage.R
+import ir.marbledu.datausage.data.UsagePlanner
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.DaySummary
@@ -322,6 +323,65 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                                 )
                             }
                         }
+                    }
+                    // پیش‌بینی بسته: با روند ۷ روز اخیر تا کی دوام می‌آورد؟
+                    val forecast = remember(settings.dataCapBytes, used, dashboard.week, settings.billingCycleDay) {
+                        UsagePlanner.forecast(
+                            capBytes = settings.dataCapBytes,
+                            usedBytes = used,
+                            recentDailyBytes = dashboard.week.map { it.bytes },
+                            nowMillis = System.currentTimeMillis(),
+                            billingDay = settings.billingCycleDay,
+                        )
+                    }
+                    if (forecast != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Metric(
+                                if (persian) "دوام بسته" else "Lasts for",
+                                when {
+                                    forecast.remainingBytes <= 0L -> if (persian) "تمام شده" else "Used up"
+                                    forecast.daysUntilEmpty < 0 -> "—"
+                                    else -> Formats.integer(forecast.daysUntilEmpty.toLong(), persian) +
+                                        (if (persian) " روز" else " days")
+                                },
+                                if (forecast.willRunOut) scheme.error else scheme.primary,
+                                Modifier.weight(1f),
+                            )
+                            Metric(
+                                if (persian) "میانگین روزانه" else "Daily average",
+                                Formats.bytes(forecast.averageDailyBytes, persian),
+                                scheme.tertiary,
+                                Modifier.weight(1f),
+                            )
+                            Metric(
+                                if (persian) "سهم هر روز" else "Daily budget",
+                                Formats.bytes(forecast.dailyBudgetBytes, persian),
+                                scheme.secondary,
+                                Modifier.weight(1f),
+                            )
+                        }
+                        Text(
+                            text = when {
+                                forecast.remainingBytes <= 0L ->
+                                    if (persian) "بسته تمام شده است." else "Your plan is used up."
+                                forecast.willRunOut -> if (persian) {
+                                    "با این روند، بسته " + Formats.integer(
+                                        (forecast.daysLeftInCycle - forecast.daysUntilEmpty).toLong(), true,
+                                    ) + " روز زودتر از پایان دوره تمام می‌شود."
+                                } else {
+                                    "At this pace the plan runs out " +
+                                        (forecast.daysLeftInCycle - forecast.daysUntilEmpty) + " days before the cycle ends."
+                                }
+                                else -> if (persian) {
+                                    "با این روند، بسته تا پایان دوره (" +
+                                        Formats.integer(forecast.daysLeftInCycle.toLong(), true) + " روز دیگر) کافی است."
+                                } else {
+                                    "At this pace the plan lasts until the cycle ends (" + forecast.daysLeftInCycle + " days)."
+                                }
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (forecast.willRunOut) scheme.error else scheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
