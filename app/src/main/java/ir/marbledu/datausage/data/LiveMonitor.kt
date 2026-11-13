@@ -29,9 +29,6 @@ class LiveMonitor(private val context: Context) {
         var lastTx = 0L
         var lastTime = 0L
         var started = false
-        var sessionStart = System.currentTimeMillis()
-        var sessionRx = 0L
-        var sessionTx = 0L
         var peak = 0.0
         var lastNetworkRefresh = 0L
         var lastIspCheck = 0L
@@ -44,13 +41,11 @@ class LiveMonitor(private val context: Context) {
             val now = System.currentTimeMillis()
             if (!started) {
                 lastRx = rx; lastTx = tx; lastTime = now; started = true
-                sessionStart = now
             }
             val elapsed = (now - lastTime).coerceAtLeast(1)
             val dRx = max(0L, rx - lastRx)
             val dTx = max(0L, tx - lastTx)
             lastRx = rx; lastTx = tx; lastTime = now
-            sessionRx += dRx; sessionTx += dTx
             val down = dRx * 1000.0 / elapsed
             val up = dTx * 1000.0 / elapsed
             speedHistory.addLast(down + up)
@@ -77,9 +72,9 @@ class LiveMonitor(private val context: Context) {
                     upBytesPerSecond = up,
                     totalRx = rx,
                     totalTx = tx,
-                    sessionRxBytes = sessionRx,
-                    sessionTxBytes = sessionTx,
-                    sessionStart = sessionStart,
+                    sessionRxBytes = mobileSession?.rxBytes ?: 0L,
+                    sessionTxBytes = mobileSession?.txBytes ?: 0L,
+                    sessionStart = mobileSession?.startMillis ?: now,
                     averageSpeed = speedHistory.average(),
                     peakSpeed = peak,
                     network = snapshot,

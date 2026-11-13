@@ -216,12 +216,12 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         item {
             StatCard(
                 title = context.getString(R.string.session_timeline),
-                value = if (t == null) "—" else context.getString(
+                value = if (t?.mobileSession == null) "—" else context.getString(
                     R.string.from_to,
                     LiveMonitor.formatHourMinute(t.sessionStart, persian),
                     LiveMonitor.formatHourMinute(t.timestamp, persian),
                 ),
-                subtitle = if (t == null) null else
+                subtitle = if (t?.mobileSession == null) null else
                     "${Formats.bytes(t.sessionRxBytes + t.sessionTxBytes, persian)} " +
                         if (persian) "در این نشست" else "this session",
                 icon = MIcons.Clock,
