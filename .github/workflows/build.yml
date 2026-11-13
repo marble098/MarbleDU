@@ -1,6 +1,6 @@
-name: Build APK
+name: Build APK (all ABIs)
 
-# بیلد خودکار APK برای همه‌ی معماری‌ها بعد از هر merge (push به main) یا تگ
+# بعد از هر merge روی main (و هر تگ نسخه) APK همه‌ی معماری‌ها ساخته می‌شود
 on:
   push:
     branches: [main]
@@ -36,7 +36,7 @@ jobs:
       - name: Install SDK platforms
         run: |
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" > /dev/null
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" > /dev/null 2>&1 || true
 
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v6
@@ -48,7 +48,7 @@ jobs:
           ./gradlew --no-daemon testDebugUnitTest --stacktrace > gradle-test.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
-            grep -nE "^e: |error:|Execution failed|FAILED" gradle-test.log | head -40 | while IFS= read -r line; do
+            grep -nE "^e: |error:|Execution failed|FAILED|What went wrong" gradle-test.log | head -40 | while IFS= read -r line; do
               echo "::error::$line"
             done
           fi
@@ -61,7 +61,7 @@ jobs:
           ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace > gradle-build.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
-            grep -nE "^e: |error:|Execution failed|FAILED" gradle-build.log | head -40 | while IFS= read -r line; do
+            grep -nE "^e: |error:|Execution failed|FAILED|What went wrong" gradle-build.log | head -40 | while IFS= read -r line; do
               echo "::error::$line"
             done
           fi
@@ -109,15 +109,35 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attach APKs to release (tag / main)
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v3
+  release:
+    name: Attach APKs to GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v6
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.run_number) }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('Build #{0}', github.run_number) }}
-          body_path: CHANGELOG.md
-          files: dist/*.apk
-          draft: false
-          prerelease: false
+          pattern: MarbleDU-apk-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish release
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            TITLE="${TAG}"
+          else
+            TAG="build-${GITHUB_RUN_NUMBER}"
+            TITLE="Build #${GITHUB_RUN_NUMBER}"
+          fi
+          echo "Publishing $TAG"
+          gh release create "$TAG" dist/*.apk \
+            --title "$TITLE" \
+            --notes-file CHANGELOG.md \
+            --target "$GITHUB_SHA" || \
+          gh release upload "$TAG" dist/*.apk --clobber
