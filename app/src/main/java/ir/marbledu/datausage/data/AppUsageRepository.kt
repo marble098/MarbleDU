@@ -80,6 +80,41 @@ class AppUsageRepository(private val context: Context) {
         result.values.sortedByDescending { it.bytes }
     }
 
+    /** نوع اتصال فعلی (برای این‌که «مصرف امروز» همان چیزی باشد که کاربر انتظار دارد). */
+    fun currentType(): ConnectionType =
+        NetworkStatsReader.currentNetwork(context).type.let {
+            if (it == ConnectionType.WIFI) ConnectionType.WIFI else ConnectionType.CELLULAR
+        }
+
+    /**
+     * مصرف کل دستگاه در هر روز، برای نمودار روند.
+     * مستقیماً از تاریخچه‌ی NetworkStatsManager خوانده می‌شود؛ نیازی به ذخیره‌سازی نیست.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun dailyTotals(days: Int, type: ConnectionType): List<DayUsage> =
+        withContext(Dispatchers.IO) {
+            val manager = nsm ?: return@withContext emptyList()
+            val networkType = if (type == ConnectionType.WIFI) ConnectivityManager.TYPE_WIFI
+            else ConnectivityManager.TYPE_MOBILE
+            val calendar = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            val result = mutableListOf<DayUsage>()
+            for (offset in (days - 1) downTo 0) {
+                val start = calendar.timeInMillis - offset * DAY_MILLIS
+                val end = start + DAY_MILLIS
+                val bytes = runCatching {
+                    val bucket = manager.querySummaryForDevice(networkType, null, start, end)
+                    bucket.rxBytes + bucket.txBytes
+                }.getOrDefault(0L)
+                result.add(DayUsage(start, bytes))
+            }
+            result
+        }
+
     /** مصرف تک‌تک اپ‌ها به تفکیک وای‌فای و موبایل (نمای جزئیات). */
     suspend fun detailedBreakdown(from: Long, to: Long): Pair<List<AppUsage>, List<AppUsage>> {
         val mobile = usageByApp(from, to, ConnectionType.CELLULAR)
@@ -98,6 +133,10 @@ class AppUsageRepository(private val context: Context) {
         pkg?.let { pm.getApplicationIcon(it) }
     }.getOrNull()
 }
+
+data class DayUsage(val startMillis: Long, val bytes: Long)
+
+private const val DAY_MILLIS = 24L * 60 * 60 * 1000
 
 data class AppUsage(
     val uid: Int,

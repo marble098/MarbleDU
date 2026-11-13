@@ -34,12 +34,12 @@ data class AppUsageUi(
 )
 
 data class DashboardUi(
-    val todayRx: Long = 0,
-    val todayTx: Long = 0,
-    val monthRx: Long = 0,
-    val monthTx: Long = 0,
-    val mobileBytes: Long = 0,
-    val wifiBytes: Long = 0,
+    val todayMobileBytes: Long = 0,
+    val todayWifiBytes: Long = 0,
+    val monthMobileBytes: Long = 0,
+    val monthWifiBytes: Long = 0,
+    val todayVariationPercent: Int = 0,
+    val week: List<ir.marbledu.datausage.data.DayUsage> = emptyList(),
     val hasUsageAccess: Boolean = false,
     val operatorName: String = "",
     val averagePingMs: Double = -1.0,
@@ -70,8 +70,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var liveJob: Job? = null
     private var pingJob: Job? = null
-
-    private val rangeFlow = MutableStateFlow(TimeRange.TODAY)
 
     init {
         startLive()
@@ -122,13 +120,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val snapshot = NetworkStatsReader.currentNetwork(getApplication())
             val averageSpeed = _tick.value?.averageSpeed ?: 0.0
 
+            val week = repository.dailyTotals(7, ConnectionType.CELLULAR)
+            val todayTotal = week.lastOrNull()?.bytes ?: 0L
+            val yesterdayTotal = week.dropLast(1).lastOrNull()?.bytes ?: 0L
+            val variation = when {
+                yesterdayTotal <= 0L -> 0
+                else -> (((todayTotal - yesterdayTotal).toDouble() / yesterdayTotal) * 100).toInt()
+            }
+
             _dashboard.value = DashboardUi(
-                todayRx = todayMobile.sumOf { it.bytes },
-                todayTx = todayWifi.sumOf { it.bytes },
-                monthRx = monthMobile.sumOf { it.bytes },
-                monthTx = monthWifi.sumOf { it.bytes },
-                mobileBytes = todayMobile.sumOf { it.bytes },
-                wifiBytes = todayWifi.sumOf { it.bytes },
+                todayMobileBytes = todayMobile.sumOf { it.bytes },
+                todayWifiBytes = todayWifi.sumOf { it.bytes },
+                monthMobileBytes = monthMobile.sumOf { it.bytes },
+                monthWifiBytes = monthWifi.sumOf { it.bytes },
+                todayVariationPercent = variation,
+                week = week,
                 hasUsageAccess = repository.hasUsageAccess(),
                 operatorName = snapshot.carrierName,
                 averagePingMs = _dashboard.value.averagePingMs,

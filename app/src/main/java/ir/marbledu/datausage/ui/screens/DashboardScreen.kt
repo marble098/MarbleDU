@@ -1,6 +1,8 @@
 package ir.marbledu.datausage.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -120,14 +123,22 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatCard(
                         title = context.getString(R.string.today_usage),
-                        value = Formats.bytes(dashboard.mobileBytes, persian),
-                        subtitle = if (persian) "داده موبایل" else "mobile data",
+                        value = Formats.bytes(dashboard.todayMobileBytes, persian),
+                        subtitle = when {
+                            dashboard.todayVariationPercent > 0 ->
+                                "▲ ${Formats.integer(dashboard.todayVariationPercent.toLong(), persian)}٪ " +
+                                    (if (persian) "بیشتر از دیروز" else "vs yesterday")
+                            dashboard.todayVariationPercent < 0 ->
+                                "▼ ${Formats.integer((-dashboard.todayVariationPercent).toLong(), persian)}٪ " +
+                                    (if (persian) "کمتر از دیروز" else "vs yesterday")
+                            else -> if (persian) "داده موبایل" else "mobile data"
+                        },
                         icon = MIcons.Download,
                         modifier = Modifier.weight(1f),
                     )
                     StatCard(
                         title = context.getString(R.string.this_month),
-                        value = Formats.bytes(dashboard.monthRx, persian),
+                        value = Formats.bytes(dashboard.monthMobileBytes, persian),
                         subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
                         icon = MIcons.Chart,
                         accent = MaterialTheme.colorScheme.tertiary,
@@ -150,6 +161,12 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 accent = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+
+        if (iran.showDataUsageReport && dashboard.week.any { it.bytes > 0 }) {
+            item {
+                WeeklyTrendCard(dashboard.week, persian)
+            }
         }
 
         if (iran.showAverageSpeed || iran.showAveragePing) {
@@ -180,7 +197,7 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
 
         if (settings.dataCapBytes > 0) {
             item {
-                val used = dashboard.monthRx
+                val used = dashboard.monthMobileBytes
                 val fraction = Formats.percentOf(used, settings.dataCapBytes)
                 StatCard(
                     title = context.getString(R.string.data_cap),
@@ -234,6 +251,77 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
 
         item { Spacer(Modifier.height(8.dp)) }
     }
+}
+
+/** نمودار میله‌ای ساده‌ی ۷ روز اخیر – بدون کتابخانه‌ی اضافی. */
+@Composable
+private fun WeeklyTrendCard(week: List<ir.marbledu.datausage.data.DayUsage>, persian: Boolean) {
+    val context = LocalContext.current
+    val max = week.maxOfOrNull { it.bytes }?.coerceAtLeast(1L) ?: 1L
+    Card(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(MIcons.Chart, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.tertiary)
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    text = if (persian) "روند ۷ روز اخیر" else "Last 7 days",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = Formats.bytes(week.sumOf { it.bytes }, persian),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth().height(96.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                week.forEach { day ->
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom,
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height((8 + 76 * (day.bytes.toFloat() / max)).dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f)),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = dayLabel(day.startMillis, persian),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun dayLabel(millis: Long, persian: Boolean): String {
+    val names = if (persian) {
+        listOf("ی", "د", "س", "چ", "پ", "ج", "ش")
+    } else {
+        listOf("S", "M", "T", "W", "T", "F", "S")
+    }
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+    // شنبه = ۰ در تقویم ایرانی
+    val index = if (persian) (cal.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
+    else cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
+    return names[index]
 }
 
 @Composable
