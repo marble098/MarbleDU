@@ -6,7 +6,7 @@
 [versions]
 agp = "9.5.1"
 kotlin = "2.4.21"
-composeBom = "2026.11.00"
+composeBom = "2026.11.00"       # آخرین BOM بتا (همراه با Material 3 Expressive)
 material3 = "1.5.0-rc01"          # Material 3 Expressive (بتا/RC آخر)
 coreKtx = "1.19.1"
 activityCompose = "1.13.0"
@@ -28,7 +28,7 @@ androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 
-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-bom = { module = "androidx.compose:compose-bom-beta", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
