@@ -3,7 +3,6 @@ package ir.marbledu.datausage.ui
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 /**
@@ -19,12 +18,11 @@ object MIcons {
             viewportWidth = 24f,
             viewportHeight = 24f,
         ).apply {
-            path(
+            addPath(
+                pathData = androidx.compose.ui.graphics.vector.PathParser().parsePathString(pathData).toNodes(),
                 fill = SolidColor(Color.Black),
                 pathFillType = androidx.compose.ui.graphics.PathFillType.NonZero,
-            ) {
-                addPathNodes(androidx.compose.ui.graphics.vector.PathParser().parsePathString(pathData).toNodes())
-            }
+            )
         }.build()
 
     val Home = icon("home", "M4 21V9l8-6 8 6v12h-6v-7h-4v7z")
