@@ -199,4 +199,25 @@
     <string name="week_compare_previous">۷ روز پیش از آن: %1$s</string>
     <string name="week_compare_change">تغییر مصرف: %1$s٪</string>
     <string name="week_compare_no_baseline">هفتهٔ قبلی مصرفی نداشته؛ درصد تغییر محاسبه نمی‌شود.</string>
+
+    <!-- مصرف پس‌زمینه، جهش اپ‌ها و ساعات رایگان (۱.۶) -->
+    <string name="apps_tab_drain">پس‌زمینه و جهش</string>
+    <string name="drain_summary_title">پیش‌زمینه در برابر پس‌زمینه</string>
+    <string name="drain_summary_desc">سهم اینترنتی که برنامه‌ها پشت صحنه یا هنگام باز بودن مصرف کرده‌اند</string>
+    <string name="foreground_label">پیش‌زمینه</string>
+    <string name="background_label">پس‌زمینه</string>
+    <string name="top_background_drainers">پرمصرف‌ترین‌ها در پس‌زمینه</string>
+    <string name="top_background_drainers_desc">برنامه‌هایی که بیشترین حجم را بدون باز بودن مصرف کرده‌اند</string>
+    <string name="restrict_bg_action">محدودکردن پس‌زمینه</string>
+    <string name="no_background_drain">در این بازه مصرف پس‌زمینه‌ی چشمگیری ثبت نشده است.</string>
+    <string name="surge_title">جهش مصرف امروز اپ‌ها</string>
+    <string name="surge_subtitle">مقایسه‌ی مصرف امروز هر برنامه با میانگین روزانه‌ی ۷ روز قبل</string>
+    <string name="surge_empty">امروز هیچ برنامه‌ای جهش غیرعادی نداشته است.</string>
+    <string name="surge_new_spike">مصرف تازه</string>
+    <string name="off_peak_title">ساعات رایگان / شبانه</string>
+    <string name="off_peak_desc">تفکیک مصرف ساعات رایگان (مثل ۲ تا ۷ بامداد) از حجم اصلی بسته</string>
+    <string name="off_peak_exclude">کسر ساعات رایگان از سقف بسته‌ی اصلی</string>
+    <string name="off_peak_cap">سقف بسته‌ی شبانه / رایگان</string>
+    <string name="off_peak_window_label">بازه‌ی زمانی</string>
+    <string name="main_hours_label">ساعات عادی</string>
 </resources>

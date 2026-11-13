@@ -246,6 +246,16 @@ data class AppSettings(
     val sessionsTabsEnabled: Boolean = true,
     /** حداکثر نشست‌های دیده‌شده در کارت خانه (بیشتر از این، اسکرول می‌شود). */
     val sessionsVisibleCount: Int = 4,
+    /** ساعات رایگان / شبانه (مثلاً ۲ تا ۷ بامداد): تفکیک مصرف ساعات رایگان از بسته اصلی. */
+    val offPeakEnabled: Boolean = false,
+    /** ساعت شروع بازه‌ی رایگان/شبانه (۰ تا ۲۳). */
+    val offPeakStartHour: Int = 2,
+    /** ساعت پایان بازه‌ی رایگان/شبانه (۰ تا ۲۳). */
+    val offPeakEndHour: Int = 7,
+    /** سقف جداگانه‌ی بسته‌ی شبانه/رایگان بر حسب بایت؛ ۰ یعنی بدون سقف جدا. */
+    val offPeakCapBytes: Long = 0L,
+    /** کسر کردن مصرف موبایلِ ساعات رایگان از پیشرفت و پیش‌بینی بسته‌ی اصلی. */
+    val offPeakExcludeFromMainCap: Boolean = true,
 ) {
     val dailyLimitBytes: Long get() = dailyLimitMb.toLong() * 1024L * 1024L
 }
@@ -284,6 +294,11 @@ class SettingsRepository(private val context: Context) {
         val SESSIONS_CARD = booleanPreferencesKey("sessions_card")
         val SESSIONS_TABS = booleanPreferencesKey("sessions_tabs")
         val SESSIONS_VISIBLE = intPreferencesKey("sessions_visible")
+        val OFF_PEAK_ENABLED = booleanPreferencesKey("off_peak_enabled")
+        val OFF_PEAK_START_HOUR = intPreferencesKey("off_peak_start_hour")
+        val OFF_PEAK_END_HOUR = intPreferencesKey("off_peak_end_hour")
+        val OFF_PEAK_CAP_BYTES = longPreferencesKey("off_peak_cap_bytes")
+        val OFF_PEAK_EXCLUDE_MAIN = booleanPreferencesKey("off_peak_exclude_main")
 
         val NOTIF_STYLE = stringPreferencesKey("notif_style")
         val NOTIF_TITLE_MODE = stringPreferencesKey("notif_title_mode")
@@ -378,6 +393,11 @@ class SettingsRepository(private val context: Context) {
             sessionsCardEnabled = p[Keys.SESSIONS_CARD] ?: true,
             sessionsTabsEnabled = p[Keys.SESSIONS_TABS] ?: true,
             sessionsVisibleCount = p[Keys.SESSIONS_VISIBLE] ?: 4,
+            offPeakEnabled = p[Keys.OFF_PEAK_ENABLED] ?: false,
+            offPeakStartHour = (p[Keys.OFF_PEAK_START_HOUR] ?: 2).coerceIn(0, 23),
+            offPeakEndHour = (p[Keys.OFF_PEAK_END_HOUR] ?: 7).coerceIn(0, 23),
+            offPeakCapBytes = (p[Keys.OFF_PEAK_CAP_BYTES] ?: 0L).coerceAtLeast(0L),
+            offPeakExcludeFromMainCap = p[Keys.OFF_PEAK_EXCLUDE_MAIN] ?: true,
         )
     }
 
@@ -420,6 +440,17 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSessionsVisible(value: Int) = context.dataStore.edit {
         it[Keys.SESSIONS_VISIBLE] = value.coerceIn(2, 10)
     }
+    suspend fun setOffPeakEnabled(value: Boolean) = context.dataStore.edit { it[Keys.OFF_PEAK_ENABLED] = value }
+    suspend fun setOffPeakWindow(startHour: Int, endHour: Int) = context.dataStore.edit {
+        it[Keys.OFF_PEAK_START_HOUR] = startHour.coerceIn(0, 23)
+        it[Keys.OFF_PEAK_END_HOUR] = endHour.coerceIn(0, 23)
+    }
+    suspend fun setOffPeakCapBytes(value: Long) = context.dataStore.edit {
+        it[Keys.OFF_PEAK_CAP_BYTES] = value.coerceAtLeast(0L)
+    }
+    suspend fun setOffPeakExcludeFromMainCap(value: Boolean) = context.dataStore.edit {
+        it[Keys.OFF_PEAK_EXCLUDE_MAIN] = value
+    }
 
     suspend fun setOnboarded(value: Boolean) = context.dataStore.edit { it[Keys.ONBOARDED] = value }
 
@@ -449,6 +480,11 @@ class SettingsRepository(private val context: Context) {
         p[Keys.SESSIONS_CARD] = settings.sessionsCardEnabled
         p[Keys.SESSIONS_TABS] = settings.sessionsTabsEnabled
         p[Keys.SESSIONS_VISIBLE] = settings.sessionsVisibleCount
+        p[Keys.OFF_PEAK_ENABLED] = settings.offPeakEnabled
+        p[Keys.OFF_PEAK_START_HOUR] = settings.offPeakStartHour.coerceIn(0, 23)
+        p[Keys.OFF_PEAK_END_HOUR] = settings.offPeakEndHour.coerceIn(0, 23)
+        p[Keys.OFF_PEAK_CAP_BYTES] = settings.offPeakCapBytes.coerceAtLeast(0L)
+        p[Keys.OFF_PEAK_EXCLUDE_MAIN] = settings.offPeakExcludeFromMainCap
         p[Keys.SPEED_OVERLAY] = settings.speedOverlay
         p[Keys.SPEED_OVERLAY_CHART] = settings.speedOverlayChart
         p[Keys.TEXT_SIZE] = settings.textSize.name

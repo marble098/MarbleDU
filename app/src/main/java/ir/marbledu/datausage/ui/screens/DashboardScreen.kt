@@ -18,14 +18,22 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,41 +46,45 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ir.marbledu.datausage.R
-import ir.marbledu.datausage.data.UsageLedger
-import ir.marbledu.datausage.data.UsagePlanner
 import ir.marbledu.datausage.data.AppSettings
-import ir.marbledu.datausage.ui.InsightsUi
+import ir.marbledu.datausage.data.AppSurgeDetector
 import ir.marbledu.datausage.data.ConnectionType
-import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.data.DaySummary
-import ir.marbledu.datausage.ui.DashboardUi
-import ir.marbledu.datausage.ui.HistoryUi
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.JalaliDate
-import ir.marbledu.datausage.data.SimIdentity
 import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.NetworkSnapshot
+import ir.marbledu.datausage.data.OffPeakWindow
 import ir.marbledu.datausage.data.OperatorCatalog
+import ir.marbledu.datausage.data.SimIdentity
+import ir.marbledu.datausage.data.UiMode
+import ir.marbledu.datausage.data.UsageLedger
+import ir.marbledu.datausage.data.UsagePlanner
 import ir.marbledu.datausage.service.NotificationFormatter
 import ir.marbledu.datausage.ui.AppIcon
 import ir.marbledu.datausage.ui.ArcGauge
 import ir.marbledu.datausage.ui.BarEntry
 import ir.marbledu.datausage.ui.CardHeader
+import ir.marbledu.datausage.ui.DashboardUi
 import ir.marbledu.datausage.ui.EmptyState
 import ir.marbledu.datausage.ui.FloatingBarClearance
 import ir.marbledu.datausage.ui.GlassPanel
 import ir.marbledu.datausage.ui.HeroCard
+import ir.marbledu.datausage.ui.HistoryUi
 import ir.marbledu.datausage.ui.InfoChip
+import ir.marbledu.datausage.ui.InsightsUi
+import ir.marbledu.datausage.ui.LargeTitleScaffold
 import ir.marbledu.datausage.ui.LegendDot
 import ir.marbledu.datausage.ui.MIcons
-import ir.marbledu.datausage.ui.LargeTitleScaffold
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.MarbleCard
 import ir.marbledu.datausage.ui.Metric
+import ir.marbledu.datausage.ui.OffPeakUi
 import ir.marbledu.datausage.ui.OperatorBadge
 import ir.marbledu.datausage.ui.SectionTitle
 import ir.marbledu.datausage.ui.SplitBar
@@ -80,6 +92,7 @@ import ir.marbledu.datausage.ui.StackedBarChart
 import ir.marbledu.datausage.ui.StatCard
 import ir.marbledu.datausage.ui.UsageBar
 import ir.marbledu.datausage.ui.theme.LocalMarbleColors
+import ir.marbledu.datausage.ui.theme.accessibleColor
 import ir.marbledu.datausage.util.UsageAccess
 
 @Composable
@@ -94,10 +107,16 @@ fun DashboardScreen(
     val usage by vm.usage.collectAsState()
     val history by vm.history.collectAsState()
     val sessionTick by vm.tick.collectAsState()
+    val appSurges by vm.appSurges.collectAsState()
+    val offPeak by vm.offPeak.collectAsState()
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
 
     var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var showOffPeakDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedTab, settings.offPeakEnabled) {
+        if (selectedTab == 1 && settings.offPeakEnabled) vm.loadOffPeak()
+    }
     val homeTabs = if (persian) listOf("امروز", "بسته و اپراتورها") else listOf("Today", "Plan & operators")
     val listState = rememberLazyListState()
     LargeTitleScaffold(
@@ -235,6 +254,16 @@ fun DashboardScreen(
                 InsightsCard(insights = insightState, persian = persian)
             }
 
+            if (appSurges.items.isNotEmpty()) {
+                item {
+                    DashboardSurgeAlertCard(
+                        surges = appSurges.items.take(3),
+                        persian = persian,
+                        onOpenAppSettings = { pkg -> UsageAccess.openAppDataUsageSettings(context, pkg) },
+                    )
+                }
+            }
+
             if (history.days.takeLast(7).any { it.total > 0 }) {
                 item {
                     WeeklyTrendCard(history.days.takeLast(7), persian)
@@ -288,7 +317,10 @@ fun DashboardScreen(
 
             if (settings.dataCapBytes > 0) {
                 item {
-                    val used = dashboard.monthMobileBytes
+                    val excludedOffPeak = if (settings.offPeakEnabled && settings.offPeakExcludeFromMainCap) {
+                        offPeak.monthMobileOffPeak
+                    } else 0L
+                    val used = (dashboard.monthMobileBytes - excludedOffPeak).coerceAtLeast(0L)
                     val fraction = Formats.percentOf(used, settings.dataCapBytes)
                     val danger = fraction > 0.9f
                     MarbleCard {
@@ -298,6 +330,16 @@ fun DashboardScreen(
                             tint = if (danger) scheme.error else scheme.primary,
                             trailing = Formats.bytes(settings.dataCapBytes, persian),
                         )
+                        if (excludedOffPeak > 0L) {
+                            InfoChip(
+                                text = if (persian) {
+                                    "بدون ${Formats.bytes(excludedOffPeak, true)} مصرف ساعات رایگان"
+                                } else {
+                                    "Excludes ${Formats.bytes(excludedOffPeak, false)} off-peak"
+                                },
+                                color = scheme.tertiary,
+                            )
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             ArcGauge(
                                 fraction = fraction,
@@ -421,8 +463,33 @@ fun DashboardScreen(
                     }
                 }
             }
+
+            item {
+                OffPeakPlanCard(
+                    settings = settings,
+                    offPeak = offPeak,
+                    persian = persian,
+                    onConfigure = { showOffPeakDialog = true },
+                )
+            }
         }
-    }        }
+    }
+
+    if (showOffPeakDialog) {
+        OffPeakConfigDialog(
+            settings = settings,
+            persian = persian,
+            onDismiss = { showOffPeakDialog = false },
+            onSave = { enabled, startH, endH, capBytes, excludeMain ->
+                vm.setOffPeakEnabled(enabled)
+                vm.setOffPeakWindow(startH, endH)
+                vm.setOffPeakCapBytes(capBytes)
+                vm.setOffPeakExcludeFromMainCap(excludeMain)
+                showOffPeakDialog = false
+            },
+        )
+    }
+}
 
 
 /**
@@ -895,3 +962,339 @@ private fun UsageAccessBanner(persian: Boolean) {
         }
     }
 }
+
+/**
+ * کارت هشدار جهش غیرعادی اپ‌ها در تب خانه؛ تنها زمانی نمایش داده می‌شود که
+ * امروز یک یا چند برنامه جهش معنادار نسبت به میانگین ۷ روزه داشته باشند.
+ */
+@Composable
+private fun DashboardSurgeAlertCard(
+    surges: List<AppSurgeDetector.SurgeItem>,
+    persian: Boolean,
+    onOpenAppSettings: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val warnTint = accessibleColor(Color(0xFFF59E0B), scheme.surfaceContainerLow)
+
+    MarbleCard(padding = 14.dp) {
+        CardHeader(
+            title = context.getString(R.string.surge_title),
+            icon = MIcons.Speed,
+            tint = warnTint,
+            subtitle = context.getString(R.string.surge_subtitle),
+            trailing = Formats.integer(surges.size.toLong(), persian) + (if (persian) " اپ" else " apps"),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            surges.forEach { item ->
+                val displayName = OperatorCatalog.specialUidLabel(item.uid, persian) ?: item.label
+                val badge = if (item.isNewSpike) {
+                    context.getString(R.string.surge_new_spike)
+                } else {
+                    "${Formats.number(item.multiplier, persian, 1)}×"
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(scheme.surfaceContainer)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppIcon(item.packageName.substringBefore(':'), displayName, size = 30.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = if (item.baselineDailyBytes > 0L) {
+                                "${Formats.bytes(item.todayTotalBytes, persian)} (${if (persian) "میانگین" else "avg"} ${Formats.bytes(item.baselineDailyBytes, persian)})"
+                            } else {
+                                Formats.bytes(item.todayTotalBytes, persian)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    InfoChip(text = badge, color = warnTint)
+                    if (item.isRestrictableApp) {
+                        TextButton(
+                            onClick = { onOpenAppSettings(item.packageName) },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        ) {
+                            Text(if (persian) "تنظیم" else "Manage", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * کارت «ساعات رایگان / شبانه» در تب بسته و اپراتورها.
+ */
+@Composable
+private fun OffPeakPlanCard(
+    settings: AppSettings,
+    offPeak: OffPeakUi,
+    persian: Boolean,
+    onConfigure: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val marble = LocalMarbleColors.current
+
+    MarbleCard(padding = 14.dp) {
+        CardHeader(
+            title = context.getString(R.string.off_peak_title),
+            icon = MIcons.Clock,
+            tint = scheme.tertiary,
+            subtitle = if (settings.offPeakEnabled) {
+                OffPeakWindow.windowLabel(settings.offPeakStartHour, settings.offPeakEndHour, persian)
+            } else {
+                context.getString(R.string.off_peak_desc)
+            },
+            trailing = if (settings.offPeakEnabled) {
+                if (persian) "فعال" else "Active"
+            } else null,
+        )
+
+        if (!settings.offPeakEnabled) {
+            androidx.compose.material3.FilledTonalButton(
+                onClick = onConfigure,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (persian) "تنظیم ساعات رایگان / شبانه" else "Set up off-peak hours")
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Metric(
+                    label = if (persian) "موبایل شبانه امروز" else "Today mobile",
+                    value = Formats.bytes(offPeak.todayMobileOffPeak, persian),
+                    color = marble.mobile,
+                    modifier = Modifier.weight(1f),
+                    icon = MIcons.Signal,
+                )
+                Metric(
+                    label = if (persian) "موبایل شبانه ۳۰ روز" else "30d mobile",
+                    value = Formats.bytes(offPeak.monthMobileOffPeak, persian),
+                    color = scheme.tertiary,
+                    modifier = Modifier.weight(1f),
+                    icon = MIcons.Clock,
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (offPeak.todayWifiOffPeak > 0L || offPeak.monthWifiOffPeak > 0L) {
+                    InfoChip(
+                        text = "${context.getString(R.string.wifi)} (${if (persian) "۳۰ روز" else "30d"}): ${
+                            Formats.bytes(offPeak.monthWifiOffPeak, persian)
+                        }",
+                        color = marble.wifi,
+                    )
+                }
+                if (settings.offPeakExcludeFromMainCap && settings.dataCapBytes > 0L) {
+                    InfoChip(
+                        text = if (persian) "کسر از بسته‌ی اصلی" else "Excluded from main cap",
+                        color = scheme.primary,
+                    )
+                }
+            }
+
+            if (settings.offPeakCapBytes > 0L) {
+                val fraction = Formats.percentOf(offPeak.monthMobileOffPeak, settings.offPeakCapBytes)
+                val danger = fraction > 0.9f
+                val remaining = (settings.offPeakCapBytes - offPeak.monthMobileOffPeak).coerceAtLeast(0L)
+                UsageBar(
+                    label = context.getString(R.string.off_peak_cap),
+                    bytes = offPeak.monthMobileOffPeak,
+                    fraction = fraction,
+                    persian = persian,
+                    trailing = "${context.getString(R.string.remaining)}: ${Formats.bytes(remaining, persian)}",
+                    color = if (danger) scheme.error else scheme.tertiary,
+                )
+            }
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onConfigure) {
+                    Text(if (persian) "تغییر بازه و سقف" else "Edit window & cap")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun OffPeakConfigDialog(
+    settings: AppSettings,
+    persian: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (enabled: Boolean, startHour: Int, endHour: Int, capBytes: Long, excludeFromMainCap: Boolean) -> Unit,
+) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    var enabled by remember { mutableStateOf(true) }
+    var startHour by remember { mutableStateOf(settings.offPeakStartHour) }
+    var endHour by remember { mutableStateOf(settings.offPeakEndHour) }
+    var excludeMain by remember { mutableStateOf(settings.offPeakExcludeFromMainCap) }
+    var capGbText by remember {
+        mutableStateOf(
+            if (settings.offPeakCapBytes > 0L) {
+                val gb = settings.offPeakCapBytes / (1024.0 * 1024 * 1024)
+                if (gb % 1.0 == 0.0) gb.toLong().toString() else String.format(java.util.Locale.US, "%.1f", gb)
+            } else "",
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(context.getString(R.string.off_peak_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        if (persian) "فعال بودن ردیاب ساعات رایگان" else "Enable off-peak tracking",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+
+                Text(
+                    context.getString(R.string.off_peak_window_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    OffPeakWindow.presets.forEach { preset ->
+                        val active = startHour == preset.startHour && endHour == preset.endHour
+                        FilterChip(
+                            selected = active,
+                            onClick = {
+                                startHour = preset.startHour
+                                endHour = preset.endHour
+                            },
+                            label = { Text(if (persian) preset.fa else preset.en) },
+                        )
+                    }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            if (persian) "ساعت شروع" else "Start hour",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { startHour = (startHour + 23) % 24 }) { Text("−") }
+                            Text(
+                                OffPeakWindow.hourText(startHour, persian),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            TextButton(onClick = { startHour = (startHour + 1) % 24 }) { Text("+") }
+                        }
+                    }
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            if (persian) "ساعت پایان" else "End hour",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { endHour = (endHour + 23) % 24 }) { Text("−") }
+                            Text(
+                                OffPeakWindow.hourText(endHour, persian),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            TextButton(onClick = { endHour = (endHour + 1) % 24 }) { Text("+") }
+                        }
+                    }
+                }
+
+                if (!OffPeakWindow.isValidWindow(startHour, endHour)) {
+                    Text(
+                        if (persian) "ساعت شروع و پایان نباید یکسان باشند." else "Start and end hours must differ.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.error,
+                    )
+                }
+
+                OutlinedTextField(
+                    value = capGbText,
+                    onValueChange = { capGbText = it },
+                    label = {
+                        Text(
+                            if (persian) "سقف بسته‌ی شبانه (GB، اختیاری)" else "Off-peak cap (GB, optional)",
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        context.getString(R.string.off_peak_exclude),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(checked = excludeMain, onCheckedChange = { excludeMain = it })
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = OffPeakWindow.isValidWindow(startHour, endHour),
+                onClick = {
+                    val gb = capGbText.trim().replace(',', '.').toDoubleOrNull() ?: 0.0
+                    val capBytes = (gb * 1024.0 * 1024 * 1024).toLong().coerceAtLeast(0L)
+                    onSave(enabled, startHour, endHour, capBytes, excludeMain)
+                },
+            ) {
+                Text(context.getString(R.string.save))
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text(context.getString(R.string.cancel))
+            }
+        },
+    )
+}
+

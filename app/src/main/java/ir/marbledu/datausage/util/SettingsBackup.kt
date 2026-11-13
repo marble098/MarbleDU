@@ -74,6 +74,11 @@ object SettingsBackup {
             put("sessionsVisibleCount", settings.sessionsVisibleCount)
             put("speedOverlay", settings.speedOverlay)
             put("speedOverlayChart", settings.speedOverlayChart)
+            put("offPeakEnabled", settings.offPeakEnabled)
+            put("offPeakStartHour", settings.offPeakStartHour)
+            put("offPeakEndHour", settings.offPeakEndHour)
+            put("offPeakCapBytes", settings.offPeakCapBytes)
+            put("offPeakExcludeFromMainCap", settings.offPeakExcludeFromMainCap)
             put("notification", JSONObject().apply {
                 put("style", n.style.name)
                 put("titleMode", n.titleMode.name)
@@ -170,6 +175,11 @@ object SettingsBackup {
                 .coerceIn(2, 10),
             speedOverlay = root.optBoolean("speedOverlay", base.speedOverlay),
             speedOverlayChart = root.optBoolean("speedOverlayChart", base.speedOverlayChart),
+            offPeakEnabled = root.optBoolean("offPeakEnabled", base.offPeakEnabled),
+            offPeakStartHour = root.optInt("offPeakStartHour", base.offPeakStartHour).coerceIn(0, 23),
+            offPeakEndHour = root.optInt("offPeakEndHour", base.offPeakEndHour).coerceIn(0, 23),
+            offPeakCapBytes = root.optLong("offPeakCapBytes", base.offPeakCapBytes).coerceAtLeast(0L),
+            offPeakExcludeFromMainCap = root.optBoolean("offPeakExcludeFromMainCap", base.offPeakExcludeFromMainCap),
             notification = notification,
         )
     }.getOrNull()

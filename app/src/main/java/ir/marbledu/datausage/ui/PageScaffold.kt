@@ -1,35 +1,40 @@
 package ir.marbledu.datausage.ui
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,21 +42,25 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import ir.marbledu.datausage.ui.theme.LocalMarbleColors
-import ir.marbledu.datausage.ui.theme.LocalTextScale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
- * اسکلت مشترک صفحه‌ها، مشابه رابط iOS:
- *  - بالای صفحه یک تیتر خیلی بزرگ و پررنگ نمایش داده می‌شود؛
- *  - با اسکرول به پایین، تیتر بزرگ نرم «چروک» می‌شود و در نوار فشرده‌ی بالای
- *    صفحه جا می‌گیرد (همیشه همان‌جا می‌ماند)؛
- *  - تب‌های ثانویه‌ی صفحه (در صورت وجود) زیر نوار فشرده همیشه دیده می‌شوند.
+ * اسکلت مشترک صفحه‌ها:
+ *  - بدون هیچ پس‌زمینه‌ی مات در بالای صفحه؛
+ *  - تیتر با اسکرول نرم جمع می‌شود و محو می‌گردد؛
+ *  - نوار تب بالای شیشه‌ای (هم‌شکل نوار تب پایین) شناور می‌ماند و محتوا از زیر آن و نوار وضعیت عبور می‌کند.
  */
 @Composable
 fun LargeTitleScaffold(
@@ -66,29 +75,68 @@ fun LargeTitleScaffold(
     content: LazyListScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val marble = LocalMarbleColors.current
+    val density = LocalDensity.current
+    val statusTopPx = WindowInsets.statusBars.getTop(density)
+    var titleHeightPx by remember { mutableIntStateOf(0) }
+    var tabsHeightPx by remember { mutableIntStateOf(0) }
+    val hasTabs = !tabs.isNullOrEmpty() && onTabSelected != null
+
+    val topPadding = with(density) {
+        if (titleHeightPx == 0) {
+            statusTopPx.toDp() + if (hasTabs) 114.dp else 54.dp
+        } else {
+            (statusTopPx + titleHeightPx + if (hasTabs) tabsHeightPx else 0).toDp() + 6.dp
+        }
+    }
+
+    fun clampedScrollPx(): Float {
+        val maxCollapse = titleHeightPx.toFloat()
+        if (maxCollapse <= 0f) return 0f
+        val raw = if (listState.firstVisibleItemIndex == 0) {
+            listState.firstVisibleItemScrollOffset.toFloat()
+        } else {
+            maxCollapse
+        }
+        return raw.coerceIn(0f, maxCollapse)
+    }
+
     Box(modifier.fillMaxSize().background(scheme.background)) {
-        // هاله‌ی رنگی نرم پشت سربرگ؛ در تم AMOLED کاملاً محو می‌شود.
-        if (!marble.amoled) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = topPadding,
+                bottom = FloatingBarClearance,
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
+
+        // سربرگ شفاف و شناور بالای لیست؛ هیچ پس‌زمینه‌ی ماتی زیر تایتل و نوار تب قرار نمی‌گیرد.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding(),
+        ) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(190.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                scheme.primary.copy(alpha = 0.10f),
-                                scheme.tertiary.copy(alpha = 0.045f),
-                                Color.Transparent,
-                            ),
-                        ),
-                    ),
-            )
-        }
-        Column(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxWidth()) {
+                    .clipToBounds()
+                    .onSizeChanged { titleHeightPx = it.height },
+            ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(0, -clampedScrollPx().roundToInt()) }
+                        .graphicsLayer {
+                            val maxCollapse = titleHeightPx.toFloat().coerceAtLeast(1f)
+                            val progress = (clampedScrollPx() / maxCollapse).coerceIn(0f, 1f)
+                            alpha = (1f - progress * 1.45f).coerceIn(0f, 1f)
+                        }
+                        .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -109,136 +157,30 @@ fun LargeTitleScaffold(
                             )
                         }
                     }
-                    if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
-                }
-                if (tabs != null && onTabSelected != null) {
-                    TopTabs(tabs = tabs, selected = selectedTab, onSelect = onTabSelected)
-                }
-            }
-            LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp, end = 16.dp, top = 8.dp, bottom = FloatingBarClearance,
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            content = content,
-        )
-        }
-    }
-}
-
-/** نوار فشرده‌ی بالای صفحه؛ وقتی تیتر بزرگ اسکرول شد، اینجا ظاهر می‌شود. */
-@Composable
-private fun CompactBar(
-    title: String,
-    collapse: Float,
-    actions: (@Composable RowScope.() -> Unit)?,
-) {
-    val scheme = MaterialTheme.colorScheme
-    val titleAlpha by animateFloatAsState(
-        targetValue = collapse,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "compact-title-alpha",
-    )
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .clipToBounds()
-            .background(scheme.surfaceContainer.copy(alpha = 0.96f * collapse)),
-    ) {
-        // خط مویی زیر نوار، مثل iOS
-        Box(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .height(0.6.dp)
-                .background(scheme.outlineVariant.copy(alpha = 0.85f * collapse)),
-        )
-        Row(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // تعادل چپ/راست تا تیتر دقیقاً وسط بماند
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                // در فارسی/انگلیسی هر دو، فضای خالیِ همان وزن آیکون‌ها را می‌گیرد
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = scheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(2.2f)
-                    .graphicsLayer { alpha = titleAlpha },
-            )
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
                     if (actions != null) {
-                        actions()
+                        Row(verticalAlignment = Alignment.CenterVertically, content = actions)
                     }
                 }
             }
-        }
-    }
-}
 
-/** تیتر بزرگ صفحه؛ با اسکرول به بالا می‌لغزد و محو می‌شود. */
-@Composable
-private fun LargeTitleBlock(
-    title: String,
-    subtitle: String?,
-    collapse: Float,
-) {
-    val scheme = MaterialTheme.colorScheme
-    val scale = LocalTextScale.current
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                // کمی کوچک‌تر می‌شود و محو می‌شود تا زیر نوار فشرده جا شود
-                val shrink = 1f - 0.18f * collapse
-                scaleX = shrink
-                scaleY = shrink
-                alpha = (1f - collapse * 0.92f).coerceIn(0f, 1f)
-                translationY = -10f * collapse * density
+            val tabList = tabs
+            if (!tabList.isNullOrEmpty() && onTabSelected != null) {
+                TopTabs(
+                    tabs = tabList,
+                    selected = selectedTab,
+                    onSelect = onTabSelected,
+                    modifier = Modifier
+                        .onSizeChanged { tabsHeightPx = it.height }
+                        .offset { IntOffset(0, -clampedScrollPx().roundToInt()) },
+                )
             }
-            .padding(top = 6.dp, bottom = 4.dp),
-    ) {
-        Text(
-            text = title,
-            fontSize = (30f * scale).sp,
-            lineHeight = (36f * scale).sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = scheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (subtitle != null) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 2,
-            )
         }
     }
 }
 
 /**
- * تب‌های ثانویه‌ی صفحه: شیشه‌ای مثل نوار پایین، کپسولی و با انیمیشن نرم؛
- * همیشه زیر سربرگ دیده می‌شود تا کاربر یک‌ضربه‌ای به بخش خودش برود.
- * پس‌زمینه‌ی مات قبلی حذف شده و به‌جایش همان شیشه‌ی نیمه‌شفاف با هاله‌ی
- * رنگ پالت و خط لبه‌ی نورانی آمده است.
+ * نوار تب شیشه‌ای بالای صفحه:
+ * دقیقاً هم‌جنس نوار پایین (GlassBar نیمه‌شفاف با هاله‌ی رنگی، بازتاب نور و کپسول لغزنده‌ی گرادیانی).
  */
 @Composable
 fun TopTabs(
@@ -247,57 +189,99 @@ fun TopTabs(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (tabs.isEmpty()) return
     val scheme = MaterialTheme.colorScheme
     val marble = LocalMarbleColors.current
-    Box(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Row(
+    val clampedSelected = selected.coerceIn(0, tabs.lastIndex)
+    val position by animateFloatAsState(
+        targetValue = clampedSelected.toFloat(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "top-tab-pill",
+    )
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+    ) {
+        BoxWithConstraints(
             Modifier
-                .horizontalScroll(rememberScrollState())
-                .glassSurface(
-                    shape = RoundedCornerShape(20.dp),
-                    tint = scheme.primary,
-                    alpha = if (marble.amoled) 0.94f else 0.80f,
-                )
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                .fillMaxWidth()
+                .height(48.dp),
         ) {
-            tabs.forEachIndexed { index, tab ->
-                val isSelected = index == selected
-                val tint by animateColorAsState(
-                    targetValue = if (isSelected) scheme.primary else scheme.onSurfaceVariant,
-                    label = "top-tab-tint",
-                )
-                val scale by animateFloatAsState(
-                    targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                    label = "top-tab-scale",
-                )
+            val tabSlotWidth = maxWidth / tabs.size
+            GlassBar(
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(24.dp),
+                tint = scheme.primary,
+            ) {
+                // نشانگر کپسولی لغزنده هم‌شکل نوار ناوبری پایین
                 Box(
                     Modifier
-                        .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
+                        .offset { IntOffset((tabSlotWidth.toPx() * position).roundToInt(), 0) }
+                        .width(tabSlotWidth)
+                        .fillMaxHeight()
+                        .padding(horizontal = 4.dp, vertical = 5.dp)
+                        .clip(RoundedCornerShape(19.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    if (marble.amoled) scheme.primary.copy(alpha = 0.34f)
+                                    else scheme.primary.copy(alpha = 0.22f),
+                                    scheme.tertiary.copy(alpha = 0.22f),
+                                ),
+                            ),
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = if (marble.dark) 0.16f else 0.55f),
+                            shape = RoundedCornerShape(19.dp),
+                        ),
+                )
+                Row(Modifier.fillMaxSize()) {
+                    tabs.forEachIndexed { index, tab ->
+                        val closeness = (1f - abs(position - index)).coerceIn(0f, 1f)
+                        val pop by animateFloatAsState(
+                            targetValue = if (clampedSelected == index) 1f else 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                            label = "top-tab-pop",
+                        )
+                        val tint = lerp(scheme.onSurfaceVariant, scheme.primary, closeness)
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(20.dp))
+                                .semantics { this.selected = clampedSelected == index }
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    role = Role.Tab,
+                                ) { onSelect(index) }
+                                .padding(horizontal = 6.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = tab,
+                                color = tint,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (closeness > 0.5f) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.graphicsLayer {
+                                    val scale = 1f + 0.05f * pop
+                                    scaleX = scale
+                                    scaleY = scale
+                                },
+                            )
+                        }
                     }
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (isSelected) scheme.primary.copy(alpha = 0.12f) else Color.Transparent)
-                    .semantics { this.selected = isSelected }
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null,
-                        role = androidx.compose.ui.semantics.Role.Tab,
-                    ) { onSelect(index) }
-                    .padding(horizontal = 15.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        text = tab,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = tint,
-                        maxLines = 1,
-                    )
                 }
             }
         }

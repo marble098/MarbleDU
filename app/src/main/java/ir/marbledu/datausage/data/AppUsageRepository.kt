@@ -94,6 +94,8 @@ class AppUsageRepository(private val context: Context) {
                 // گاهی startTimeStamp/endTimeStamp صفر است؛ نباید 1970 وارد گزارش شود.
                 val first = bucket.startTimeStamp.takeIf { it > 0 } ?: fromMillis
                 val last = bucket.endTimeStamp.takeIf { it > 0 } ?: toMillis
+                val fg = if (bucket.state == NetworkStats.Bucket.STATE_FOREGROUND) bytes else 0L
+                val bg = if (bucket.state == NetworkStats.Bucket.STATE_DEFAULT) bytes else 0L
                 val existing = result[uid]
                 result[uid] = if (existing == null) {
                     val pkg = if (uid >= 0) runCatching { pm.getNameForUid(uid) }.getOrNull() else null
@@ -105,12 +107,16 @@ class AppUsageRepository(private val context: Context) {
                         bytes = bytes,
                         firstTimestamp = first,
                         lastTimestamp = last,
+                        foregroundBytes = fg,
+                        backgroundBytes = bg,
                     )
                 } else {
                     existing.copy(
                         bytes = existing.bytes + bytes,
                         firstTimestamp = minOf(existing.firstTimestamp, first),
                         lastTimestamp = maxOf(existing.lastTimestamp, last),
+                        foregroundBytes = existing.foregroundBytes + fg,
+                        backgroundBytes = existing.backgroundBytes + bg,
                     )
                 }
             }
@@ -581,6 +587,32 @@ class AppUsageRepository(private val context: Context) {
         return mobile to wifi
     }
 
+    /**
+     * مصرف کل دستگاه در «ساعات رایگان / شبانه» بین [fromMillis] و [toMillis] به تفکیک موبایل و وای‌فای.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun offPeakDeviceTraffic(
+        fromMillis: Long,
+        toMillis: Long,
+        startHour: Int,
+        endHour: Int,
+        epochMillis: Long = 0L,
+    ): Pair<Traffic, Traffic> = withContext(Dispatchers.IO) {
+        val manager = nsm ?: return@withContext Traffic() to Traffic()
+        if (!OffPeakWindow.isValidWindow(startHour, endHour)) return@withContext Traffic() to Traffic()
+        val effectiveFrom = if (epochMillis > 0L) maxOf(fromMillis, epochMillis) else fromMillis
+        if (toMillis <= effectiveFrom) return@withContext Traffic() to Traffic()
+        val subscriber = subscriberId()
+        val slices = OffPeakWindow.rangeSlices(effectiveFrom, toMillis, startHour, endHour)
+        var mobile = Traffic()
+        var wifi = Traffic()
+        slices.forEach { (sliceStart, sliceEnd) ->
+            mobile += deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriber, sliceStart, sliceEnd)
+            wifi += deviceTraffic(manager, ConnectivityManager.TYPE_WIFI, null, sliceStart, sliceEnd)
+        }
+        mobile to wifi
+    }
+
     private fun labelFor(pkg: String?): String {
         if (pkg == null) return "—"
         return runCatching {
@@ -668,6 +700,8 @@ data class AppUsage(
     val bytes: Long,
     val firstTimestamp: Long,
     val lastTimestamp: Long,
+    val foregroundBytes: Long = 0L,
+    val backgroundBytes: Long = 0L,
 )
 
 /** بازه‌های زمانی گزارش‌گیری. */

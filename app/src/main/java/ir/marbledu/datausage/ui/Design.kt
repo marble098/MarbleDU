@@ -82,15 +82,17 @@ fun GlassBar(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(26.dp),
     tint: Color = MaterialTheme.colorScheme.primary,
+    alpha: Float? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val marble = LocalMarbleColors.current
     // رنگ‌ها را بیرون از Canvas می‌گیریم تا در scope غیر-Composable هم در دسترس باشند.
     val tertiaryColor = MaterialTheme.colorScheme.tertiary
     val highlight = if (marble.amoled) 0.06f else if (marble.dark) 0.16f else 0.55f
+    val surfaceAlpha = alpha ?: if (marble.amoled) 0.90f else 0.72f
     Box(modifier.clip(shape)) {
         // بدنه‌ی شیشه
-        Box(Modifier.fillMaxSize().glassSurface(shape, tint, alpha = if (marble.amoled) 0.94f else 0.80f))
+        Box(Modifier.fillMaxSize().glassSurface(shape, tint, alpha = surfaceAlpha))
         // هاله‌ی رنگی نرم داخل شیشه (چپ و راست) تا شیشه «زنده» دیده شود
         Canvas(Modifier.fillMaxSize().clip(shape)) {
             val w = size.width

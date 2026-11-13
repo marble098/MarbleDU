@@ -60,6 +60,7 @@ import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.HourTraffic
 import ir.marbledu.datausage.data.JalaliDate
 import ir.marbledu.datausage.data.LiveMonitor
+import ir.marbledu.datausage.data.OffPeakWindow
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.OperatorTraffic
 import ir.marbledu.datausage.data.TimeMath
@@ -448,6 +449,7 @@ fun ReportsScreen(
                     item {
                         HoursCard(
                             report = report,
+                            settings = settings,
                             persian = persian,
                             selection = hourSelection,
                             onSelect = { hourSelection = if (hourSelection == it) null else it },
@@ -785,6 +787,7 @@ private fun OperatorRow(
 @Composable
 private fun HoursCard(
     report: DayReport,
+    settings: AppSettings,
     persian: Boolean,
     selection: Int?,
     onSelect: (Int) -> Unit,
@@ -890,6 +893,27 @@ private fun HoursCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurfaceVariant,
                 )
+            }
+
+            if (settings.offPeakEnabled) {
+                val split = remember(hours, settings.offPeakStartHour, settings.offPeakEndHour) {
+                    OffPeakWindow.splitHours(hours, settings.offPeakStartHour, settings.offPeakEndHour)
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    InfoChip(
+                        text = "${context.getString(R.string.off_peak_title)} (${
+                            OffPeakWindow.windowLabel(settings.offPeakStartHour, settings.offPeakEndHour, persian)
+                        }): ${Formats.bytes(split.offPeakTotalBytes, persian)}",
+                        color = scheme.tertiary,
+                    )
+                    InfoChip(
+                        text = "${context.getString(R.string.main_hours_label)}: ${Formats.bytes(split.mainTotalBytes, persian)}",
+                        color = scheme.primary,
+                    )
+                }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -31,6 +34,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +49,7 @@ import ir.marbledu.datausage.data.SimIdentity
 import ir.marbledu.datausage.ui.BarEntry
 import ir.marbledu.datausage.ui.CardHeader
 import ir.marbledu.datausage.ui.FloatingBarClearance
+import ir.marbledu.datausage.ui.GlassBar
 import ir.marbledu.datausage.ui.HeroCard
 import ir.marbledu.datausage.ui.MIcons
 import ir.marbledu.datausage.ui.MainViewModel
@@ -105,41 +111,23 @@ fun OperatorDetailScreen(
     val maxDayTotal = days.maxOfOrNull { it.total } ?: 1L
     val selectedIndex = days.indexOfFirst { it.dayStart == detail.selectedDayStart }.takeIf { it >= 0 }
 
-    Column(
+    val density = LocalDensity.current
+    val statusTopDp = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+
+    Box(
         Modifier
             .fillMaxSize()
             .background(scheme.background),
     ) {
-        // نوار بالا با دکمه‌ی بازگشت – همه‌جا ثابت می‌ماند
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(MIcons.ChevronStart, contentDescription = if (persian) "بازگشت" else "Back")
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = if (persian) "جزئیات اپراتور" else "Operator details",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
-                Text(
-                    text = if (persian) "۳۰ روز اخیر" else "Last 30 days",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                )
-            }
-        }
-
         LazyColumn(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(top = 4.dp, bottom = FloatingBarClearance),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = statusTopDp + 72.dp,
+                bottom = FloatingBarClearance,
+            ),
         ) {
             item {
                 HeroCard {
@@ -352,6 +340,51 @@ fun OperatorDetailScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        // نوار شیشه‌ای شناور بالای صفحه با دکمه‌ی بازگشت؛ محتوا از زیر آن عبور می‌کند.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+        ) {
+            GlassBar(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                shape = RoundedCornerShape(24.dp),
+                tint = Color(operator.brandColor),
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(MIcons.ChevronStart, contentDescription = if (persian) "بازگشت" else "Back")
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = if (persian) "جزئیات اپراتور" else "Operator details",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = "${operator.name(persian)} · ${if (persian) "۳۰ روز اخیر" else "Last 30 days"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    OperatorBadge(operator, size = 32.dp)
+                    Spacer(Modifier.width(6.dp))
                 }
             }
         }

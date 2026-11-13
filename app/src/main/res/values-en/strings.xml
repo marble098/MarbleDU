@@ -199,4 +199,25 @@
     <string name="week_compare_previous">Previous 7 days: %1$s</string>
     <string name="week_compare_change">Usage change: %1$s%%</string>
     <string name="week_compare_no_baseline">No usage in the previous week; percentage change is unavailable.</string>
+
+    <!-- Background drain, app surges & off-peak hours (1.6) -->
+    <string name="apps_tab_drain">Drain &amp; spikes</string>
+    <string name="drain_summary_title">Foreground vs. background</string>
+    <string name="drain_summary_desc">How much data apps used quietly in the background vs. while open</string>
+    <string name="foreground_label">Foreground</string>
+    <string name="background_label">Background</string>
+    <string name="top_background_drainers">Top background drainers</string>
+    <string name="top_background_drainers_desc">Apps consuming the most data without being open</string>
+    <string name="restrict_bg_action">Restrict background</string>
+    <string name="no_background_drain">No significant background usage recorded in this range.</string>
+    <string name="surge_title">Unusual app spikes today</string>
+    <string name="surge_subtitle">Comparing today’s traffic against each app’s 7-day daily average</string>
+    <string name="surge_empty">No app is using unusually high data today.</string>
+    <string name="surge_new_spike">New spike</string>
+    <string name="off_peak_title">Off-peak / night hours</string>
+    <string name="off_peak_desc">Separate free/night window traffic (e.g. 02:00–07:00) from your main plan</string>
+    <string name="off_peak_exclude">Exclude off-peak mobile data from main cap</string>
+    <string name="off_peak_cap">Off-peak / night plan cap</string>
+    <string name="off_peak_window_label">Time window</string>
+    <string name="main_hours_label">Peak / main hours</string>
 </resources>
