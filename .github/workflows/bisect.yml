@@ -1,7 +1,9 @@
 name: Bisect
 on:
   push:
-    branches: ['**']
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
 concurrency:
   group: bisect-${{ github.ref }}
   cancel-in-progress: true
