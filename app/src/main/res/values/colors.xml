@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="marble_background">#F8F9FE</color>
+    <color name="marble_background_dark">#10131A</color>
+    <color name="marble_primary">#2F6FED</color>
+    <color name="marble_secondary">#00A99D</color>
+    <color name="ic_launcher_background">#2F6FED</color>
+</resources>

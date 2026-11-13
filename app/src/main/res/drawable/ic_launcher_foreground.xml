@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- حلقه‌ی سیگنال -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:fillColor="#00000000"
+        android:pathData="M34,68 a20,20 0 1,1 40,0 a20,20 0 1,1 -40,0" />
+    <!-- نمودار مصرف -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,62 h7 v12 h-7 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50.5,50 h7 v24 h-7 z" />
+    <path
+        android:fillColor="#8FF3E8"
+        android:pathData="M63,40 h7 v34 h-7 z" />
+</vector>

@@ -1,0 +1,38 @@
+name: Weekly Dependency Update
+
+# هر هفته کتابخانه‌ها، Gradle و Kotlin را به آخرین نسخه (در صورت وجود: بتا) آپدیت می‌کند
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Resolve latest versions
+        run: python3 scripts/update_versions.py
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore(deps): هفتگی – به‌روزرسانی نسخه‌ها به آخرین نسخه‌ها'
+          branch: chore/weekly-dependency-update
+          delete-branch: true
+          title: 'chore(deps): آپدیت هفتگی کتابخانه‌ها، Gradle و Kotlin'
+          body: |
+            این PR به‌صورت خودکار هر هفته ساخته می‌شود و نسخه‌های
+            `gradle/libs.versions.toml`، `gradle/wrapper/gradle-wrapper.properties`
+            و `gradle/versions-lock.json` را به آخرین نسخه‌های منتشرشده
+            (در صورت وجود: نسخه‌ی بتا) به‌روزرسانی می‌کند.

@@ -1,0 +1,100 @@
+name: Build APK (all ABIs)
+
+# هر merge روی main → بیلد خودکار APK برای همه‌ی معماری‌ها
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build signed APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-37.0 build-tools;36.0.0'
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest --stacktrace
+
+      - name: Build debug + release (per-ABI + universal)
+        run: ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace
+
+      - name: Verify signing (all APKs, identical certificate)
+        run: |
+          set -e
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "Build tools: $BT"
+          FAILED=0
+          FINGERPRINTS=""
+          for apk in $(find app/build/outputs/apk -name '*.apk' | sort); do
+            echo "── $apk"
+            OUT=$("$BT/apksigner" verify --print-certs "$apk" 2>&1) || { echo "apksigner failed: $OUT"; FAILED=1; continue; }
+            FP=$(echo "$OUT" | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}')
+            echo "   SHA-256: $FP"
+            FINGERPRINTS="$FINGERPRINTS\n$apk -> $FP"
+          done
+          echo -e "$FINGERPRINTS"
+          UNIQUE=$(echo -e "$FINGERPRINTS" | grep -v '^$' | awk -F'-> ' '{print $2}' | sort -u | wc -l)
+          echo "Unique certificates: $UNIQUE"
+          if [ "$FAILED" != "0" ]; then echo "::error::One or more APKs failed verification"; exit 1; fi
+          if [ "$UNIQUE" != "1" ]; then echo "::error::APKs are not signed with the same certificate"; exit 1; fi
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          find app/build/outputs/apk -name '*.apk' -exec cp {} dist/ \;
+          ls -la dist
+          echo "### APK ها" >> "$GITHUB_STEP_SUMMARY"
+          echo "| فایل | حجم |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for f in dist/*.apk; do
+            printf "| %s | %s |\n" "$(basename "$f")" "$(du -h "$f" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload per-architecture APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: MarbleDU-apk-${{ github.sha }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach APKs to release (on tag / main push)
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.run_number) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('Build #{0}', github.run_number) }}
+          body_path: CHANGELOG.md
+          files: dist/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
