@@ -1,18 +1,19 @@
 package ir.marbledu.datausage.data
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AppOpsManager
 import android.app.usage.NetworkStats
 import android.app.usage.NetworkStatsManager
-import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.os.Build
 import android.os.Process
-import androidx.annotation.RequiresApi
+import android.telephony.TelephonyManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 
 /**
  * تفکیک مصرف به تفکیک اپ (مثل NetworkStatsManager xray/neko) به‌همراه نام و
@@ -24,14 +25,46 @@ class AppUsageRepository(private val context: Context) {
     private val nsm: NetworkStatsManager? =
         context.getSystemService(NetworkStatsManager::class.java)
 
+    /**
+     * آیا «دسترسی به داده‌های مصرف» (PACKAGE_USAGE_STATS / AppOps) فعال است؟
+     *
+     * unsafeCheckOpNoThrow فقط از API 29 به بعد وجود دارد؛ minSdk اپ 26 است،
+     * پس روی اندروید ۸/۹ باید از checkOpNoThrow قدیمی استفاده شود وگرنه
+     * NoSuchMethodError می‌دهد و کل صفحه خالی می‌ماند.
+     */
+    @Suppress("DEPRECATION")
     fun hasUsageAccess(): Boolean {
         val appOps = context.getSystemService(AppOpsManager::class.java) ?: return false
-        val mode = appOps.unsafeCheckOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            Process.myUid(),
-            context.packageName,
-        )
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName,
+            )
+        } else {
+            appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName,
+            )
+        }
         return mode == AppOpsManager.MODE_ALLOWED
+    }
+
+    /**
+     * روی اندروید ۹ و پایین‌تر querySummary(TYPE_MOBILE, ...) به subscriberId
+     * نیاز دارد؛ از اندروید ۱۰ به بعد null قابل قبول است.
+     */
+    @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission", "HardwareIds")
+    private fun subscriberId(): String? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return null
+        if (context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return null
+        return runCatching {
+            context.getSystemService(TelephonyManager::class.java)?.subscriberId
+        }.getOrNull()
     }
 
     /** مصرف هر اپ در بازه‌ی زمانی مشخص. */
@@ -46,36 +79,42 @@ class AppUsageRepository(private val context: Context) {
             ConnectionType.WIFI -> ConnectivityManager.TYPE_WIFI
             else -> ConnectivityManager.TYPE_MOBILE
         }
+        val stats = runCatching {
+            manager.querySummary(networkType, subscriberId(), fromMillis, toMillis)
+        }.getOrNull() ?: return@withContext emptyList()
+
         val result = mutableMapOf<Int, AppUsage>()
-        runCatching {
-            manager.querySummary(networkType, null, fromMillis, toMillis)
-        }.onSuccess { stats ->
-            while (stats.hasNextBucket()) {
-                val bucket = NetworkStats.Bucket()
-                stats.getNextBucket(bucket)
+        try {
+            val bucket = NetworkStats.Bucket()
+            while (stats.hasNextBucket() && stats.getNextBucket(bucket)) {
                 val uid = bucket.uid
                 if (uid == Process.myUid() || uid < 0) continue
                 val bytes = bucket.rxBytes + bucket.txBytes
                 if (bytes <= 0) continue
+                // گاهی startTimeStamp/endTimeStamp صفر است؛ نباید 1970 وارد گزارش شود.
+                val first = bucket.startTimeStamp.takeIf { it > 0 } ?: fromMillis
+                val last = bucket.endTimeStamp.takeIf { it > 0 } ?: toMillis
                 val existing = result[uid]
-                if (existing == null) {
+                result[uid] = if (existing == null) {
                     val pkg = runCatching { pm.getNameForUid(uid) }.getOrNull()
-                    result[uid] = AppUsage(
+                    AppUsage(
                         uid = uid,
                         packageName = pkg ?: "uid:$uid",
                         label = labelFor(pkg),
                         bytes = bytes,
-                        firstTimestamp = bucket.startTimeStamp.takeIf { it > 0 } ?: fromMillis,
-                        lastTimestamp = bucket.endTimeStamp.takeIf { it > 0 } ?: toMillis,
+                        firstTimestamp = first,
+                        lastTimestamp = last,
                     )
                 } else {
-                    result[uid] = existing.copy(
+                    existing.copy(
                         bytes = existing.bytes + bytes,
-                        firstTimestamp = minOf(existing.firstTimestamp, bucket.startTimeStamp),
-                        lastTimestamp = maxOf(existing.lastTimestamp, bucket.endTimeStamp),
+                        firstTimestamp = minOf(existing.firstTimestamp, first),
+                        lastTimestamp = maxOf(existing.lastTimestamp, last),
                     )
                 }
             }
+        } finally {
+            stats.close()
         }
         result.values.sortedByDescending { it.bytes }
     }
@@ -96,18 +135,24 @@ class AppUsageRepository(private val context: Context) {
             val manager = nsm ?: return@withContext emptyList()
             val networkType = if (type == ConnectionType.WIFI) ConnectivityManager.TYPE_WIFI
             else ConnectivityManager.TYPE_MOBILE
-            val calendar = java.util.Calendar.getInstance().apply {
-                set(java.util.Calendar.HOUR_OF_DAY, 0)
-                set(java.util.Calendar.MINUTE, 0)
-                set(java.util.Calendar.SECOND, 0)
-                set(java.util.Calendar.MILLISECOND, 0)
+            val subscriber = subscriberId()
+            // مرز روزها را با Calendar جلو می‌بریم تا تغییر ساعت تابستانی جابه‌جا نشود.
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = System.currentTimeMillis()
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                add(Calendar.DAY_OF_MONTH, -(days - 1).coerceAtLeast(0))
             }
             val result = mutableListOf<DayUsage>()
-            for (offset in (days - 1) downTo 0) {
-                val start = calendar.timeInMillis - offset * DAY_MILLIS
-                val end = start + DAY_MILLIS
+            repeat(days.coerceAtLeast(0)) {
+                val start = calendar.timeInMillis
+                calendar.add(Calendar.DAY_OF_MONTH, 1)
+                val end = calendar.timeInMillis
                 val bytes = runCatching {
-                    val bucket = manager.querySummaryForDevice(networkType, null, start, end)
+                    val bucket =
+                        manager.querySummaryForDevice(networkType, subscriber, start, end)
                     bucket.rxBytes + bucket.txBytes
                 }.getOrDefault(0L)
                 result.add(DayUsage(start, bytes))
@@ -135,8 +180,6 @@ class AppUsageRepository(private val context: Context) {
 }
 
 data class DayUsage(val startMillis: Long, val bytes: Long)
-
-private const val DAY_MILLIS = 24L * 60 * 60 * 1000
 
 data class AppUsage(
     val uid: Int,

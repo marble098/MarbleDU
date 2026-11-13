@@ -33,8 +33,8 @@ object ReportExporter {
         fun line(app: AppUsage, type: String) {
             builder.append(
                 listOf(
-                    app.label.replace(",", " "),
-                    app.packageName,
+                    csvEscape(app.label),
+                    csvEscape(app.packageName),
                     type,
                     app.bytes.toString(),
                     Formats.bytes(app.bytes, false),
@@ -45,10 +45,21 @@ object ReportExporter {
         }
         mobile.forEach { line(it, "mobile") }
         wifi.forEach { line(it, "wifi") }
-        builder.append("# carrier,$operatorName\n")
+        builder.append("# carrier,${csvEscape(operatorName)}\n")
         builder.append("# generated,${LiveMonitor.formatDate(System.currentTimeMillis())}\n")
         file.writeText(builder.toString())
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
+
+    /**
+     * CSV escape استاندارد: اگر فیلد کاما، کوتیشن یا newline داشته باشد،
+     * داخل کوتیشن می‌گذاریم و کوتیشن‌های داخلی را دوبرابر می‌کنیم.
+     * (نسخه‌ی قبلی فقط کاما را با فاصله عوض می‌کرد و داده را خراب می‌کرد.)
+     */
+    private fun csvEscape(value: String): String {
+        val needsQuote = value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
+        if (!needsQuote) return value
+        return "\"" + value.replace("\"", "\"\"") + "\""
     }
 
     fun shareIntent(context: Context, uri: Uri): Intent {
@@ -85,6 +96,8 @@ object ReportExporter {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, body)
+            // اگر از context غیر-Activity صدا زده شود، بدون این فلگ کرش می‌کند.
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_report)))
     }

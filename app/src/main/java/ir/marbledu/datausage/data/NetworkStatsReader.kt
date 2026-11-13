@@ -4,24 +4,17 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.os.Build
-import android.os.Process
-import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
-import androidx.annotation.RequiresApi
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
- * ردیف‌های /proc/net/xt_qtaguid/stats یا /proc/net/xt_qtaguid/iface_stat_fmt
- * در اندرویدهای قدیمی و /sys/class/net/<iface>/statistics در اندرویدهای جدید.
+ * خواندن شمارنده‌های شبکه‌ی سیستم از /sys/class/net/<iface>/statistics.
  *
  * کل ایده (همان روشی که Xray/NekoBox بدون VPN استفاده می‌کند):
  *  ۱) شمارنده‌های شبکه‌ی سیستم را می‌خوانیم (کل مصرف دستگاه).
- *  ۲) با /proc/net/xt_qtaguid یا NetworkStatsManager مصرف هر اپ را جدا می‌کنیم.
+ *  ۲) با NetworkStatsManager مصرف هر اپ را جدا می‌کنیم.
  *  ۳) اختلاف دو نمونه = مصرف بازه‌ی زمانی؛ که با سرعت لحظه‌ای و پینگ ترکیب می‌شود.
  * هیچ VPN، هیچ دسترسی root و هیچ سرویس پس‌زمینه‌ی همیشه‌روشن لازم نیست.
  */
@@ -45,24 +38,6 @@ object NetworkStatsReader {
     private fun readLong(file: File): Long = runCatching {
         if (file.canRead()) file.readText().trim().toLong() else 0L
     }.getOrDefault(0L)
-
-    /** فقط اینترفیس Wi-Fi. */
-    fun wifiInterfaceBytes(): Pair<Long, Long> {
-        val candidate = ifaceDir.listFiles()?.map { it.name }?.firstOrNull {
-            it.startsWith("wlan") || it.startsWith("ap") || it == "wifi0"
-        } ?: return 0L to 0L
-        val dir = File(ifaceDir, candidate)
-        return readLong(File(dir, "statistics/rx_bytes")) to readLong(File(dir, "statistics/tx_bytes"))
-    }
-
-    /** فقط اینترفیس داده‌ی موبایل. */
-    fun cellularInterfaceBytes(): Pair<Long, Long> {
-        val candidate = ifaceDir.listFiles()?.map { it.name }?.firstOrNull {
-            it.startsWith("rmnet") || it.startsWith("ccmni") || it.startsWith("pdp")
-        } ?: return 0L to 0L
-        val dir = File(ifaceDir, candidate)
-        return readLong(File(dir, "statistics/rx_bytes")) to readLong(File(dir, "statistics/tx_bytes"))
-    }
 
     /** وضعیت فعلی شبکه: نوع، نام اپراتور و IP. */
     @SuppressLint("MissingPermission")
@@ -102,16 +77,6 @@ object NetworkStatsReader {
         return context.getString(ir.marbledu.datausage.R.string.network_unknown)
     }
 
-    /** در اندروید ۱۱+ دسترسی به MCC/MNC معمولاً محدود است؛ در صورت وجود استفاده می‌شود. */
-    @RequiresApi(Build.VERSION_CODES.Q)
-    @SuppressLint("MissingPermission")
-    fun subscriptionIds(context: Context): IntArray {
-        val sm = context.getSystemService(SubscriptionManager::class.java) ?: return intArrayOf()
-        return runCatching<IntArray> {
-            sm.activeSubscriptionInfoList?.map { it.subscriptionId }?.toIntArray() ?: intArrayOf()
-        }.getOrDefault(intArrayOf())
-    }
-
     private fun localIpAddress(): String {
         val address: String? = runCatching {
             NetworkInterface.getNetworkInterfaces().asSequence()
@@ -123,26 +88,6 @@ object NetworkStatsReader {
         }.getOrNull()
         return address ?: ""
     }
-
-    /** مصرف کل دستگاه از NetworkStatsManager (اگر دسترسی داده شود). */
-    fun deviceUsageBytes(
-        context: Context,
-        fromMillis: Long,
-        toMillis: Long,
-        type: ConnectionType,
-    ): Long = runCatching {
-        val nsm = context.getSystemService(android.app.usage.NetworkStatsManager::class.java)
-        val networkType = when (type) {
-            ConnectionType.WIFI -> ConnectivityManager.TYPE_WIFI
-            ConnectionType.CELLULAR -> ConnectivityManager.TYPE_MOBILE
-            else -> ConnectivityManager.TYPE_MOBILE
-        }
-        val bucket = nsm.querySummaryForDevice(networkType, null, fromMillis, toMillis)
-        bucket.rxBytes + bucket.txBytes
-    }.getOrDefault(0L)
-
-    /** شناسه‌ی پکیج همین اپ برای تفکیک ترافیک خودمان. */
-    fun selfUid(): Int = Process.myUid()
 }
 
 data class NetworkSnapshot(

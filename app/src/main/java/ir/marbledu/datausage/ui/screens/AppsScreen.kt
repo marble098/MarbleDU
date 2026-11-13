@@ -1,6 +1,7 @@
 package ir.marbledu.datausage.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,7 +30,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ir.marbledu.datausage.R
-import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.LiveMonitor
@@ -46,8 +47,10 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val usage by vm.usage.collectAsState()
     val dashboard by vm.dashboard.collectAsState()
 
+    // فقط یک بار در ورود به صفحه لود می‌شود. نسخه‌ی قبلی usage.range را به‌عنوان
+    // کلید استفاده می‌کرد که بعد از هر لود تغییر می‌کرد و حلقه‌ی بی‌نهایت می‌ساخت.
     LaunchedEffect(Unit) {
-        vm.loadUsage(usage.range)
+        vm.loadUsage()
     }
 
     LazyColumn(
@@ -110,7 +113,16 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         }
 
         val combined = mergeByPackage(usage.mobile, usage.wifi)
-        if (combined.isEmpty()) {
+        if (usage.loading) {
+            item {
+                Box(
+                    Modifier.fillMaxWidth().padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        } else if (combined.isEmpty()) {
             item { EmptyState(context.getString(R.string.no_data_yet)) }
         } else {
             val max = combined.maxOf { it.first }

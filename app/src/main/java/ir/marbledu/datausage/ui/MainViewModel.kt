@@ -14,15 +14,14 @@ import ir.marbledu.datausage.data.LiveTick
 import ir.marbledu.datausage.data.NetworkStatsReader
 import ir.marbledu.datausage.data.PingResult
 import ir.marbledu.datausage.data.ThemeMode
+import ir.marbledu.datausage.data.TimeMath
 import ir.marbledu.datausage.data.TimeRange
 import ir.marbledu.datausage.service.MonitorService
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -46,7 +45,6 @@ data class DashboardUi(
     val averageSpeed: Double = 0.0,
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = (app as MarbleDuApp).appUsageRepository
@@ -73,7 +71,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         startLive()
+        // پیش از این فقط داشبورد لود می‌شد و لیست اپ‌ها/گزارش‌ها تا وقتی کاربر
+        // دکمه‌ی «به‌روزرسانی» را می‌زد خالی می‌ماند.
+        refreshAll()
+    }
+
+    /**
+     * یک نقطه‌ی واحد برای تازه کردن همه‌چیز. از ON_RESUME صدا زده می‌شود تا
+     * بعد از برگشتن از «دسترسی به داده‌های مصرف» همان لحظه داده‌ها ظاهر شوند.
+     */
+    fun refreshAll() {
         refreshDashboard()
+        loadUsage(_usage.value.range)
     }
 
     // ----------------------------------------------------------------- live
@@ -109,7 +118,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshDashboard() {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            val dayStart = now - TimeRange.TODAY.millis()
+            val dayStart = TimeMath.dayStart(now)
             val monthStart = now - TimeRange.MONTH.millis()
 
             val todayMobile = repository.usageByApp(dayStart, now, ConnectionType.CELLULAR)
@@ -143,16 +152,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setRange(range: TimeRange) {
-        _usage.value = _usage.value.copy(range = range, loading = true)
-        viewModelScope.launch { loadUsage(range) }
-    }
+    /** تغییر بازه فقط یک بار لود می‌کند (قبل از این دو coroutine روی هم ساخته می‌شد). */
+    fun setRange(range: TimeRange) = loadUsage(range)
 
     fun loadUsage(range: TimeRange = _usage.value.range) {
         viewModelScope.launch {
             _usage.value = _usage.value.copy(range = range, loading = true)
             val now = System.currentTimeMillis()
-            val from = now - range.millis()
+            val from = TimeMath.rangeStart(range, now, settings.value.billingCycleDay)
             val (mobile, wifi) = repository.detailedBreakdown(from, now)
             _usage.value = AppUsageUi(
                 range = range,
@@ -170,6 +177,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setDynamicColor(on: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(on) }
     fun setDataCap(bytes: Long) = viewModelScope.launch { settingsRepo.setDataCap(bytes) }
     fun setBillingDay(day: Int) = viewModelScope.launch { settingsRepo.setBillingCycleDay(day.coerceIn(1, 28)) }
+    fun setMonitorInterval(seconds: Int) = viewModelScope.launch {
+        settingsRepo.setMonitorInterval(seconds.coerceIn(1, 60))
+    }
     fun setOperator(name: String) = viewModelScope.launch { settingsRepo.setOperator(name) }
     fun setMonitorBackground(on: Boolean) = viewModelScope.launch {
         settingsRepo.setMonitorBackground(on)

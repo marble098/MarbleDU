@@ -20,8 +20,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlin.math.max
 
 /**
@@ -39,20 +41,30 @@ class MonitorService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification(0.0, 0.0, "--"))
-        val interval = (application as MarbleDuApp).settingsRepository
         loop?.cancel()
         loop = scope.launch {
+            // فاصله‌ی به‌روزرسانی از تنظیمات خوانده می‌شود (نه ثابت ۵ ثانیه).
+            val intervalSeconds = runCatching {
+                runBlocking {
+                    (application as MarbleDuApp).settingsRepository.settings.first()
+                        .monitorIntervalSeconds
+                }
+            }.getOrDefault(5).coerceIn(1, 60)
             var lastRx = 0L
             var lastTx = 0L
+            var lastTime = 0L
             var initialized = false
             while (isActive) {
                 val (rx, tx) = NetworkStatsReader.totalInterfaceBytes()
+                val now = System.currentTimeMillis()
                 if (!initialized) {
-                    lastRx = rx; lastTx = tx; initialized = true
+                    lastRx = rx; lastTx = tx; lastTime = now; initialized = true
                 }
-                val down = max(0L, rx - lastRx) * 1000.0 / (intervalSeconds * 1000)
-                val up = max(0L, tx - lastTx) * 1000.0 / (intervalSeconds * 1000)
-                lastRx = rx; lastTx = tx
+                // سرعت با زمان واقعی سپری‌شده حساب می‌شود.
+                val elapsed = (now - lastTime).coerceAtLeast(1)
+                val down = max(0L, rx - lastRx) * 1000.0 / elapsed
+                val up = max(0L, tx - lastTx) * 1000.0 / elapsed
+                lastRx = rx; lastTx = tx; lastTime = now
                 val snapshot = NetworkStatsReader.currentNetwork(this@MonitorService)
                 notificationManager().notify(
                     NOTIFICATION_ID,
@@ -63,8 +75,6 @@ class MonitorService : Service() {
         }
         return START_STICKY
     }
-
-    private val intervalSeconds: Long = 5L
 
     private fun buildNotification(down: Double, up: Double, carrier: String): Notification {
         val open = PendingIntent.getActivity(

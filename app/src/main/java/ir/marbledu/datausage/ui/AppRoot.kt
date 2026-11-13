@@ -4,42 +4,38 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import ir.marbledu.datausage.R
-import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.ui.screens.AppsScreen
 import ir.marbledu.datausage.ui.screens.DashboardScreen
@@ -47,7 +43,7 @@ import ir.marbledu.datausage.ui.screens.LiveScreen
 import ir.marbledu.datausage.ui.screens.OnboardingScreen
 import ir.marbledu.datausage.ui.screens.ReportsScreen
 import ir.marbledu.datausage.ui.screens.SettingsScreen
-import kotlinx.coroutines.launch
+import ir.marbledu.datausage.util.UsageAccess
 
 private enum class Tab(val labelRes: Int, val icon: ImageVector) {
     HOME(R.string.nav_dashboard, MIcons.Home),
@@ -58,20 +54,34 @@ private enum class Tab(val labelRes: Int, val icon: ImageVector) {
 }
 
 @Composable
-fun AppRoot(vm: MainViewModel, settings: AppSettings) {
-    val persian = settings.language == AppLanguage.PERSIAN
-    if (!settings.onboarded) {
-        OnboardingScreen(persian = persian, onFinish = { vm.completeOnboarding() })
-        return
+fun AppRoot(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
+    val context = LocalContext.current
+    val dashboard by vm.dashboard.collectAsState()
+
+    // وضعیت انتخاب تب، یک state ساده و قابل ذخیره است. نسخه‌ی قبلی از
+    // rememberPagerState + animateScrollToPage استفاده می‌کرد در حالی که هیچ
+    // HorizontalPager ای به آن وصل نبود؛ در نتیجه لمس تب‌ها هیچ تغییری نمی‌داد.
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+
+    // بازگشت از صفحه‌ی «دسترسی به داده‌های مصرف» => همان لحظه وضعیت و آمار تازه شود.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        vm.refreshAll()
     }
 
-    val pagerState = rememberPagerState(pageCount = { Tab.entries.size })
-    val scope = rememberCoroutineScope()
+    if (!settings.onboarded) {
+        OnboardingScreen(
+            persian = persian,
+            needsUsageAccess = !dashboard.hasUsageAccess,
+            onGrantUsageAccess = { UsageAccess.openSettings(context) },
+            onFinish = { vm.completeOnboarding() },
+        )
+        return
+    }
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             AnimatedContent(
-                targetState = Tab.entries[pagerState.currentPage],
+                targetState = Tab.entries[selectedTab],
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
                 label = "tab-content",
                 modifier = Modifier.weight(1f),
@@ -85,9 +95,8 @@ fun AppRoot(vm: MainViewModel, settings: AppSettings) {
                 }
             }
             MarbleNavigationBar(
-                current = pagerState.currentPage,
-                onSelect = { scope.launch { pagerState.animateScrollToPage(it) } },
-                persian = persian,
+                current = selectedTab,
+                onSelect = { selectedTab = it },
             )
         }
     }
@@ -98,7 +107,7 @@ fun AppRoot(vm: MainViewModel, settings: AppSettings) {
  * گزینه‌ی انتخاب‌شده با پس‌زمینه‌ی رنگی و آیکون پر.
  */
 @Composable
-private fun MarbleNavigationBar(current: Int, onSelect: (Int) -> Unit, persian: Boolean) {
+private fun MarbleNavigationBar(current: Int, onSelect: (Int) -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -130,7 +139,7 @@ private fun MarbleNavigationBar(current: Int, onSelect: (Int) -> Unit, persian: 
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                            else androidx.compose.ui.graphics.Color.Transparent,
+                            else Color.Transparent,
                             modifier = Modifier.fillMaxWidth(if (selected) 0.95f else 0.7f),
                             onClick = { onSelect(index) },
                         ) {
@@ -141,7 +150,7 @@ private fun MarbleNavigationBar(current: Int, onSelect: (Int) -> Unit, persian: 
                             ) {
                                 Icon(
                                     imageVector = tab.icon,
-                                    contentDescription = null,
+                                    contentDescription = label(tab),
                                     modifier = Modifier.size(if (selected) 22.dp else 21.dp),
                                     tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -166,5 +175,4 @@ private fun MarbleNavigationBar(current: Int, onSelect: (Int) -> Unit, persian: 
 }
 
 @Composable
-private fun label(tab: Tab): String = androidx.compose.ui.platform.LocalContext.current
-    .getString(tab.labelRes)
+private fun label(tab: Tab): String = LocalContext.current.getString(tab.labelRes)
