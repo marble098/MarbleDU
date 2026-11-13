@@ -46,6 +46,8 @@ data class UsageSession(
     val endEstimated: Boolean = false,
     /** تعداد وقفه‌های بزرگ در نمونه‌برداری داخل این جلسه. */
     val samplingGaps: Int = 0,
+    val transport: String = UsageLedger.MOBILE,
+    val networkName: String = "",
 ) {
     val totalBytes: Long get() = rxBytes + txBytes
     val isOpen: Boolean get() = endMillis == null
@@ -93,7 +95,6 @@ object UsageLedger {
     private const val KEEP_DAYS = 40
     private const val FLUSH_INTERVAL_MS = 15_000L
     private const val MIN_SAMPLE_INTERVAL_MS = 500L
-    private const val MAX_CONTIGUOUS_SAMPLE_GAP_MS = 15_000L
 
     private val lock = Any()
     /** کلید هر ردیف شامل روز، اتصال، اپراتور، شناسه‌ی سیم و ساعت است. */
@@ -237,8 +238,8 @@ object UsageLedger {
 
     /** فرمت sessions مستقل است تا نصب‌های قبلی بدون از دست رفتن ledger آپدیت شوند. */
     fun parseSessions(text: String): List<UsageSession> = text.lineSequence().mapNotNull { line ->
-        val p = line.split('\t', limit = 13)
-        if (p.size != 13) return@mapNotNull null
+        val p = line.split('\t')
+        if (p.size != 13 && p.size != 15) return@mapNotNull null
         val id = p[0].toLongOrNull() ?: return@mapNotNull null
         val start = p[1].toLongOrNull() ?: return@mapNotNull null
         val endRaw = p[2].toLongOrNull() ?: return@mapNotNull null
@@ -263,6 +264,8 @@ object UsageLedger {
             startEstimated = p[10].toBooleanStrictOrNull() ?: true,
             endEstimated = p[11].toBooleanStrictOrNull() ?: false,
             samplingGaps = p[12].toIntOrNull()?.coerceAtLeast(0) ?: 0,
+            transport = p.getOrNull(13) ?: MOBILE,
+            networkName = p.getOrNull(14)?.let(::decodeName).orEmpty(),
         )
     }.toList()
 
@@ -284,6 +287,8 @@ object UsageLedger {
                     session.startEstimated.toString(),
                     session.endEstimated.toString(),
                     session.samplingGaps.toString(),
+                    session.transport,
+                    encodeName(session.networkName),
                 ).joinToString("\t"),
             ).append('\n')
         }
@@ -319,71 +324,21 @@ object UsageLedger {
         addTraffic(day, transport, operatorId, calendar.get(Calendar.HOUR_OF_DAY), traffic, sim)
     }
 
-    private fun closeSession(id: Long, atMillis: Long, estimated: Boolean = true) {
-        val index = sessions.indexOfLast { it.id == id && it.isOpen }
-        if (index < 0) return
-        val current = sessions[index]
-        sessions[index] = current.copy(
-            endMillis = atMillis.coerceAtLeast(current.startMillis),
-            endEstimated = estimated,
-        )
-        sessionsDirty = true
-    }
-
-    private fun updateMobileSession(
-        now: Long,
-        previousSampleAt: Long,
-        active: Boolean,
-        operatorId: String,
-        sim: SimIdentity?,
-        delta: Traffic,
-    ) {
-        val activeSession = sessions.lastOrNull { it.isOpen }
-        val today = dayKey(now)
-        val crossingDay = activeSession != null && dayKey(activeSession.startMillis) != today
-        val sameIdentity = activeSession != null && activeSession.operatorId == operatorId && activeSession.sim == sim
-
-        if (!active || (activeSession != null && (!sameIdentity || crossingDay))) {
-            if (activeSession != null) {
-                val endAt = if (crossingDay && previousSampleAt > 0L) {
-                    previousSampleAt.coerceAtLeast(activeSession.startMillis)
-                } else now
-                closeSession(activeSession.id, endAt)
+    private fun updateSession(now: Long, route: SessionTracker.Route?, delta: Traffic) {
+        val current = sessions.lastOrNull { it.isOpen }
+        val result = SessionTracker.advance(current, route, now, delta, nextSessionId)
+        if (current != null && result.closed != null) {
+            sessions[sessions.indexOfLast { it.id == current.id }] = result.closed
+        }
+        result.open?.let { open ->
+            if (current != null && current.id == open.id) {
+                sessions[sessions.indexOfLast { it.id == current.id }] = open
+            } else {
+                sessions.add(open)
+                nextSessionId++
             }
         }
-        if (!active) return
-
-        val latest = sessions.lastOrNull { it.isOpen }
-        val canContinue = latest != null && sameIdentity && !crossingDay
-        val gap = previousSampleAt > 0L && now - previousSampleAt > MAX_CONTIGUOUS_SAMPLE_GAP_MS
-        if (canContinue) {
-            val index = sessions.indexOfLast { it.id == latest!!.id }
-            if (index >= 0) {
-                val old = sessions[index]
-                sessions[index] = old.copy(
-                    lastSampleMillis = now,
-                    rxBytes = old.rxBytes + delta.rx,
-                    txBytes = old.txBytes + delta.tx,
-                    samplingGaps = old.samplingGaps + if (gap) 1 else 0,
-                )
-                sessionsDirty = true
-            }
-        } else {
-            sessions += UsageSession(
-                id = nextSessionId++,
-                startMillis = now,
-                endMillis = null,
-                lastSampleMillis = now,
-                rxBytes = delta.rx,
-                txBytes = delta.tx,
-                operatorId = operatorId,
-                sim = sim,
-                startEstimated = true,
-                endEstimated = false,
-                samplingGaps = if (gap) 1 else 0,
-            )
-            sessionsDirty = true
-        }
+        if (current != null || result.open != null) sessionsDirty = true
     }
 
     /**
@@ -403,7 +358,6 @@ object UsageLedger {
         }
 
         val previous = lastCounters
-        val previousSampleAt = lastSampleAt
         lastCounters = counters
         lastSampleAt = now
 
@@ -440,17 +394,20 @@ object UsageLedger {
             recordTraffic(now, WIFI, wifiOperator, wifi)
         }
 
-        updateMobileSession(
-            now = now,
-            previousSampleAt = previousSampleAt,
-            active = snapshot.type == ConnectionType.CELLULAR,
-            operatorId = operatorId,
-            sim = sim,
-            delta = mobile,
-        )
+        val route = when (snapshot.type) {
+            ConnectionType.CELLULAR -> SessionTracker.Route(MOBILE, operatorId, sim)
+            ConnectionType.WIFI, ConnectionType.ETHERNET -> SessionTracker.Route(
+                if (snapshot.type == ConnectionType.ETHERNET) "ethernet" else WIFI,
+                snapshot.operator.id, networkName = snapshot.wifiSsid,
+            )
+            else -> null
+        }
+        val previousSessionId = sessions.lastOrNull { it.isOpen }?.id
+        updateSession(now, route, if (snapshot.type == ConnectionType.CELLULAR) mobile else wifi)
+        val sessionChanged = previousSessionId != sessions.lastOrNull { it.isOpen }?.id
 
         val shouldFlush = dirty || sessionsDirty
-        if (shouldFlush && now - lastFlush >= FLUSH_INTERVAL_MS) flushLocked(now)
+        if (shouldFlush && (sessionChanged || now - lastFlush >= FLUSH_INTERVAL_MS)) flushLocked(now)
         sessions.lastOrNull { it.isOpen }
     }
 
@@ -473,16 +430,20 @@ object UsageLedger {
             .toList()
     }
 
+    /** Recent observations, newest first. Only sessions observed while monitoring are available. */
+    fun recentSessions(context: Context, sinceMillis: Long): List<UsageSession> = synchronized(lock) {
+        ensureLoaded(context)
+        sessions.filter { it.startMillis >= sinceMillis }.sortedByDescending { it.startMillis }
+    }
+
     private fun flushLocked(now: Long) {
         val ledger = ledgerFile ?: return
         val sessionLog = sessionsFile ?: return
         val cutoff = dayKey(now - KEEP_DAYS * 24L * 60 * 60 * 1000)
         entries.keys.removeAll { key -> (decodeKey(key)?.day ?: Int.MAX_VALUE) < cutoff }
-        sessions.removeAll { session -> dayKey(session.startMillis) < cutoff }
-        runCatching { writeAtomically(ledger, serialize(entries)) }
-        runCatching { writeAtomically(sessionLog, serializeSessions(sessions)) }
-        dirty = false
-        sessionsDirty = false
+        sessions.removeAll { session -> !session.isOpen && dayKey(session.startMillis) < cutoff }
+        if (runCatching { writeAtomically(ledger, serialize(entries)) }.isSuccess) dirty = false
+        if (runCatching { writeAtomically(sessionLog, serializeSessions(sessions)) }.isSuccess) sessionsDirty = false
         lastFlush = now
     }
 

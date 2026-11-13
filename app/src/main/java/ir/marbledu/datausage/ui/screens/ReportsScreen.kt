@@ -111,6 +111,7 @@ fun ReportsScreen(
     val dayUi by vm.dayReport.collectAsState()
     val dashboard by vm.dashboard.collectAsState()
     val usage by vm.usage.collectAsState()
+    val sessionTick by vm.tick.collectAsState()
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
@@ -139,7 +140,7 @@ fun ReportsScreen(
     LaunchedEffect(Unit) { vm.loadHistory() }
 
     var selectedTab by rememberSaveable { mutableStateOf(0) }
-    val reportTabs = if (persian) listOf("روند", "جزئیات روز") else listOf("Trend", "This day")
+    val reportTabs = if (persian) listOf("روند", "جزئیات روز", "نشست‌ها") else listOf("Trend", "This day", "Sessions")
     LargeTitleScaffold(
         title = if (persian) "گزارش ۳۰ روز" else "30-day report",
         listState = listState,
@@ -174,7 +175,43 @@ fun ReportsScreen(
             }
         }
 
-        if (days.isEmpty()) {
+        if (selectedTab == 2) {
+            item {
+                var daysAgo by rememberSaveable { mutableStateOf(0) }
+                val sessionDay = remember(daysAgo, sessionTick?.timestamp) {
+                    java.util.Calendar.getInstance().apply {
+                        set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                        set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+                        add(java.util.Calendar.DAY_OF_YEAR, -daysAgo)
+                    }.timeInMillis
+                }
+                val sessions = remember(sessionDay, sessionTick?.timestamp) { UsageLedger.sessionsForDay(context, sessionDay) }
+                val rx = sessions.sumOf { it.rxBytes }
+                val tx = sessions.sumOf { it.txBytes }
+                MarbleCard(container = scheme.primaryContainer) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { daysAgo++ }, enabled = daysAgo < 29) {
+                            Text(if (persian) "روز قبل" else "Previous")
+                        }
+                        Text(primaryDate(sessionDay, persian), style = MaterialTheme.typography.titleSmall,
+                            color = scheme.onPrimaryContainer, modifier = Modifier.weight(1f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        TextButton(onClick = { daysAgo-- }, enabled = daysAgo > 0) {
+                            Text(if (persian) "روز بعد" else "Next")
+                        }
+                    }
+                    Text(if (persian) "مصرف ثبت‌شده این روز" else "Observed usage this day",
+                        color = scheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                    Text(Formats.bytes(rx + tx, persian), color = scheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("↓ ${Formats.bytes(rx, persian)}   ↑ ${Formats.bytes(tx, persian)}  ·  " +
+                        Formats.integer(sessions.size.toLong(), persian) + if (persian) " نشست" else " sessions",
+                        color = scheme.onPrimaryContainer, style = MaterialTheme.typography.bodySmall)
+                }
+                SessionsCard(sessions, persian)
+            }
+        } else if (days.isEmpty()) {
             item {
                 if (history.loading) LoadingBox() else EmptyState(context.getString(R.string.no_data_yet))
             }

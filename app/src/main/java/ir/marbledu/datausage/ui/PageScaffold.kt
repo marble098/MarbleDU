@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.marbledu.datausage.ui.theme.LocalTextScale
@@ -61,20 +63,19 @@ fun LargeTitleScaffold(
     content: LazyListScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    // میزان «چروک شدن» تیتر: ۰ = تیتر بزرگ کامل، ۱ = تیتر بزرگ کاملاً رفته زیر نوار فشرده.
-    val collapse by remember(listState) {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex > 0) 1f
-            else (listState.firstVisibleItemScrollOffset / 96f).coerceIn(0f, 1f)
+    Column(modifier.fillMaxSize().background(scheme.background)) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold,
+                    color = scheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant, maxLines = 2)
+            }
+            if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
         }
-    }
-
-    Column(
-        modifier
-            .fillMaxSize()
-            .background(scheme.background),
-    ) {
-        CompactBar(title = title, collapse = collapse, actions = actions)
         if (tabs != null && onTabSelected != null) {
             TopTabs(tabs = tabs, selected = selectedTab, onSelect = onTabSelected)
         }
@@ -82,18 +83,11 @@ fun LargeTitleScaffold(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 2.dp,
-                bottom = FloatingBarClearance,
+                start = 16.dp, end = 16.dp, top = 8.dp, bottom = FloatingBarClearance,
             ),
             verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            item(key = "large_title") {
-                LargeTitleBlock(title = title, subtitle = subtitle, collapse = collapse)
-            }
-            content()
-        }
+            content = content,
+        )
     }
 }
 
@@ -228,7 +222,7 @@ fun TopTabs(
         tabs.forEachIndexed { index, tab ->
             val isSelected = index == selected
             val container by animateColorAsState(
-                targetValue = if (isSelected) scheme.primaryContainer else Color.Transparent,
+                targetValue = if (isSelected) scheme.primaryContainer else scheme.surfaceContainerHigh,
                 label = "top-tab-container",
             )
             val tint by animateColorAsState(
@@ -236,7 +230,7 @@ fun TopTabs(
                 label = "top-tab-tint",
             )
             val scale by animateFloatAsState(
-                targetValue = if (isSelected) 1.05f else 1f,
+                targetValue = 1f,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMediumLow,
@@ -251,7 +245,12 @@ fun TopTabs(
                     }
                     .clip(RoundedCornerShape(14.dp))
                     .background(container)
-                    .clickable { onSelect(index) }
+                    .semantics { selected = isSelected }
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        role = androidx.compose.ui.semantics.Role.Tab,
+                    ) { onSelect(index) }
                     .padding(horizontal = 15.dp, vertical = 8.dp),
             ) {
                 Text(

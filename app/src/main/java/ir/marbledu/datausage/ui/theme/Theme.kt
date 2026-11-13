@@ -98,7 +98,7 @@ private fun paletteScheme(palette: ThemePalette, dark: Boolean): ColorScheme {
     val white = Color.White
     val black = Color.Black
     return if (!dark) {
-        val background = Color(0xFFF7F8FC)
+        val background = mix(Color(0xFFF7F8FC), p, 0.035f)
         lightColorScheme(
             primary = p,
             onPrimary = white,
@@ -116,20 +116,20 @@ private fun paletteScheme(palette: ThemePalette, dark: Boolean): ColorScheme {
             onBackground = Color(0xFF191B22),
             surface = background,
             onSurface = Color(0xFF191B22),
-            surfaceVariant = Color(0xFFE8EAF1),
+            surfaceVariant = mix(Color(0xFFE8EAF1), p, 0.055f),
             onSurfaceVariant = Color(0xFF555A66),
             outline = Color(0xFF747986),
             outlineVariant = Color(0xFFC8CBD4),
             surfaceContainerLowest = white,
-            surfaceContainerLow = Color(0xFFF3F4F8),
-            surfaceContainer = Color(0xFFEFF1F6),
-            surfaceContainerHigh = Color(0xFFE9ECF3),
-            surfaceContainerHighest = Color(0xFFE2E5ED),
-            surfaceDim = Color(0xFFDADDE6),
-            surfaceBright = Color(0xFFFAFBFF),
+            surfaceContainerLow = mix(Color(0xFFF3F4F8), p, 0.055f),
+            surfaceContainer = mix(Color(0xFFEFF1F6), p, 0.055f),
+            surfaceContainerHigh = mix(Color(0xFFE9ECF3), p, 0.055f),
+            surfaceContainerHighest = mix(Color(0xFFE2E5ED), p, 0.055f),
+            surfaceDim = mix(Color(0xFFDADDE6), p, 0.055f),
+            surfaceBright = mix(Color(0xFFFAFBFF), p, 0.055f),
         )
     } else {
-        val base = Color(0xFF101218)
+        val base = mix(Color(0xFF101218), p, 0.045f)
         darkColorScheme(
             primary = mix(p, white, 0.42f),
             onPrimary = mix(p, black, 0.72f),
@@ -145,19 +145,19 @@ private fun paletteScheme(palette: ThemePalette, dark: Boolean): ColorScheme {
             onTertiaryContainer = mix(t, white, 0.84f),
             background = base,
             onBackground = Color(0xFFE6E8EF),
-            surface = Color(0xFF13161D),
+            surface = mix(Color(0xFF13161D), p, 0.07f),
             onSurface = Color(0xFFE6E8EF),
-            surfaceVariant = Color(0xFF2B303A),
+            surfaceVariant = mix(Color(0xFF2B303A), p, 0.07f),
             onSurfaceVariant = Color(0xFFC1C5D0),
             outline = Color(0xFF8B909D),
             outlineVariant = Color(0xFF424752),
-            surfaceContainerLowest = Color(0xFF0C0E13),
-            surfaceContainerLow = Color(0xFF171A22),
-            surfaceContainer = Color(0xFF1C2028),
-            surfaceContainerHigh = Color(0xFF232731),
-            surfaceContainerHighest = Color(0xFF2A2F3A),
+            surfaceContainerLowest = mix(Color(0xFF0C0E13), p, 0.07f),
+            surfaceContainerLow = mix(Color(0xFF171A22), p, 0.07f),
+            surfaceContainer = mix(Color(0xFF1C2028), p, 0.07f),
+            surfaceContainerHigh = mix(Color(0xFF232731), p, 0.07f),
+            surfaceContainerHighest = mix(Color(0xFF2A2F3A), p, 0.07f),
             surfaceDim = Color(0xFF101218),
-            surfaceBright = Color(0xFF363B46),
+            surfaceBright = mix(Color(0xFF363B46), p, 0.07f),
         )
     }
 }

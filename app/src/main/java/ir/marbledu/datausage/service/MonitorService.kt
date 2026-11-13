@@ -66,15 +66,6 @@ class MonitorService : Service() {
     private var initialized: Boolean = false
 
     @Volatile
-    private var sessionStart: Long = 0L
-
-    @Volatile
-    private var sessionRx: Long = 0L
-
-    @Volatile
-    private var sessionTx: Long = 0L
-
-    @Volatile
     private var peakSpeed: Double = 0.0
 
     private val speedHistory = ArrayDeque<Double>()
@@ -209,7 +200,6 @@ class MonitorService : Service() {
                     lastRx = rx
                     lastTx = tx
                     lastTime = now
-                    sessionStart = now
                     initialized = true
                 }
                 val elapsed = (now - lastTime).coerceAtLeast(1)
@@ -218,8 +208,6 @@ class MonitorService : Service() {
                 lastRx = rx
                 lastTx = tx
                 lastTime = now
-                sessionRx += dRx
-                sessionTx += dTx
 
                 val down = dRx * 1000.0 / elapsed
                 val up = dTx * 1000.0 / elapsed
@@ -411,6 +399,7 @@ class MonitorService : Service() {
         val avgSpeed = synchronized(speedHistory) {
             if (speedHistory.isEmpty()) down + up else speedHistory.average()
         }
+        val connectionSession = UsageLedger.activeSession(this)
         val input = NotificationInput(
             downBytesPerSec = down,
             upBytesPerSec = up,
@@ -426,9 +415,9 @@ class MonitorService : Service() {
             publicIp = snapshot.publicIp,
             todayMobileBytes = cachedTodayMobile.total,
             todayWifiBytes = cachedTodayWifi.total,
-            sessionRxBytes = sessionRx,
-            sessionTxBytes = sessionTx,
-            sessionStartMillis = sessionStart,
+            sessionRxBytes = connectionSession?.rxBytes ?: 0L,
+            sessionTxBytes = connectionSession?.txBytes ?: 0L,
+            sessionStartMillis = connectionSession?.startMillis ?: 0L,
             capTotalBytes = settings.dataCapBytes,
             capUsedBytes = cachedMonthMobileBytes,
             topAppName = cachedTopApp?.first.orEmpty(),

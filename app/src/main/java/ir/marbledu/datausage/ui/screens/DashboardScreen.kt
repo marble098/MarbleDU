@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ir.marbledu.datausage.R
+import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.UsagePlanner
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.ConnectionType
@@ -90,6 +91,7 @@ fun DashboardScreen(
     val dashboard by vm.dashboard.collectAsState()
     val usage by vm.usage.collectAsState()
     val history by vm.history.collectAsState()
+    val sessionTick by vm.tick.collectAsState()
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
 
@@ -143,7 +145,9 @@ fun DashboardScreen(
         }
 
         item {
-            ActiveMobileSessionCard(vm, persian)
+            val since = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -29); set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.timeInMillis
+            val recent = remember(sessionTick?.timestamp, since) { UsageLedger.recentSessions(context, since).take(5) }
+            SessionsCard(recent, persian, showDate = true)
         }
 
         if (settings.uiMode == UiMode.MINIMAL) {
