@@ -84,20 +84,20 @@ fun StatCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
                     Box(
                         Modifier
-                            .size(34.dp)
+                            .size(30.dp)
                             .clip(CircleShape)
                             .background(accent.copy(alpha = 0.16f)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(19.dp))
+                        Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(17.dp))
                     }
                     Spacer(Modifier.width(10.dp))
                 }
@@ -227,7 +227,7 @@ fun EmptyState(text: String, modifier: Modifier = Modifier) {
 fun OperatorBadge(
     operator: ir.marbledu.datausage.data.OperatorCatalog.Operator,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 44.dp,
+    size: androidx.compose.ui.unit.Dp = 40.dp,
     transportIcon: ImageVector? = null,
 ) {
     val brand = Color(operator.brandColor)
@@ -342,16 +342,16 @@ fun AppIcon(
 @Composable
 fun MarbleCard(
     modifier: Modifier = Modifier,
-    container: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    padding: androidx.compose.ui.unit.Dp = 18.dp,
+    container: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    padding: androidx.compose.ui.unit.Dp = 16.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = container),
     ) {
-        Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+        Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
 
@@ -365,11 +365,11 @@ fun HeroCard(
     Box(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(32.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(Brush.linearGradient(listOf(colors.heroStart, colors.heroEnd))),
     ) {
         CompositionLocalProvider(LocalContentColor provides colors.onHero) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
         }
     }
 }
@@ -386,12 +386,12 @@ fun CardHeader(
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(32.dp).clip(CircleShape).background(tint.copy(alpha = 0.16f)),
+            Modifier.size(30.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             if (subtitle != null) {
@@ -458,4 +458,4 @@ fun LegendDot(label: String, color: Color, modifier: Modifier = Modifier) {
 }
 
 /** فضای خالی پایین لیست‌ها تا محتوا زیر نوار شناور پنهان نماند. */
-val FloatingBarClearance = 112.dp
+val FloatingBarClearance = 94.dp

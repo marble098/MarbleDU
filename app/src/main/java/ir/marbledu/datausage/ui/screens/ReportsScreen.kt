@@ -1,6 +1,7 @@
 package ir.marbledu.datausage.ui.screens
 
 import android.content.Intent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,11 +10,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -55,9 +59,13 @@ import ir.marbledu.datausage.data.DaySummary
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.HourTraffic
 import ir.marbledu.datausage.data.JalaliDate
+import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.OperatorTraffic
 import ir.marbledu.datausage.data.TimeMath
+import ir.marbledu.datausage.data.Traffic
+import ir.marbledu.datausage.data.SimIdentity
+import ir.marbledu.datausage.data.UsageSession
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.ui.AppIcon
 import ir.marbledu.datausage.ui.BarEntry
@@ -112,7 +120,7 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     var hourMode by rememberSaveable { mutableStateOf(0) }
     var showAllApps by remember(dayUi.dayStart) { mutableStateOf(false) }
     var appSelection by remember(dayUi.dayStart) { mutableStateOf<Int?>(null) }
-    var selectedOperatorId by remember(dayUi.dayStart) { mutableStateOf<String?>(null) }
+    var selectedOperator by remember(dayUi.dayStart) { mutableStateOf<OperatorTraffic?>(null) }
 
     val monthMobile = days.fold(0L) { acc, d -> acc + d.mobile.total }
     val monthWifi = days.fold(0L) { acc, d -> acc + d.wifi.total }
@@ -124,17 +132,19 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val busiest = days.maxByOrNull { it.total }?.takeIf { it.total > 0 }
     val todayStart = remember(history.loadedAt) { TimeMath.dayStart(System.currentTimeMillis()) }
 
+    LaunchedEffect(Unit) { vm.loadHistory() }
+
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = FloatingBarClearance),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = FloatingBarClearance),
     ) {
         item {
             SectionTitle(
                 text = if (persian) "گزارش ۳۰ روز اخیر" else "Last 30 days",
                 action = {
-                    TextButton(onClick = { vm.loadHistory() }) {
+                    TextButton(onClick = { vm.loadHistory(force = true) }) {
                         Icon(MIcons.Refresh, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(context.getString(R.string.refresh_label))
@@ -256,7 +266,7 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             )
                         },
                         colors = listOf(marble.mobile, marble.wifi),
-                        height = 210.dp,
+                        height = 166.dp,
                         selected = selectedIndex,
                         onSelect = { index -> days.getOrNull(index)?.let { vm.selectDay(it.startMillis) } },
                         labelEvery = 5,
@@ -294,7 +304,8 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 if (report == null) {
                     item { LoadingBox() }
                 } else {
-                    item { OperatorsCard(report, persian, onSelect = { selectedOperatorId = it }) }
+                    item { SessionAuditCard(report, persian) }
+                    item { OperatorsCard(report, persian, onSelect = { selectedOperator = it }) }
                     item {
                         HoursCard(
                             report = report,
@@ -317,14 +328,14 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     }
 
                     // ------------------------------------------------ ۲۴ ساعت اپراتور انتخاب‌شده
-                    if (selectedOperatorId != null) {
+                    selectedOperator?.let { operatorRow ->
                         item {
                             OperatorHourlyCard(
                                 vm = vm,
                                 dayStart = dayUi.dayStart,
-                                operatorId = selectedOperatorId!!,
+                                operatorRow = operatorRow,
                                 persian = persian,
-                                onDismiss = { selectedOperatorId = null },
+                                onDismiss = { selectedOperator = null },
                             )
                         }
                     }
@@ -604,12 +615,240 @@ private fun DayHeaderCard(
 }
 
 @Composable
-private fun OperatorsCard(report: DayReport, persian: Boolean, onSelect: (String) -> Unit = {}) {
+private fun SessionAuditCard(report: DayReport, persian: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    val marble = LocalMarbleColors.current
+    var selectedSim by remember(report.summary.startMillis) { mutableStateOf<SimIdentity?>(null) }
+    var filterBySim by remember(report.summary.startMillis) { mutableStateOf(false) }
+    var showAll by remember(report.summary.startMillis) { mutableStateOf(false) }
+    val sessions = report.sessions.sortedByDescending { it.startMillis }
+    val sims = sessions.mapNotNull { it.sim }.distinct()
+    val hasUnknownSim = sessions.any { it.sim == null }
+    val visibleSessions = if (filterBySim) sessions.filter { it.sim == selectedSim } else sessions
+    val system = report.summary.mobile
+    val observed = report.observedMobile
+    val difference = Traffic(
+        rx = kotlin.math.abs(system.rx - observed.rx),
+        tx = kotlin.math.abs(system.tx - observed.tx),
+    )
+    val notObserved = Traffic(
+        rx = (system.rx - observed.rx).coerceAtLeast(0L),
+        tx = (system.tx - observed.tx).coerceAtLeast(0L),
+    )
+    val overage = Traffic(
+        rx = (observed.rx - system.rx).coerceAtLeast(0L),
+        tx = (observed.tx - system.tx).coerceAtLeast(0L),
+    )
+    val observedExceedsSystem = overage.total > 0L
+
+    MarbleCard(modifier = Modifier.animateContentSize(), padding = 14.dp) {
+        CardHeader(
+            title = if (persian) "جلسه‌ها و تطبیق دیتای سیم‌کارت" else "SIM sessions & data check",
+            icon = MIcons.Signal,
+            tint = scheme.primary,
+            trailing = Formats.bytes(system.total, persian),
+            subtitle = if (persian) "جمع روز از آمار خود Android" else "Android device total for this day",
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Metric(
+                if (persian) "ثبت‌شده هنگام پایش" else "Observed by monitor",
+                Formats.bytes(observed.total, persian),
+                marble.mobile,
+                Modifier.weight(1f),
+                MIcons.Download,
+            )
+            Metric(
+                if (persian) "اختلاف شمارنده‌ها" else "Counter difference",
+                Formats.bytes(difference.total, persian),
+                if (observedExceedsSystem) scheme.error else scheme.tertiary,
+                Modifier.weight(1f),
+                MIcons.Chart,
+            )
+        }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(scheme.secondaryContainer.copy(alpha = 0.58f))
+                .padding(11.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = if (observedExceedsSystem) {
+                    if (persian) {
+                        "نمونه‌ها از جمع Android بیشترند: دانلود ${Formats.bytes(overage.rx, persian)} و آپلود ${Formats.bytes(overage.tx, persian)} اختلاف؛ مقدار خام دست‌نخورده مانده است."
+                    } else {
+                        "Samples exceed Android by ${Formats.bytes(overage.rx, persian)} download and ${Formats.bytes(overage.tx, persian)} upload; raw values are preserved."
+                    }
+                } else {
+                    (if (persian) "ثبت‌نشده/نامنتسب: " else "Not observed / unassigned: ") +
+                        Formats.bytes(notObserved.total, persian) +
+                        (if (persian) " (دانلود ${Formats.bytes(notObserved.rx, persian)}، آپلود ${Formats.bytes(notObserved.tx, persian)})؛ "
+                        else " (download ${Formats.bytes(notObserved.rx, persian)}, upload ${Formats.bytes(notObserved.tx, persian)}); ") +
+                        if (persian) "ممکن است پایش خاموش بوده یا دقت تجمیع Android متفاوت باشد."
+                        else "monitoring may have been paused or Android may aggregate counters differently."
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onSecondaryContainer,
+            )
+            Text(
+                text = if (persian) {
+                    "در گوشی دوسیم‌کارته، شمارنده‌ی موبایل Android ممکن است تجمیعی باشد؛ به سیم‌کارت پیش‌فرض داده در هر نمونه نسبت داده می‌شود و تغییر بین نمونه‌ها تقریبی است."
+                } else {
+                    "On dual-SIM phones Android may expose one aggregate mobile counter. Bytes are attributed to the default data SIM at each sample; a SIM switch between samples is approximate."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSecondaryContainer.copy(alpha = 0.86f),
+            )
+            Text(
+                text = if (persian) {
+                    "این داده، شمارنده‌ی خود گوشی است؛ اپ‌های عادی به صورتحساب/ریزثبت اپراتور دسترسی ندارند. برای بررسی کسر حجم، همین بازه را با گزارش رسمی اپراتور مقایسه کن."
+                } else {
+                    "This is device-side accounting. Regular apps cannot read a carrier's billing ledger; compare the same time range with the carrier's official usage report."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSecondaryContainer.copy(alpha = 0.86f),
+            )
+        }
+
+        if (sims.size > 1 || (sims.isNotEmpty() && hasUnknownSim)) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                FilterChip(
+                    selected = !filterBySim,
+                    onClick = { filterBySim = false },
+                    label = { Text(if (persian) "همه‌ی سیم‌ها" else "All SIMs") },
+                )
+                sims.forEach { sim ->
+                    FilterChip(
+                        selected = filterBySim && selectedSim == sim,
+                        onClick = {
+                            selectedSim = sim
+                            filterBySim = true
+                        },
+                        label = { Text(simSlotName(sim.slotIndex, sim.displayName, persian)) },
+                    )
+                }
+                if (hasUnknownSim) {
+                    FilterChip(
+                        selected = filterBySim && selectedSim == null,
+                        onClick = {
+                            selectedSim = null
+                            filterBySim = true
+                        },
+                        label = { Text(if (persian) "سیم نامشخص" else "Unknown SIM") },
+                    )
+                }
+            }
+        }
+
+        if (visibleSessions.isEmpty()) {
+            Text(
+                text = if (persian) {
+                    "برای این روز جلسه‌ای نمونه‌برداری نشده؛ پایش پس‌زمینه را روشن نگه دار تا دفعات بعد زمان شروع و پایان ثبت شود."
+                } else {
+                    "No sampled sessions for this day. Keep background monitoring on to capture session start/end times next time."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        } else {
+            visibleSessions.take(if (showAll) 30 else 5).forEach { session ->
+                SessionAuditRow(session, persian)
+            }
+            if (visibleSessions.size > 5) {
+                TextButton(onClick = { showAll = !showAll }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Text(
+                        if (showAll) {
+                            if (persian) "نمایش کمتر" else "Show less"
+                        } else {
+                            if (persian) "نمایش همه‌ی ${Formats.integer(visibleSessions.size.toLong(), true)} جلسه‌ها" else "Show all ${visibleSessions.size} sessions"
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionAuditRow(session: UsageSession, persian: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    val operator = OperatorCatalog.byId(session.operatorId)
+    val from = LiveMonitor.formatHourMinute(session.startMillis, persian)
+    val to = session.endMillis?.let { LiveMonitor.formatHourMinute(it, persian) }
+        ?: if (persian) "اکنون" else "now"
+    val approximate = session.startEstimated || session.endEstimated || session.samplingGaps > 0
+    val startPrefix = if (session.startEstimated) "≈ " else ""
+    val endPrefix = if (session.endEstimated && to != (if (persian) "اکنون" else "now")) "≈ " else ""
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(scheme.surfaceContainerLow)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OperatorBadge(operator, size = 34.dp, transportIcon = MIcons.Signal)
+        Spacer(Modifier.width(9.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "${simSlotName(session.sim?.slotIndex, session.sim?.displayName, persian)} · ${operator.name(persian)}",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "$startPrefix$from – $endPrefix$to",
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.primary,
+            )
+            Text(
+                "↓ ${Formats.bytes(session.rxBytes, persian)}  ·  ↑ ${Formats.bytes(session.txBytes, persian)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+            )
+            if (approximate) {
+                Text(
+                    if (session.samplingGaps > 0) {
+                        if (persian) "مرز تقریبی · وقفه‌ی پایش ${Formats.integer(session.samplingGaps.toLong(), true)} بار"
+                        else "Approximate boundary · ${session.samplingGaps} monitoring gap(s)"
+                    } else if (persian) "زمان برآوردی تا فاصله‌ی نمونه‌برداری" else "Time boundary is within the sampling interval",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (session.isOpen) {
+            InfoChip(if (persian) "اکنون" else "LIVE", color = scheme.secondary)
+        }
+    }
+}
+
+private fun simSlotName(slot: Int?, displayName: String?, persian: Boolean): String {
+    val slotLabel = slot?.let {
+        if (persian) "سیم‌کارت ${Formats.integer((it + 1).toLong(), true)}" else "SIM ${it + 1}"
+    }
+    val name = displayName?.trim().orEmpty()
+    return when {
+        slotLabel != null && name.isNotBlank() -> "$slotLabel · $name"
+        slotLabel != null -> slotLabel
+        name.isNotBlank() -> name
+        else -> if (persian) "سیم‌کارت نامشخص" else "SIM not identified"
+    }
+}
+
+@Composable
+private fun OperatorsCard(report: DayReport, persian: Boolean, onSelect: (OperatorTraffic) -> Unit = {}) {
     val context = LocalContext.current
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
     val rows = report.operators
-    val total = rows.fold(0L) { acc, r -> acc + r.traffic.total }.coerceAtLeast(1L)
+    val total = report.summary.total.coerceAtLeast(1L)
     MarbleCard {
         CardHeader(
             title = if (persian) "مصرف هر اپراتور" else "Usage by operator",
@@ -625,14 +864,12 @@ private fun OperatorsCard(report: DayReport, persian: Boolean, onSelect: (String
             )
         }
         rows.forEach { row -> OperatorRow(row, total, persian, onSelect = onSelect) }
-        if (rows.any { it.estimated && it.transport == UsageLedger.WIFI }) {
+        if (rows.any { it.estimated }) {
             Text(
                 text = if (persian) {
-                    "«وای‌فای – اپراتور نامشخص» یعنی آن موقع MarbleDU در حال پایش نبوده یا هنوز اپراتور مودم را پیدا نکرده بود. " +
-                        "با روشن ماندن «پایش در پس‌زمینه» روزهای بعد دقیق ثبت می‌شوند."
+                    "ردیف تخمینی/نامنتسب اختلاف با جمع Android است؛ به سیم‌کارت یا اپراتور خاصی نسبت داده نشده."
                 } else {
-                    "“Wi-Fi – unknown operator” means MarbleDU was not monitoring at that time or had not identified the router's ISP yet. " +
-                        "Keep background monitoring on for exact attribution."
+                    "Estimated/unassigned rows represent the difference from Android's total; they are not attributed to a specific SIM or carrier."
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.onSurfaceVariant,
@@ -650,7 +887,7 @@ private fun OperatorRow(
     row: OperatorTraffic,
     total: Long,
     persian: Boolean,
-    onSelect: (String) -> Unit = {},
+    onSelect: (OperatorTraffic) -> Unit = {},
 ) {
     val context = LocalContext.current
     val marble = LocalMarbleColors.current
@@ -658,19 +895,21 @@ private fun OperatorRow(
     val operator = OperatorCatalog.byId(row.operatorId)
     val wifi = row.transport == UsageLedger.WIFI
     val name = when {
+        row.estimated && !wifi -> if (persian) "موبایل – تخصیص‌نیافته" else "Mobile – unassigned"
         wifi && row.operatorId == OperatorCatalog.ID_WIFI ->
             if (persian) "وای‌فای – اپراتور نامشخص" else "Wi-Fi – unknown operator"
         row.operatorId == OperatorCatalog.ID_MOBILE -> if (persian) "سیم‌کارت نامشخص" else "Unknown SIM"
+        row.operatorId == OperatorCatalog.ID_UNKNOWN -> if (persian) "اپراتور نامشخص" else "Unknown operator"
         else -> operator.name(persian)
     }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = { if (row.operatorId != OperatorCatalog.ID_WIFI && row.operatorId != OperatorCatalog.ID_MOBILE) onSelect(row.operatorId) }),
+            .then(if (!wifi && !row.estimated) Modifier.clickable { onSelect(row) } else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OperatorBadge(operator, size = 46.dp, transportIcon = if (wifi) MIcons.Wifi else MIcons.Signal)
-        Spacer(Modifier.width(14.dp))
+        OperatorBadge(operator, size = 38.dp, transportIcon = if (wifi) MIcons.Wifi else MIcons.Signal)
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -691,9 +930,13 @@ private fun OperatorRow(
                 )
             }
             Text(
-                text = (if (wifi) context.getString(R.string.wifi) else context.getString(R.string.cellular)) +
-                    "  •  " + percentText(row.traffic.total * 100.0 / total, persian) +
-                    (if (row.estimated && !wifi) (if (persian) "  •  تخمینی" else "  •  estimated") else ""),
+                text = buildString {
+                    append(if (wifi) context.getString(R.string.wifi) else context.getString(R.string.cellular))
+                    if (!wifi && row.sim != null) append("  •  ").append(simSlotName(row.sim.slotIndex, row.sim.displayName, persian))
+                    if (!wifi && row.sim == null && !row.estimated) append("  •  ").append(if (persian) "سیم نامشخص" else "SIM unknown")
+                    append("  •  ").append(percentText(row.traffic.total * 100.0 / total, persian))
+                    if (row.estimated) append("  •  ").append(if (persian) "نامنتسب" else "unassigned")
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.onSurfaceVariant,
             )
@@ -764,7 +1007,7 @@ private fun HoursCard(
                     )
                 },
                 colors = if (mode == 0) listOf(marble.mobile, marble.wifi) else listOf(marble.download, marble.upload),
-                height = 200.dp,
+                height = 160.dp,
                 selected = selection,
                 onSelect = onSelect,
                 labelEvery = 3,
@@ -1094,32 +1337,35 @@ private fun DayRow(
 private fun OperatorHourlyCard(
     vm: MainViewModel,
     dayStart: Long,
-    operatorId: String,
+    operatorRow: OperatorTraffic,
     persian: Boolean,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val marble = LocalMarbleColors.current
+    val operatorId = operatorRow.operatorId
+    val sim = operatorRow.sim
     val operator = OperatorCatalog.byId(operatorId)
     val hourly by vm.operatorHourly.collectAsState()
-    val loading = hourly.loading && hourly.dayStart == dayStart && hourly.operatorId == operatorId
+    val matchesSelection = hourly.dayStart == dayStart &&
+        hourly.operatorId == operatorId && hourly.sim == sim
+    val loading = matchesSelection && hourly.loading
 
-    LaunchedEffect(dayStart, operatorId) {
-        if (hourly.dayStart != dayStart || hourly.operatorId != operatorId || !hourly.loading) {
-            vm.loadOperatorHourly(dayStart, operatorId)
-        }
+    LaunchedEffect(dayStart, operatorId, sim) {
+        vm.loadOperatorHourly(dayStart, operatorId, sim)
     }
 
-    MarbleCard {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    MarbleCard(padding = 14.dp) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(MIcons.ArrowForward, null, Modifier.size(18.dp), tint = scheme.primary)
                     Spacer(Modifier.size(8.dp))
                     Column {
                         Text(
-                            text = if (persian) "۲۴ ساعت: ${operator.name(persian)}" else "24h: ${operator.name(persian)}",
+                            text = (if (persian) "۲۴ ساعت: " else "24h: ") + operator.name(persian) +
+                                " · " + simSlotName(sim?.slotIndex, sim?.displayName, persian),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = scheme.onSurface,
@@ -1136,8 +1382,8 @@ private fun OperatorHourlyCard(
                 }
             }
 
-            val hours = if (hourly.dayStart == dayStart && hourly.operatorId == operatorId) hourly.hours else emptyList()
-            if (hourly.loading && hours.isEmpty()) {
+            val hours = if (matchesSelection) hourly.hours else emptyList()
+            if (!matchesSelection || loading) {
                 CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally), strokeWidth = 4.dp)
             } else if (hours.isEmpty()) {
                 Text(
@@ -1147,35 +1393,48 @@ private fun OperatorHourlyCard(
                 )
             } else {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.Bottom,
                 ) {
-                    val max = hours.maxOfOrNull { it.total } ?: 1L
-                    hours.forEach { h ->
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .background(marble.mobile.copy(alpha = 0.15f + 0.6f * (h.total.toFloat() / max))),
-                            contentAlignment = Alignment.BottomCenter,
+                    val max = (hours.maxOfOrNull { it.total } ?: 1L).coerceAtLeast(1L)
+                    hours.forEach { hour ->
+                        Column(
+                            modifier = Modifier.width(42.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            Text(
+                                text = Formats.bytes(hour.total, persian),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(0.62f)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .background(scheme.surfaceVariant),
+                                contentAlignment = Alignment.BottomCenter,
                             ) {
-                                Text(
-                                    text = Formats.bytes(h.total, persian),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = scheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                )
-                                Text(
-                                    text = "${h.hour}:00",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = scheme.onSurfaceVariant,
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .fillMaxHeight(
+                                            if (hour.total > 0L) (hour.total.toFloat() / max).coerceIn(0.08f, 1f) else 0f,
+                                        )
+                                        .clip(RoundedCornerShape(7.dp))
+                                        .background(marble.mobile),
                                 )
                             }
+                            Text(
+                                text = hourText(hour.hour, persian),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
                         }
                     }
                 }

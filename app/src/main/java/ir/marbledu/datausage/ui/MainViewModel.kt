@@ -1,6 +1,7 @@
 package ir.marbledu.datausage.ui
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import ir.marbledu.datausage.MarbleDuApp
@@ -10,7 +11,6 @@ import ir.marbledu.datausage.data.AppUsage
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.DayReport
 import ir.marbledu.datausage.data.DaySummary
-import ir.marbledu.datausage.data.HourUsage
 import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.LiveTick
@@ -22,6 +22,7 @@ import ir.marbledu.datausage.data.PingResult
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.data.TimeMath
 import ir.marbledu.datausage.data.HourOperatorTraffic
+import ir.marbledu.datausage.data.SimIdentity
 import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.TimeRange
@@ -81,9 +82,12 @@ data class DayReportUi(
 data class OperatorHourlyUi(
     val dayStart: Long = 0L,
     val operatorId: String = "",
+    val sim: SimIdentity? = null,
     val hours: List<HourOperatorTraffic> = emptyList(),
     val loading: Boolean = false,
 )
+
+private const val HISTORY_CACHE_MS = 2L * 60 * 1000
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -115,9 +119,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _pingRunning = MutableStateFlow(false)
     val pingRunning: StateFlow<Boolean> = _pingRunning.asStateFlow()
 
-    private val _peakHours = MutableStateFlow<List<HourUsage>>(emptyList())
-    val peakHours: StateFlow<List<HourUsage>> = _peakHours.asStateFlow()
-
     private val _speedHistory = MutableStateFlow<List<SpeedPoint>>(emptyList())
     val speedHistory: StateFlow<List<SpeedPoint>> = _speedHistory.asStateFlow()
 
@@ -132,11 +133,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var historyJob: Job? = null
     private var dayJob: Job? = null
-
+    private var operatorHourlyJob: Job? = null
     private var liveJob: Job? = null
+    private var lastRefreshAllAt = 0L
     private var pingJob: Job? = null
 
     init {
+        // دسترسی را سبک و فوری بخوان تا راه‌اندازی، مجوزِ از قبل فعال را اشتباهاً درخواست نکند.
+        _dashboard.value = _dashboard.value.copy(hasUsageAccess = repository.hasUsageAccess())
         IspResolver.enabled = true
         // با هر تغییر نتیجه‌ی شناسایی وای‌فای یا تغییر زبان، کارت اتصال بلافاصله تازه می‌شود.
         viewModelScope.launch(Dispatchers.IO) {
@@ -145,13 +149,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            settings.map { it.language }.distinctUntilChanged().collect {
-                refreshLiveNetworkSnapshot()
-                refreshDashboard()
+            var lastLanguage: AppLanguage? = null
+            settings.map { it.language }.distinctUntilChanged().collect { language ->
+                if (lastLanguage != null && lastLanguage != language) {
+                    refreshLiveNetworkSnapshot()
+                    refreshDashboard()
+                }
+                lastLanguage = language
             }
         }
-        startLive()
-        refreshAll()
+        // پایش و گزارش سنگین تا پایان راه‌اندازی/نمایش رابط شروع نمی‌شوند.
     }
 
     private fun refreshLiveNetworkSnapshot() {
@@ -166,17 +173,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * بعد از برگشتن از «دسترسی به داده‌های مصرف» همان لحظه داده‌ها ظاهر شوند.
      */
     fun refreshAll() {
+        val now = SystemClock.elapsedRealtime()
+        // LaunchedEffect و ON_RESUME می‌توانند هم‌زمان در شروع رابط اجرا شوند.
+        if (lastRefreshAllAt != 0L && now - lastRefreshAllAt < 750L) return
+        lastRefreshAllAt = now
         refreshDashboard()
         loadUsage(_usage.value.range)
-        loadPeakHours(_usage.value.range)
-        loadHistory()
+        // تاریخچه‌ی ۳۰روزه فقط بعد از باز شدن تب گزارش خوانده می‌شود؛ بار اول
+        // ورود به خانه نباید ده‌ها query تاریخی را هم‌زمان اجرا کند.
+        if (_history.value.loadedAt > 0L) loadHistory()
     }
 
     // ------------------------------------------------------------- 30 days
-    /** فهرست ۳۰ روز اخیر؛ اگر هنوز روزی انتخاب نشده، «امروز» انتخاب می‌شود. */
-    fun loadHistory() {
+    /** فهرست ۳۰ روز اخیر؛ فقط در اولین ورود یا پس از منقضی شدن cache دوباره خوانده می‌شود. */
+    fun loadHistory(force: Boolean = false) {
         if (historyJob?.isActive == true) return
-        historyJob = viewModelScope.launch {
+        if (!force && _history.value.loadedAt > 0L &&
+            System.currentTimeMillis() - _history.value.loadedAt < HISTORY_CACHE_MS
+        ) return
+        historyJob = viewModelScope.launch(Dispatchers.IO) {
             _history.value = _history.value.copy(loading = true)
             val days = repository.daySummaries(30)
             _history.value = HistoryUi(days = days, loading = false, loadedAt = System.currentTimeMillis())
@@ -206,7 +221,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startLive() {
         if (liveJob?.isActive == true) return
         liveJob = viewModelScope.launch {
-            monitor.stream(1000) { LocaleHelper.isPersian(settings.value.language) }.collect { value ->
+            monitor.stream(
+                intervalMillis = 1000,
+                persianProvider = { LocaleHelper.isPersian(settings.value.language) },
+                recordUsageProvider = { !settings.value.monitorInBackground },
+            ).collect { value ->
                 _tick.value = value
                 _speedHistory.value = (_speedHistory.value + SpeedPoint(value.downBytesPerSecond, value.upBytesPerSecond))
                     .takeLast(60)
@@ -244,57 +263,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------- dashboard
     fun refreshDashboard() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val now = System.currentTimeMillis()
             val dayStart = TimeMath.dayStart(now)
             val monthStart = now - TimeRange.MONTH.millis()
 
-            val todayMobile = repository.usageByApp(dayStart, now, ConnectionType.CELLULAR)
-            val todayWifi = repository.usageByApp(dayStart, now, ConnectionType.WIFI)
-            val monthMobile = repository.usageByApp(monthStart, now, ConnectionType.CELLULAR)
-            val monthWifi = repository.usageByApp(monthStart, now, ConnectionType.WIFI)
+            // آمار دستگاه (source of truth) را مستقیم می‌خوانیم؛ جمع UIDهای اپ‌ها
+            // برای داشبورد کندتر و در بعضی نسخه‌های اندروید ناقص است.
+            val todayMobile = repository.aggregateTraffic(dayStart, now, ConnectionType.CELLULAR)
+            val todayWifi = repository.aggregateTraffic(dayStart, now, ConnectionType.WIFI)
+            val monthMobile = repository.aggregateTraffic(monthStart, now, ConnectionType.CELLULAR)
+            val monthWifi = repository.aggregateTraffic(monthStart, now, ConnectionType.WIFI)
+            val week = repository.dailyTotals(7, ConnectionType.CELLULAR)
 
             val persian = LocaleHelper.isPersian(settings.value.language)
             val snapshot = NetworkStatsReader.currentNetwork(getApplication(), persian)
-            val averageSpeed = _tick.value?.averageSpeed ?: 0.0
-
-            val todaySummary = repository.daySummaries(1).lastOrNull()
-            val week = repository.dailyTotals(7, ConnectionType.CELLULAR)
-            val todayTotal = week.lastOrNull()?.bytes ?: 0L
             val yesterdayTotal = week.dropLast(1).lastOrNull()?.bytes ?: 0L
-            val variation = when {
-                yesterdayTotal <= 0L -> 0
-                else -> (((todayTotal - yesterdayTotal).toDouble() / yesterdayTotal) * 100).toInt()
-            }
+            val variation = if (yesterdayTotal <= 0L) 0 else
+                (((todayMobile.total - yesterdayTotal).toDouble() / yesterdayTotal) * 100).toInt()
 
             _dashboard.value = DashboardUi(
-                todayMobileBytes = todayMobile.sumOf { it.bytes },
-                todayWifiBytes = todayWifi.sumOf { it.bytes },
-                monthMobileBytes = monthMobile.sumOf { it.bytes },
-                monthWifiBytes = monthWifi.sumOf { it.bytes },
+                todayMobileBytes = todayMobile.total,
+                todayWifiBytes = todayWifi.total,
+                monthMobileBytes = monthMobile.total,
+                monthWifiBytes = monthWifi.total,
                 todayVariationPercent = variation,
                 week = week,
                 hasUsageAccess = repository.hasUsageAccess(),
                 operatorName = snapshot.carrierName,
                 averagePingMs = _dashboard.value.averagePingMs,
-                averageSpeed = averageSpeed,
-                todayMobile = todaySummary?.mobile ?: Traffic(),
-                todayWifi = todaySummary?.wifi ?: Traffic(),
+                averageSpeed = _tick.value?.averageSpeed ?: 0.0,
+                todayMobile = todayMobile,
+                todayWifi = todayWifi,
             )
         }
     }
 
     /** تغییر بازه فقط یک بار لود می‌کند. */
     fun setRange(range: TimeRange) = loadUsage(range)
-
-    /** ساعت‌های پرمصرف بر اساس مصرف واقعی هر ساعت. */
-    fun loadPeakHours(range: TimeRange = _usage.value.range) {
-        viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val from = TimeMath.rangeStart(range, now, settings.value.billingCycleDay)
-            _peakHours.value = repository.hourlyTotals(from, now, ConnectionType.CELLULAR)
-        }
-    }
 
     fun loadUsage(range: TimeRange = _usage.value.range) {
         viewModelScope.launch {
@@ -333,14 +339,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setWidgetBigText(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetBigText(value) }
 
     /** ترافیک ساعتی یک اپراتور در روز انتخاب‌شده (برای گزارش ۲۴ ساعت). */
-    fun loadOperatorHourly(dayStart: Long, operatorId: String) {
-        if (dayJob?.isActive == true) return
-        _operatorHourly.value = OperatorHourlyUi(dayStart = dayStart, operatorId = operatorId, loading = true)
-        dayJob = viewModelScope.launch {
-            val hours = repository.hourlyOperatorTraffic(dayStart, operatorId)
+    fun loadOperatorHourly(dayStart: Long, operatorId: String, sim: SimIdentity?) {
+        operatorHourlyJob?.cancel()
+        _operatorHourly.value = OperatorHourlyUi(
+            dayStart = dayStart,
+            operatorId = operatorId,
+            sim = sim,
+            loading = true,
+        )
+        operatorHourlyJob = viewModelScope.launch(Dispatchers.IO) {
+            val hours = repository.hourlyOperatorTraffic(dayStart, operatorId, sim)
             _operatorHourly.value = OperatorHourlyUi(
                 dayStart = dayStart,
                 operatorId = operatorId,
+                sim = sim,
                 hours = hours,
                 loading = false,
             )
@@ -358,5 +370,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun applyNotificationPreset(preset: NotificationPreset) =
         viewModelScope.launch { settingsRepo.updateNotification { NotificationConfig.fromPreset(preset) } }
 
-    fun completeOnboarding() = viewModelScope.launch { settingsRepo.setOnboarded(true) }
+    fun completeOnboarding() = viewModelScope.launch {
+        settingsRepo.setOnboarded(true)
+        if (settings.value.monitorInBackground) {
+            MonitorService.start(getApplication<Application>())
+        }
+    }
 }

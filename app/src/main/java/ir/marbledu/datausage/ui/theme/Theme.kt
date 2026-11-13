@@ -95,37 +95,38 @@ private fun paletteScheme(palette: ThemePalette, dark: Boolean): ColorScheme {
     val white = Color.White
     val black = Color.Black
     return if (!dark) {
+        val background = Color(0xFFF7F8FC)
         lightColorScheme(
             primary = p,
             onPrimary = white,
-            primaryContainer = mix(p, white, 0.82f),
-            onPrimaryContainer = mix(p, black, 0.62f),
+            primaryContainer = mix(p, white, 0.84f),
+            onPrimaryContainer = mix(p, black, 0.66f),
             secondary = s,
             onSecondary = white,
-            secondaryContainer = mix(s, white, 0.82f),
-            onSecondaryContainer = mix(s, black, 0.62f),
+            secondaryContainer = mix(s, white, 0.86f),
+            onSecondaryContainer = mix(s, black, 0.66f),
             tertiary = t,
             onTertiary = white,
-            tertiaryContainer = mix(t, white, 0.82f),
-            onTertiaryContainer = mix(t, black, 0.62f),
-            background = mix(p, white, 0.955f),
-            onBackground = mix(p, black, 0.88f),
-            surface = mix(p, white, 0.955f),
-            onSurface = mix(p, black, 0.88f),
-            surfaceVariant = mix(p, white, 0.86f),
-            onSurfaceVariant = mix(p, Color(0xFF3C3F46), 0.82f),
-            outline = mix(p, Color(0xFF7A7D85), 0.75f),
-            outlineVariant = mix(p, white, 0.74f),
+            tertiaryContainer = mix(t, white, 0.86f),
+            onTertiaryContainer = mix(t, black, 0.66f),
+            background = background,
+            onBackground = Color(0xFF191B22),
+            surface = background,
+            onSurface = Color(0xFF191B22),
+            surfaceVariant = Color(0xFFE8EAF1),
+            onSurfaceVariant = Color(0xFF555A66),
+            outline = Color(0xFF747986),
+            outlineVariant = Color(0xFFC8CBD4),
             surfaceContainerLowest = white,
-            surfaceContainerLow = mix(p, white, 0.975f),
-            surfaceContainer = mix(p, white, 0.925f),
-            surfaceContainerHigh = mix(p, white, 0.985f),
-            surfaceContainerHighest = mix(p, white, 0.88f),
-            surfaceDim = mix(p, white, 0.84f),
-            surfaceBright = mix(p, white, 0.97f),
+            surfaceContainerLow = Color(0xFFF3F4F8),
+            surfaceContainer = Color(0xFFEFF1F6),
+            surfaceContainerHigh = Color(0xFFE9ECF3),
+            surfaceContainerHighest = Color(0xFFE2E5ED),
+            surfaceDim = Color(0xFFDADDE6),
+            surfaceBright = Color(0xFFFAFBFF),
         )
     } else {
-        val base = Color(0xFF0D0E13)
+        val base = Color(0xFF101218)
         darkColorScheme(
             primary = mix(p, white, 0.42f),
             onPrimary = mix(p, black, 0.72f),
@@ -139,21 +140,21 @@ private fun paletteScheme(palette: ThemePalette, dark: Boolean): ColorScheme {
             onTertiary = mix(t, black, 0.72f),
             tertiaryContainer = mix(t, black, 0.52f),
             onTertiaryContainer = mix(t, white, 0.84f),
-            background = mix(p, base, 0.94f),
-            onBackground = Color(0xFFE7E8EE),
-            surface = mix(p, base, 0.94f),
-            onSurface = Color(0xFFE7E8EE),
-            surfaceVariant = mix(p, base, 0.80f),
-            onSurfaceVariant = Color(0xFFC3C6D0),
-            outline = mix(p, Color(0xFF8C8F99), 0.80f),
-            outlineVariant = mix(p, base, 0.70f),
-            surfaceContainerLowest = mix(p, black, 0.96f),
-            surfaceContainerLow = mix(p, base, 0.90f),
-            surfaceContainer = mix(p, base, 0.87f),
-            surfaceContainerHigh = mix(p, base, 0.84f),
-            surfaceContainerHighest = mix(p, base, 0.79f),
-            surfaceDim = mix(p, base, 0.94f),
-            surfaceBright = mix(p, base, 0.74f),
+            background = base,
+            onBackground = Color(0xFFE6E8EF),
+            surface = Color(0xFF13161D),
+            onSurface = Color(0xFFE6E8EF),
+            surfaceVariant = Color(0xFF2B303A),
+            onSurfaceVariant = Color(0xFFC1C5D0),
+            outline = Color(0xFF8B909D),
+            outlineVariant = Color(0xFF424752),
+            surfaceContainerLowest = Color(0xFF0C0E13),
+            surfaceContainerLow = Color(0xFF171A22),
+            surfaceContainer = Color(0xFF1C2028),
+            surfaceContainerHigh = Color(0xFF232731),
+            surfaceContainerHighest = Color(0xFF2A2F3A),
+            surfaceDim = Color(0xFF101218),
+            surfaceBright = Color(0xFF363B46),
         )
     }
 }
@@ -166,26 +167,33 @@ val Vazirmatn = FontFamily(
     Font(R.font.vazirmatn_bold, FontWeight.Bold),
 )
 
-private fun withVazirmatn(style: TextStyle): TextStyle =
-    style.copy(fontFamily = Vazirmatn, lineHeight = style.fontSize * 1.75f)
+private fun withVazirmatn(
+    style: TextStyle,
+    sizeScale: Float = 1f,
+    lineScale: Float = 1.4f,
+): TextStyle {
+    val size = style.fontSize * sizeScale
+    return style.copy(fontFamily = Vazirmatn, fontSize = size, lineHeight = size * lineScale)
+}
 
+/** سلسله‌مراتب تایپوگرافی جمع‌وجورتر با فاصله‌ی خطوط مناسب فارسی؛ اعداد مهم‌اند، نه تیترهای غول‌آسا. */
 private val VazirTypography = Typography().let { base ->
     Typography(
-        displayLarge = withVazirmatn(base.displayLarge),
-        displayMedium = withVazirmatn(base.displayMedium),
-        displaySmall = withVazirmatn(base.displaySmall),
-        headlineLarge = withVazirmatn(base.headlineLarge),
-        headlineMedium = withVazirmatn(base.headlineMedium),
-        headlineSmall = withVazirmatn(base.headlineSmall),
-        titleLarge = withVazirmatn(base.titleLarge),
-        titleMedium = withVazirmatn(base.titleMedium),
-        titleSmall = withVazirmatn(base.titleSmall),
-        bodyLarge = withVazirmatn(base.bodyLarge),
-        bodyMedium = withVazirmatn(base.bodyMedium),
-        bodySmall = withVazirmatn(base.bodySmall),
-        labelLarge = withVazirmatn(base.labelLarge),
-        labelMedium = withVazirmatn(base.labelMedium),
-        labelSmall = withVazirmatn(base.labelSmall),
+        displayLarge = withVazirmatn(base.displayLarge, 0.72f, 1.22f),
+        displayMedium = withVazirmatn(base.displayMedium, 0.78f, 1.24f),
+        displaySmall = withVazirmatn(base.displaySmall, 0.82f, 1.28f),
+        headlineLarge = withVazirmatn(base.headlineLarge, 0.86f, 1.30f),
+        headlineMedium = withVazirmatn(base.headlineMedium, 0.90f, 1.32f),
+        headlineSmall = withVazirmatn(base.headlineSmall, 0.92f, 1.34f),
+        titleLarge = withVazirmatn(base.titleLarge, 0.92f, 1.34f),
+        titleMedium = withVazirmatn(base.titleMedium, 0.96f, 1.38f),
+        titleSmall = withVazirmatn(base.titleSmall, 0.96f, 1.38f),
+        bodyLarge = withVazirmatn(base.bodyLarge, 0.96f, 1.52f),
+        bodyMedium = withVazirmatn(base.bodyMedium, 0.96f, 1.50f),
+        bodySmall = withVazirmatn(base.bodySmall, 0.98f, 1.48f),
+        labelLarge = withVazirmatn(base.labelLarge, 0.96f, 1.38f),
+        labelMedium = withVazirmatn(base.labelMedium, 0.96f, 1.38f),
+        labelSmall = withVazirmatn(base.labelSmall, 0.96f, 1.38f),
     )
 }
 

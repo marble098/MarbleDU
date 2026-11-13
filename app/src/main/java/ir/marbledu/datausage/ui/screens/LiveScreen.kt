@@ -67,8 +67,8 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = FloatingBarClearance),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = FloatingBarClearance),
     ) {
         item {
             SectionTitle(text = context.getString(R.string.live_now))
@@ -84,8 +84,8 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         fraction = ((down + up) / peak).toFloat(),
                         startColor = marble.heroStart,
                         endColor = marble.heroEnd,
-                        diameter = 158.dp,
-                        stroke = 15.dp,
+                        diameter = 126.dp,
+                        stroke = 12.dp,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(MIcons.Speed, null, Modifier.size(18.dp), tint = scheme.primary)
@@ -154,7 +154,7 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     up = speedHistory.map { it.up.toFloat() },
                     downColor = marble.download,
                     upColor = marble.upload,
-                    height = 160.dp,
+                    height = 136.dp,
                     maxLabel = Formats.speed(
                         (speedHistory.maxOfOrNull { maxOf(it.down, it.up) } ?: 0.0).coerceAtLeast(1024.0) * 1.2,
                         persian,

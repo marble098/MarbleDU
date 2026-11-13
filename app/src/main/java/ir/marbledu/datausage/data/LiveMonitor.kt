@@ -22,6 +22,8 @@ class LiveMonitor(private val context: Context) {
     fun stream(
         intervalMillis: Long = 1000,
         persianProvider: () -> Boolean = { true },
+        /** وقتی سرویس پس‌زمینه خودش نمونه‌برداری می‌کند، UI فقط نمودار زنده را می‌سازد. */
+        recordUsageProvider: () -> Boolean = { true },
     ): Flow<LiveTick> = flow {
         var lastRx = 0L
         var lastTx = 0L
@@ -31,9 +33,14 @@ class LiveMonitor(private val context: Context) {
         var sessionRx = 0L
         var sessionTx = 0L
         var peak = 0.0
+        var lastNetworkRefresh = 0L
+        var lastIspCheck = 0L
+        var cachedNetwork: NetworkSnapshot? = null
         val speedHistory = ArrayDeque<Double>()
         while (true) {
-            val (rx, tx) = NetworkStatsReader.totalInterfaceBytes()
+            val counters = NetworkStatsReader.byteCounters()
+            val rx = counters.totalRxBytes
+            val tx = counters.totalTxBytes
             val now = System.currentTimeMillis()
             if (!started) {
                 lastRx = rx; lastTx = tx; lastTime = now; started = true
@@ -49,9 +56,20 @@ class LiveMonitor(private val context: Context) {
             speedHistory.addLast(down + up)
             if (speedHistory.size > 30) speedHistory.removeFirst()
             peak = max(peak, down + up)
-            IspResolver.ensureFresh(context)
-            val snapshot = NetworkStatsReader.currentNetwork(context, persianProvider())
-            UsageLedger.sample(context, rx, tx, snapshot, now)
+
+            // مشخصات شبکه و IP کندتر از شمارنده‌های سرعت تغییر می‌کنند؛ نگه‌داشتن
+            // snapshot چند ثانیه، فراخوانی‌های telephony/network interface را کم می‌کند.
+            if (cachedNetwork == null || now - lastNetworkRefresh >= NETWORK_REFRESH_MS) {
+                if (now - lastIspCheck >= ISP_REFRESH_MS) {
+                    IspResolver.ensureFresh(context)
+                    lastIspCheck = now
+                }
+                cachedNetwork = NetworkStatsReader.currentNetwork(context, persianProvider())
+                lastNetworkRefresh = now
+            }
+            val snapshot = cachedNetwork ?: NetworkStatsReader.currentNetwork(context, persianProvider())
+            if (recordUsageProvider()) UsageLedger.sample(context, counters, snapshot, now)
+            val mobileSession = UsageLedger.activeSession(context)
             emit(
                 LiveTick(
                     timestamp = now,
@@ -66,6 +84,7 @@ class LiveMonitor(private val context: Context) {
                     peakSpeed = peak,
                     network = snapshot,
                     uptimeMillis = SystemClock.elapsedRealtime(),
+                    mobileSession = mobileSession,
                 ),
             )
             delay(intervalMillis)
@@ -107,6 +126,9 @@ class LiveMonitor(private val context: Context) {
     }.flowOn(Dispatchers.IO)
 
     companion object {
+        private const val NETWORK_REFRESH_MS = 2_000L
+        private const val ISP_REFRESH_MS = 10_000L
+
         fun formatHourMinute(millis: Long): String =
             SimpleDateFormat("HH:mm", Locale.US).format(Date(millis))
 
@@ -137,4 +159,6 @@ data class LiveTick(
     val peakSpeed: Double,
     val network: NetworkSnapshot,
     val uptimeMillis: Long,
+    /** جلسه‌ی فعلی اینترنت موبایل با سیم‌کارت/اپراتور، برای نمایش زمان و حجم واقعیِ مشاهده‌شده. */
+    val mobileSession: UsageSession? = null,
 )

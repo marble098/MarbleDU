@@ -194,7 +194,9 @@ class MonitorService : Service() {
             while (isActive) {
                 val settings = latestSettings
                 val intervalSeconds = settings.monitorIntervalSeconds.coerceIn(1, 60)
-                val (rx, tx) = NetworkStatsReader.totalInterfaceBytes()
+                val counters = NetworkStatsReader.byteCounters()
+                val rx = counters.totalRxBytes
+                val tx = counters.totalTxBytes
                 val now = System.currentTimeMillis()
                 if (!initialized) {
                     lastRx = rx
@@ -225,7 +227,7 @@ class MonitorService : Service() {
                 val persian = LocaleHelper.isPersian(settings.language)
                 IspResolver.ensureFresh(this@MonitorService)
                 val snapshot = NetworkStatsReader.currentNetwork(this@MonitorService, persian)
-                UsageLedger.sample(this@MonitorService, rx, tx, snapshot, now)
+                UsageLedger.sample(this@MonitorService, counters, snapshot, now)
 
                 refreshStatsIfNeeded(settings, persian, forceStats = false)
                 postCurrentNotification(down = down, up = up)
