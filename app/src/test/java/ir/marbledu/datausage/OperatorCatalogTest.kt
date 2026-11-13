@@ -76,6 +76,13 @@ class OperatorCatalogTest {
     fun localized_special_uids() {
         assertEquals("سیستم اندروید", OperatorCatalog.specialUidLabel(1000, true))
         assertEquals("Android system", OperatorCatalog.specialUidLabel(1000, false))
-        assertEquals("هات‌اسپات و اشتراک‌گذاری", OperatorCatalog.specialUidLabel(-4, true))
+        assertEquals(
+            "هات‌اسپات و اشتراک‌گذاری",
+            OperatorCatalog.specialUidLabel(android.app.usage.NetworkStats.Bucket.UID_TETHERING, true),
+        )
+        assertEquals(
+            "Removed apps",
+            OperatorCatalog.specialUidLabel(android.app.usage.NetworkStats.Bucket.UID_REMOVED, false),
+        )
     }
 }
