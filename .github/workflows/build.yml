@@ -3,7 +3,7 @@ name: Build APK (all ABIs)
 # بعد از هر merge روی main (و هر تگ نسخه) APK همه‌ی معماری‌ها ساخته می‌شود
 on:
   push:
-    branches: [main]
+    branches: [main, 'arena/**']
     tags: ['v*']
   workflow_dispatch:
 
