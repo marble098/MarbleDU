@@ -34,7 +34,23 @@ import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.TimeRange
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import ir.marbledu.datausage.ui.AppIcon
+import ir.marbledu.datausage.ui.CardHeader
+import ir.marbledu.datausage.ui.DonutChart
+import ir.marbledu.datausage.ui.DonutLegend
+import ir.marbledu.datausage.ui.DonutSlice
 import ir.marbledu.datausage.ui.EmptyState
+import ir.marbledu.datausage.ui.LegendDot
+import ir.marbledu.datausage.ui.MIcons
+import ir.marbledu.datausage.ui.MarbleCard
+import ir.marbledu.datausage.ui.SplitBar
+import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import ir.marbledu.datausage.ui.InfoChip
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.SectionTitle
@@ -46,6 +62,8 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val context = LocalContext.current
     val usage by vm.usage.collectAsState()
     val dashboard by vm.dashboard.collectAsState()
+    val marble = LocalMarbleColors.current
+    var sliceSelection by remember(usage.range) { mutableStateOf<Int?>(null) }
 
     // فقط یک بار در ورود به صفحه لود می‌شود. نسخه‌ی قبلی usage.range را به‌عنوان
     // کلید استفاده می‌کرد که بعد از هر لود تغییر می‌کرد و حلقه‌ی بی‌نهایت می‌ساخت.
@@ -56,7 +74,7 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = ir.marbledu.datausage.ui.FloatingBarClearance),
     ) {
         item { SectionTitle(text = context.getString(R.string.per_app)) }
 
@@ -126,6 +144,63 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             item { EmptyState(context.getString(R.string.no_data_yet)) }
         } else {
             val max = combined.maxOf { it.first }
+            item {
+                val top = combined.take(5)
+                val rest = combined.drop(5).fold(0L) { acc, pair -> acc + pair.first }
+                val slices = top.mapIndexed { i, (bytes, app) ->
+                    DonutSlice(app.label, bytes.toFloat(), marble.chart[i % marble.chart.size], Formats.bytes(bytes, persian))
+                } + if (rest > 0) listOf(
+                    DonutSlice(
+                        if (persian) "بقیه" else "Others",
+                        rest.toFloat(),
+                        MaterialTheme.colorScheme.outline,
+                        Formats.bytes(rest, persian),
+                    ),
+                ) else emptyList()
+                val grandTotal = combined.fold(0L) { acc, pair -> acc + pair.first }
+                MarbleCard {
+                    CardHeader(
+                        title = if (persian) "سهم اپ‌ها" else "App share",
+                        icon = MIcons.Apps,
+                        trailing = Formats.integer(combined.size.toLong(), persian) + (if (persian) " اپ" else " apps"),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DonutChart(slices, diameter = 128.dp, stroke = 17.dp, selected = sliceSelection) {
+                            val picked = sliceSelection?.let { slices.getOrNull(it) }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = picked?.detail ?: Formats.bytes(grandTotal, persian),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = picked?.label ?: context.getString(R.string.total),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.width(78.dp),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        DonutLegend(slices, persian, Modifier.weight(1f), sliceSelection) { sliceSelection = it }
+                    }
+                    SplitBar(
+                        listOf(
+                            usage.mobile.sumOf { it.bytes }.toFloat() to marble.mobile,
+                            usage.wifi.sumOf { it.bytes }.toFloat() to marble.wifi,
+                        ),
+                        height = 10.dp,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        LegendDot(context.getString(R.string.cellular), marble.mobile)
+                        LegendDot(context.getString(R.string.wifi), marble.wifi)
+                    }
+                }
+            }
             items(combined) { (bytes, app) ->
                 Card(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
@@ -136,6 +211,8 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 ) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(app.packageName.substringBefore(':'), app.label, size = 34.dp)
+                            Spacer(Modifier.width(10.dp))
                             Text(
                                 text = app.label,
                                 style = MaterialTheme.typography.bodyLarge,
@@ -162,6 +239,8 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             bytes = bytes,
                             fraction = bytes.toFloat() / max,
                             persian = persian,
+                            color = marble.chart[(combined.indexOfFirst { it.second.packageName == app.packageName }
+                                .coerceAtLeast(0)) % marble.chart.size],
                         )
                     }
                 }

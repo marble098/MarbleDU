@@ -1,45 +1,66 @@
 package ir.marbledu.datausage.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.AppSettings
+import ir.marbledu.datausage.data.ConnectionType
+import ir.marbledu.datausage.data.DaySummary
 import ir.marbledu.datausage.data.Formats
+import ir.marbledu.datausage.data.JalaliDate
 import ir.marbledu.datausage.data.LiveMonitor
+import ir.marbledu.datausage.data.NetworkSnapshot
+import ir.marbledu.datausage.data.OperatorCatalog
+import ir.marbledu.datausage.ui.AppIcon
+import ir.marbledu.datausage.ui.ArcGauge
+import ir.marbledu.datausage.ui.BarEntry
+import ir.marbledu.datausage.ui.CardHeader
 import ir.marbledu.datausage.ui.EmptyState
+import ir.marbledu.datausage.ui.FloatingBarClearance
+import ir.marbledu.datausage.ui.HeroCard
 import ir.marbledu.datausage.ui.InfoChip
+import ir.marbledu.datausage.ui.LegendDot
 import ir.marbledu.datausage.ui.MIcons
 import ir.marbledu.datausage.ui.MainViewModel
+import ir.marbledu.datausage.ui.MarbleCard
+import ir.marbledu.datausage.ui.Metric
+import ir.marbledu.datausage.ui.OperatorBadge
 import ir.marbledu.datausage.ui.SectionTitle
+import ir.marbledu.datausage.ui.SplitBar
+import ir.marbledu.datausage.ui.StackedBarChart
 import ir.marbledu.datausage.ui.StatCard
 import ir.marbledu.datausage.ui.UsageBar
+import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import ir.marbledu.datausage.util.UsageAccess
 
 @Composable
@@ -48,12 +69,15 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
     val dashboard by vm.dashboard.collectAsState()
     val usage by vm.usage.collectAsState()
     val tick by vm.tick.collectAsState()
+    val history by vm.history.collectAsState()
+    val marble = LocalMarbleColors.current
+    val scheme = MaterialTheme.colorScheme
     val iran = settings.iran
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 12.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = FloatingBarClearance),
     ) {
         item {
             Column {
@@ -65,28 +89,26 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 Text(
                     text = context.getString(R.string.app_tagline),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = scheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (iran.detectOperator) {
-                        InfoChip(
-                            text = settings.operatorOverride.ifBlank {
-                                dashboard.operatorName.ifBlank {
-                                    context.getString(R.string.network_unknown)
-                                }
-                            },
-                            color = MaterialTheme.colorScheme.tertiary,
-                        )
-                    }
-                    InfoChip(
-                        text = networkLabel(tick?.network?.type?.name, persian),
-                        color = MaterialTheme.colorScheme.secondary,
-                    )
-                    if (tick?.network?.isValidated == true) {
-                        InfoChip(text = if (persian) "آنلاین" else "Online")
-                    }
-                }
+                Text(
+                    text = JalaliDate.weekday(System.currentTimeMillis(), persian) + "، " +
+                        JalaliDate.fromMillis(System.currentTimeMillis()).long(persian) + "  •  " +
+                        JalaliDate.gregorianLong(System.currentTimeMillis(), persian),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.primary,
+                )
+            }
+        }
+
+        if (iran.detectOperator) {
+            item {
+                ConnectionCard(
+                    network = tick?.network,
+                    settings = settings,
+                    persian = persian,
+                    onRetry = { vm.refreshWifiOperator() },
+                )
             }
         }
 
@@ -94,21 +116,19 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
             item {
                 Card(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = scheme.errorContainer),
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             context.getString(R.string.grant_usage_access),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            color = scheme.onErrorContainer,
                         )
                         Text(
                             context.getString(R.string.grant_usage_access_desc),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            color = scheme.onErrorContainer,
                         )
                         TextButton(onClick = { UsageAccess.openSettings(context) }) {
                             Text(context.getString(R.string.open))
@@ -120,53 +140,91 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
 
         if (iran.showDataUsageReport) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatCard(
-                        title = context.getString(R.string.today_usage),
-                        value = Formats.bytes(dashboard.todayMobileBytes, persian),
-                        subtitle = when {
+                val mobile = dashboard.todayMobile
+                val wifi = dashboard.todayWifi
+                val total = mobile.total + wifi.total
+                HeroCard {
+                    Text(
+                        context.getString(R.string.today_usage),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = LocalContentColor.current.copy(alpha = 0.85f),
+                    )
+                    Text(
+                        Formats.bytes(total, persian),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = when {
                             dashboard.todayVariationPercent > 0 ->
-                                "▲ ${Formats.integer(dashboard.todayVariationPercent.toLong(), persian)}٪ " +
-                                    (if (persian) "بیشتر از دیروز" else "vs yesterday")
+                                "▲ ${Formats.integer(dashboard.todayVariationPercent.toLong(), persian)}" +
+                                    (if (persian) "٪ داده‌ی موبایل بیشتر از دیروز" else "% more mobile data than yesterday")
                             dashboard.todayVariationPercent < 0 ->
-                                "▼ ${Formats.integer((-dashboard.todayVariationPercent).toLong(), persian)}٪ " +
-                                    (if (persian) "کمتر از دیروز" else "vs yesterday")
-                            else -> if (persian) "داده موبایل" else "mobile data"
+                                "▼ ${Formats.integer((-dashboard.todayVariationPercent).toLong(), persian)}" +
+                                    (if (persian) "٪ داده‌ی موبایل کمتر از دیروز" else "% less mobile data than yesterday")
+                            else -> if (persian) "از نیمه‌شب تا الان" else "since midnight"
                         },
-                        icon = MIcons.Download,
-                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LocalContentColor.current.copy(alpha = 0.9f),
                     )
-                    StatCard(
-                        title = context.getString(R.string.this_month),
-                        value = Formats.bytes(dashboard.monthMobileBytes, persian),
-                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
-                        icon = MIcons.Chart,
-                        accent = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            // مصرف وای‌فای هم نمایش داده می‌شود (قبل از این فقط موبایل دیده می‌شد).
-            if (dashboard.todayWifiBytes > 0 || dashboard.monthWifiBytes > 0) {
-                item {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard(
-                            title = context.getString(R.string.wifi),
-                            value = Formats.bytes(dashboard.todayWifiBytes, persian),
-                            subtitle = if (persian) "امروز" else "today",
-                            icon = MIcons.Wifi,
-                            accent = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.weight(1f),
+                        Metric(
+                            context.getString(R.string.download),
+                            Formats.bytes(mobile.rx + wifi.rx, persian),
+                            LocalContentColor.current,
+                            Modifier.weight(1f),
+                            MIcons.Download,
                         )
-                        StatCard(
-                            title = context.getString(R.string.this_month),
-                            value = Formats.bytes(dashboard.monthWifiBytes, persian),
-                            subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
-                            icon = MIcons.Wifi,
-                            accent = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.weight(1f),
+                        Metric(
+                            context.getString(R.string.upload),
+                            Formats.bytes(mobile.tx + wifi.tx, persian),
+                            LocalContentColor.current,
+                            Modifier.weight(1f),
+                            MIcons.Upload,
                         )
                     }
+                    SplitBar(
+                        listOf(
+                            mobile.total.toFloat() to Color.White,
+                            wifi.total.toFloat() to Color.White.copy(alpha = 0.45f),
+                        ),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Metric(
+                            context.getString(R.string.cellular),
+                            Formats.bytes(mobile.total, persian),
+                            LocalContentColor.current,
+                            Modifier.weight(1f),
+                            MIcons.Signal,
+                        )
+                        Metric(
+                            context.getString(R.string.wifi),
+                            Formats.bytes(wifi.total, persian),
+                            LocalContentColor.current,
+                            Modifier.weight(1f),
+                            MIcons.Wifi,
+                        )
+                    }
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatCard(
+                        title = context.getString(R.string.cellular),
+                        value = Formats.bytes(dashboard.monthMobileBytes, persian),
+                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
+                        icon = MIcons.Signal,
+                        accent = marble.mobile,
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatCard(
+                        title = context.getString(R.string.wifi),
+                        value = Formats.bytes(dashboard.monthWifiBytes, persian),
+                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
+                        icon = MIcons.Wifi,
+                        accent = marble.wifi,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }
@@ -181,14 +239,14 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 subtitle = "↓ ${Formats.speed(tick?.downBytesPerSecond ?: 0.0, persian)}   " +
                     "↑ ${Formats.speed(tick?.upBytesPerSecond ?: 0.0, persian)}",
                 icon = MIcons.Speed,
-                accent = MaterialTheme.colorScheme.secondary,
+                accent = scheme.secondary,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
 
-        if (iran.showDataUsageReport && dashboard.week.any { it.bytes > 0 }) {
+        if (iran.showDataUsageReport && history.days.takeLast(7).any { it.total > 0 }) {
             item {
-                WeeklyTrendCard(dashboard.week, persian)
+                WeeklyTrendCard(history.days.takeLast(7), persian)
             }
         }
 
@@ -210,7 +268,7 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                                 "${Formats.number(dashboard.averagePingMs, persian, 0)} ${context.getString(R.string.ms)}"
                             } else "--",
                             icon = MIcons.Timer,
-                            accent = MaterialTheme.colorScheme.tertiary,
+                            accent = scheme.tertiary,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -222,19 +280,57 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
             item {
                 val used = dashboard.monthMobileBytes
                 val fraction = Formats.percentOf(used, settings.dataCapBytes)
-                StatCard(
-                    title = context.getString(R.string.data_cap),
-                    value = "${Formats.bytes(used, persian)} / ${Formats.bytes(settings.dataCapBytes, persian)}",
-                    subtitle = if (fraction > 0.9f) context.getString(R.string.cap_reached)
-                    else "${context.getString(R.string.remaining)}: ${
-                        Formats.bytes((settings.dataCapBytes - used).coerceAtLeast(0), persian)
-                    }",
-                    icon = MIcons.Shield,
-                    accent = if (fraction > 0.9f) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
-                    progress = fraction,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                val danger = fraction > 0.9f
+                MarbleCard {
+                    CardHeader(
+                        title = context.getString(R.string.data_cap),
+                        icon = MIcons.Shield,
+                        tint = if (danger) scheme.error else scheme.primary,
+                        trailing = Formats.bytes(settings.dataCapBytes, persian),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ArcGauge(
+                            fraction = fraction,
+                            startColor = if (danger) scheme.error else marble.heroStart,
+                            endColor = if (danger) scheme.error else marble.heroEnd,
+                            diameter = 128.dp,
+                            stroke = 14.dp,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    Formats.number(fraction * 100.0, persian, 0) + (if (persian) "٪" else "%"),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    context.getString(R.string.used),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = scheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Metric(
+                                context.getString(R.string.used),
+                                Formats.bytes(used, persian),
+                                if (danger) scheme.error else scheme.primary,
+                            )
+                            Metric(
+                                context.getString(R.string.remaining),
+                                Formats.bytes((settings.dataCapBytes - used).coerceAtLeast(0), persian),
+                                scheme.secondary,
+                            )
+                            if (danger) {
+                                Text(
+                                    context.getString(R.string.cap_reached),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = scheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -261,13 +357,18 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 val top = usage.mobile.take(5)
                 val max = top.maxOfOrNull { it.bytes } ?: 1L
                 items(top) { app ->
-                    UsageBar(
-                        label = app.label,
-                        bytes = app.bytes,
-                        fraction = app.bytes.toFloat() / max,
-                        persian = persian,
-                        trailing = LiveMonitor.formatHourMinute(app.lastTimestamp),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIcon(app.packageName.substringBefore(':'), app.label, size = 34.dp)
+                        Spacer(Modifier.width(10.dp))
+                        UsageBar(
+                            label = app.label,
+                            bytes = app.bytes,
+                            fraction = app.bytes.toFloat() / max,
+                            persian = persian,
+                            trailing = LiveMonitor.formatHourMinute(app.lastTimestamp),
+                            color = marble.chart[top.indexOf(app).coerceAtLeast(0) % marble.chart.size],
+                        )
+                    }
                 }
             }
         }
@@ -276,77 +377,159 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
     }
 }
 
-/** نمودار میله‌ای ساده‌ی ۷ روز اخیر – بدون کتابخانه‌ی اضافی. */
+/**
+ * کارت «اینترنت فعلی»: نشان و نام اپراتوری که همین الان اینترنت از آن می‌آید.
+ * روی وای‌فای هم اپراتورِ مودم نوشته می‌شود و اپراتور سیم‌کارت جدا می‌آید.
+ */
 @Composable
-private fun WeeklyTrendCard(week: List<ir.marbledu.datausage.data.DayUsage>, persian: Boolean) {
-    val context = LocalContext.current
-    val max = week.maxOfOrNull { it.bytes }?.coerceAtLeast(1L) ?: 1L
-    Card(
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(MIcons.Chart, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.tertiary)
-                Spacer(Modifier.size(8.dp))
+private fun ConnectionCard(
+    network: NetworkSnapshot?,
+    settings: AppSettings,
+    persian: Boolean,
+    onRetry: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val type = network?.type ?: ConnectionType.OFFLINE
+    val onWifi = type == ConnectionType.WIFI || type == ConnectionType.ETHERNET
+    val override = settings.operatorOverride
+    val sim = if (override.isNotBlank()) OperatorCatalog.resolveName(override) else network?.simOperator
+    val operator = when {
+        network == null -> OperatorCatalog.byId(OperatorCatalog.ID_UNKNOWN)
+        type == ConnectionType.CELLULAR && override.isNotBlank() -> OperatorCatalog.resolveName(override)
+        else -> network.operator
+    }
+    val resolved = network?.wifiOperatorResolved == true
+    MarbleCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OperatorBadge(
+                operator,
+                size = 56.dp,
+                transportIcon = when (type) {
+                    ConnectionType.WIFI, ConnectionType.ETHERNET -> MIcons.Wifi
+                    ConnectionType.CELLULAR -> MIcons.Signal
+                    else -> null
+                },
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = if (persian) "روند ۷ روز اخیر" else "Last 7 days",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
+                    text = if (persian) "اینترنت فعلی" else "Current internet",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.weight(1f))
                 Text(
-                    text = Formats.bytes(week.sumOf { it.bytes }, persian),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.tertiary,
+                    text = when {
+                        type == ConnectionType.OFFLINE -> if (persian) "بدون اتصال" else "Offline"
+                        onWifi && !resolved -> if (persian) "وای‌فای" else "Wi-Fi"
+                        else -> operator.name(persian)
+                    },
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = when {
+                        onWifi && resolved -> (if (persian) "از طریق وای‌فای" else "over Wi-Fi") +
+                            (if ((network?.ispAsn ?: 0) > 0) "  •  AS${network?.ispAsn}" else "")
+                        onWifi && settings.wifiIspLookup ->
+                            if (persian) "در حال شناسایی اپراتور وای‌فای…" else "Identifying the Wi-Fi operator…"
+                        onWifi -> if (persian) "شناسایی اپراتور وای‌فای خاموش است" else "Wi-Fi operator lookup is off"
+                        else -> networkLabel(type.name, persian)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            Row(
-                Modifier.fillMaxWidth().height(96.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                week.forEach { day ->
-                    Column(
-                        Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Bottom,
-                    ) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height((8 + 76 * (day.bytes.toFloat() / max)).dp)
-                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f)),
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = dayLabel(day.startMillis, persian),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+        }
+        if (onWifi && resolved && !network?.ispName.isNullOrBlank()) {
+            Text(
+                text = "ISP: ${network?.ispName}",
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (network?.isValidated == true) {
+                InfoChip(text = if (persian) "آنلاین" else "Online", color = scheme.secondary)
+            }
+            if (network?.vpnActive == true) {
+                InfoChip(text = if (persian) "VPN روشن" else "VPN on", color = scheme.tertiary)
+            }
+            if (onWifi && sim != null) {
+                InfoChip(
+                    text = (if (persian) "سیم‌کارت: " else "SIM: ") + sim.name(persian),
+                    color = Color(sim.brandColor).let { c -> if (LocalMarbleColors.current.dark) scheme.primary else c },
+                )
+            }
+            if (onWifi && settings.wifiIspLookup) {
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                    Icon(MIcons.Refresh, null, Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (persian) "بررسی دوباره" else "Re-check", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
     }
 }
 
-private fun dayLabel(millis: Long, persian: Boolean): String {
-    val names = if (persian) {
-        // شنبه تا جمعه
-        listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
-    } else {
-        // یکشنبه تا شنبه
-        listOf("S", "M", "T", "W", "T", "F", "S")
+/** نمودار ۷ روز اخیر: ستون‌های دورنگ (موبایل/وای‌فای)، قابل لمس. */
+@Composable
+private fun WeeklyTrendCard(week: List<DaySummary>, persian: Boolean) {
+    val context = LocalContext.current
+    val marble = LocalMarbleColors.current
+    val scheme = MaterialTheme.colorScheme
+    var selection by remember(week.size) { mutableStateOf<Int?>(null) }
+    val total = week.fold(0L) { acc, d -> acc + d.total }
+    MarbleCard {
+        CardHeader(
+            title = if (persian) "روند ۷ روز اخیر" else "Last 7 days",
+            icon = MIcons.Chart,
+            tint = scheme.tertiary,
+            trailing = Formats.bytes(total, persian),
+        )
+        StackedBarChart(
+            entries = week.map { d ->
+                BarEntry(
+                    JalaliDate.weekdayShort(d.startMillis, persian) + " " + JalaliDate.axisDay(d.startMillis, persian),
+                    listOf(d.mobile.total.toFloat(), d.wifi.total.toFloat()),
+                )
+            },
+            colors = listOf(marble.mobile, marble.wifi),
+            height = 170.dp,
+            selected = selection,
+            onSelect = { selection = if (selection == it) null else it },
+            maxLabel = Formats.bytes(week.maxOf { it.total }, persian),
+            averageLabel = (if (persian) "میانگین " else "avg ") + Formats.bytes(total / week.size.coerceAtLeast(1), persian),
+        )
+        val picked = selection?.let { week.getOrNull(it) }
+        if (picked != null) {
+            Text(
+                text = JalaliDate.weekday(picked.startMillis, persian) + "، " +
+                    JalaliDate.fromMillis(picked.startMillis).long(persian) + "  •  " +
+                    JalaliDate.gregorianNumeric(picked.startMillis, persian),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Metric(context.getString(R.string.total), Formats.bytes(picked.total, persian), scheme.tertiary, Modifier.weight(1f))
+                Metric(context.getString(R.string.download), Formats.bytes(picked.all.rx, persian), marble.download, Modifier.weight(1f), MIcons.Download)
+                Metric(context.getString(R.string.upload), Formats.bytes(picked.all.tx, persian), marble.upload, Modifier.weight(1f), MIcons.Upload)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            LegendDot(context.getString(R.string.cellular), marble.mobile)
+            LegendDot(context.getString(R.string.wifi), marble.wifi)
+            if (picked == null) {
+                LegendDot(if (persian) "روی ستون‌ها بزن" else "Tap a bar", scheme.outline)
+            }
+        }
     }
-    val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-    // Calendar.DAY_OF_WEEK: یکشنبه=1 ... شنبه=7
-    val index = if (persian) (cal.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
-    else cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
-    return names[index]
 }
 
 @Composable

@@ -30,7 +30,18 @@ import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.LiveMonitor
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextOverflow
+import ir.marbledu.datausage.ui.ArcGauge
+import ir.marbledu.datausage.ui.CardHeader
+import ir.marbledu.datausage.ui.FloatingBarClearance
+import ir.marbledu.datausage.ui.LegendDot
 import ir.marbledu.datausage.ui.MIcons
+import ir.marbledu.datausage.ui.MarbleCard
+import ir.marbledu.datausage.ui.Metric
+import ir.marbledu.datausage.ui.OperatorBadge
+import ir.marbledu.datausage.ui.SpeedLineChart
+import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.SectionTitle
 import ir.marbledu.datausage.ui.StatCard
@@ -41,63 +52,121 @@ fun LiveScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val tick by vm.tick.collectAsState()
     val pings by vm.ping.collectAsState()
     val t = tick
+    val speedHistory by vm.speedHistory.collectAsState()
+    val marble = LocalMarbleColors.current
+    val scheme = MaterialTheme.colorScheme
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = FloatingBarClearance),
     ) {
         item {
             SectionTitle(text = context.getString(R.string.live_now))
         }
 
         item {
-            Card(
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(30.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    Modifier.padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(MIcons.Download, null, Modifier.size(20.dp))
-                        Spacer(Modifier.size(8.dp))
-                        Text(
+            val down = t?.downBytesPerSecond ?: 0.0
+            val up = t?.upBytesPerSecond ?: 0.0
+            val peak = (t?.peakSpeed ?: 0.0).coerceAtLeast(64.0 * 1024)
+            MarbleCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ArcGauge(
+                        fraction = ((down + up) / peak).toFloat(),
+                        startColor = marble.heroStart,
+                        endColor = marble.heroEnd,
+                        diameter = 158.dp,
+                        stroke = 15.dp,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(MIcons.Speed, null, Modifier.size(18.dp), tint = scheme.primary)
+                            Text(
+                                Formats.bytes((down + up).toLong(), persian),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                            )
+                            Text(
+                                if (persian) "بر ثانیه" else "per second",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = scheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Metric(
                             context.getString(R.string.download),
-                            style = MaterialTheme.typography.labelLarge,
+                            Formats.speed(down, persian),
+                            marble.download,
+                            icon = MIcons.Download,
                         )
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            Formats.speed(t?.downBytesPerSecond ?: 0.0, persian),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                    LinearWavyProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f),
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(MIcons.Upload, null, Modifier.size(20.dp))
-                        Spacer(Modifier.size(8.dp))
-                        Text(
+                        Metric(
                             context.getString(R.string.upload),
-                            style = MaterialTheme.typography.labelLarge,
+                            Formats.speed(up, persian),
+                            marble.upload,
+                            icon = MIcons.Upload,
                         )
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            Formats.speed(t?.upBytesPerSecond ?: 0.0, persian),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
+                        val network = t?.network
+                        if (network != null && settings.iran.detectOperator) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                OperatorBadge(network.operator, size = 26.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    network.operator.name(persian),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                     }
+                }
+            }
+        }
+
+        item {
+            MarbleCard {
+                CardHeader(
+                    title = if (persian) "نمودار زنده‌ی سرعت" else "Live speed chart",
+                    icon = MIcons.Live,
+                    tint = scheme.primary,
+                    subtitle = if (persian) "۶۰ ثانیه‌ی اخیر" else "Last 60 seconds",
+                )
+                SpeedLineChart(
+                    down = speedHistory.map { it.down.toFloat() },
+                    up = speedHistory.map { it.up.toFloat() },
+                    downColor = marble.download,
+                    upColor = marble.upload,
+                    height = 160.dp,
+                    maxLabel = Formats.speed(
+                        (speedHistory.maxOfOrNull { maxOf(it.down, it.up) } ?: 0.0).coerceAtLeast(1024.0) * 1.2,
+                        persian,
+                    ),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    LegendDot(context.getString(R.string.download), marble.download)
+                    LegendDot(context.getString(R.string.upload), marble.upload)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Metric(
+                        if (persian) "بیشترین دانلود" else "Max download",
+                        Formats.speed(speedHistory.maxOfOrNull { it.down } ?: 0.0, persian),
+                        marble.download,
+                        Modifier.weight(1f),
+                    )
+                    Metric(
+                        if (persian) "بیشترین آپلود" else "Max upload",
+                        Formats.speed(speedHistory.maxOfOrNull { it.up } ?: 0.0, persian),
+                        marble.upload,
+                        Modifier.weight(1f),
+                    )
+                    Metric(
+                        if (persian) "حجم این ۶۰ ثانیه" else "Volume (60 s)",
+                        Formats.bytes(speedHistory.sumOf { it.down + it.up }.toLong(), persian),
+                        scheme.tertiary,
+                        Modifier.weight(1f),
+                    )
                 }
             }
         }

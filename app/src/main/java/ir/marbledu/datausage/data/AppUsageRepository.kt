@@ -206,6 +206,149 @@ class AppUsageRepository(private val context: Context) {
         buckets.map { HourUsage(it.key, it.value) }.sortedByDescending { it.bytes }
     }
 
+    // ------------------------------------------------------------------
+    // گزارش ۳۰ روزه
+    // ------------------------------------------------------------------
+
+    @SuppressLint("MissingPermission")
+    private fun deviceTraffic(
+        manager: NetworkStatsManager,
+        networkType: Int,
+        subscriber: String?,
+        start: Long,
+        end: Long,
+    ): Traffic {
+        if (end <= start) return Traffic()
+        return runCatching {
+            val bucket = manager.querySummaryForDevice(networkType, subscriber, start, end)
+            if (bucket == null) Traffic()
+            else Traffic(bucket.rxBytes.coerceAtLeast(0), bucket.txBytes.coerceAtLeast(0))
+        }.getOrDefault(Traffic())
+    }
+
+    /** خلاصه‌ی هر روز از [days] روز اخیر (قدیمی‌ترین اول): دانلود/آپلودِ موبایل و وای‌فای. */
+    suspend fun daySummaries(days: Int = 30): List<DaySummary> = withContext(Dispatchers.IO) {
+        val manager = nsm ?: return@withContext emptyList()
+        val subscriber = subscriberId()
+        val now = System.currentTimeMillis()
+        val calendar = Calendar.getInstance().apply {
+            timeInMillis = now
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            add(Calendar.DAY_OF_MONTH, -(days - 1).coerceAtLeast(0))
+        }
+        val result = ArrayList<DaySummary>(days.coerceAtLeast(0))
+        repeat(days.coerceAtLeast(0)) {
+            val start = calendar.timeInMillis
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
+            val end = minOf(calendar.timeInMillis, now)
+            result.add(
+                DaySummary(
+                    startMillis = start,
+                    endMillis = calendar.timeInMillis,
+                    mobile = deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriber, start, end),
+                    wifi = deviceTraffic(manager, ConnectivityManager.TYPE_WIFI, null, start, end),
+                ),
+            )
+        }
+        result
+    }
+
+    /** ۲۴ ساعتِ یک روز: هر ساعت چقدر دانلود/آپلود روی موبایل و وای‌فای. */
+    suspend fun dayHours(dayStart: Long, dayEnd: Long): List<HourTraffic> = withContext(Dispatchers.IO) {
+        val manager = nsm ?: return@withContext emptyList()
+        val subscriber = subscriberId()
+        val now = System.currentTimeMillis()
+        val calendar = Calendar.getInstance().apply { timeInMillis = dayStart }
+        val result = ArrayList<HourTraffic>(24)
+        var guard = 0
+        while (calendar.timeInMillis < dayEnd && guard < 26) {
+            guard++
+            val start = calendar.timeInMillis
+            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+            calendar.add(Calendar.HOUR_OF_DAY, 1)
+            val end = minOf(calendar.timeInMillis, dayEnd, now)
+            val mobile = deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriber, start, end)
+            val wifi = deviceTraffic(manager, ConnectivityManager.TYPE_WIFI, null, start, end)
+            val existing = result.indexOfFirst { it.hour == hour }
+            if (existing >= 0) {
+                // روز تغییر ساعت رسمی: همان ساعت دوبار می‌آید.
+                val old = result[existing]
+                result[existing] = old.copy(mobile = old.mobile + mobile, wifi = old.wifi + wifi)
+            } else {
+                result.add(HourTraffic(hour, mobile, wifi))
+            }
+        }
+        // همیشه ۲۴ ستون، حتی اگر روز هنوز تمام نشده باشد.
+        (0..23).map { h -> result.firstOrNull { it.hour == h } ?: HourTraffic(h, Traffic(), Traffic()) }
+    }
+
+    /** مصرف هر اپ در یک بازه، با تفکیک دانلود/آپلود و موبایل/وای‌فای. */
+    @SuppressLint("MissingPermission")
+    suspend fun appTraffic(fromMillis: Long, toMillis: Long): List<AppTraffic> = withContext(Dispatchers.IO) {
+        val manager = nsm ?: return@withContext emptyList()
+        val map = LinkedHashMap<Int, AppTraffic>()
+        fun collect(networkType: Int, subscriber: String?, wifi: Boolean) {
+            val stats = runCatching {
+                manager.querySummary(networkType, subscriber, fromMillis, toMillis)
+            }.getOrNull() ?: return
+            try {
+                val bucket = NetworkStats.Bucket()
+                while (stats.hasNextBucket() && stats.getNextBucket(bucket)) {
+                    val traffic = Traffic(bucket.rxBytes.coerceAtLeast(0), bucket.txBytes.coerceAtLeast(0))
+                    if (traffic.total <= 0) continue
+                    val uid = bucket.uid
+                    val existing = map[uid] ?: run {
+                        val pkg = if (uid >= 0) runCatching { pm.getNameForUid(uid) }.getOrNull() else null
+                        AppTraffic(
+                            uid = uid,
+                            packageName = pkg?.substringBefore(':') ?: "uid:$uid",
+                            label = specialLabel(uid) ?: labelFor(pkg?.substringBefore(':')),
+                            mobile = Traffic(),
+                            wifi = Traffic(),
+                        )
+                    }
+                    map[uid] = if (wifi) existing.copy(wifi = existing.wifi + traffic)
+                    else existing.copy(mobile = existing.mobile + traffic)
+                }
+            } catch (ignored: Exception) {
+                // آمار ناقص بهتر از کرش است.
+            } finally {
+                runCatching { stats.close() }
+            }
+        }
+        collect(ConnectivityManager.TYPE_MOBILE, subscriberId(), wifi = false)
+        collect(ConnectivityManager.TYPE_WIFI, null, wifi = true)
+        map.values.sortedByDescending { it.total.total }
+    }
+
+    /** شناسه‌های ویژه‌ی سیستم که اپ واقعی نیستند (رابط کاربری نام بومی می‌گذارد). */
+    private fun specialLabel(uid: Int): String? = when (uid) {
+        NetworkStats.Bucket.UID_REMOVED -> "Removed apps"
+        NetworkStats.Bucket.UID_TETHERING -> "Tethering"
+        0 -> "root"
+        1000 -> "Android system"
+        else -> null
+    }
+
+    /** گزارش کامل یک روز. */
+    suspend fun dayReport(summary: DaySummary): DayReport {
+        val now = System.currentTimeMillis()
+        val end = minOf(summary.endMillis, now)
+        val hours = dayHours(summary.startMillis, summary.endMillis)
+        val apps = appTraffic(summary.startMillis, end)
+        val sim = NetworkStatsReader.simOperator(context)
+        val operators = UsageLedger.reconcile(
+            recorded = UsageLedger.forDay(context, summary.startMillis),
+            systemMobile = summary.mobile,
+            systemWifi = summary.wifi,
+            defaultMobileId = sim?.id ?: OperatorCatalog.ID_MOBILE,
+        )
+        return DayReport(summary, hours, apps, operators)
+    }
+
     /** مصرف تک‌تک اپ‌ها به تفکیک وای‌فای و موبایل (نمای جزئیات). */
     suspend fun detailedBreakdown(from: Long, to: Long): Pair<List<AppUsage>, List<AppUsage>> {
         val mobile = usageByApp(from, to, ConnectionType.CELLULAR)
@@ -226,6 +369,41 @@ class AppUsageRepository(private val context: Context) {
 }
 
 data class DayUsage(val startMillis: Long, val bytes: Long)
+
+/** خلاصه‌ی یک روز تقویمی. */
+data class DaySummary(
+    val startMillis: Long,
+    val endMillis: Long,
+    val mobile: Traffic,
+    val wifi: Traffic,
+) {
+    val all: Traffic get() = mobile + wifi
+    val total: Long get() = mobile.total + wifi.total
+}
+
+/** مصرف یک ساعت از روز (۰ تا ۲۳). */
+data class HourTraffic(val hour: Int, val mobile: Traffic, val wifi: Traffic) {
+    val total: Long get() = mobile.total + wifi.total
+    val rx: Long get() = mobile.rx + wifi.rx
+    val tx: Long get() = mobile.tx + wifi.tx
+}
+
+data class AppTraffic(
+    val uid: Int,
+    val packageName: String,
+    val label: String,
+    val mobile: Traffic,
+    val wifi: Traffic,
+) {
+    val total: Traffic get() = mobile + wifi
+}
+
+data class DayReport(
+    val summary: DaySummary,
+    val hours: List<HourTraffic>,
+    val apps: List<AppTraffic>,
+    val operators: List<OperatorTraffic>,
+)
 
 /** مصرف تجمیعی در یک ساعت شبانه‌روز (۰ تا ۲۳). */
 data class HourUsage(val hour: Int, val bytes: Long)

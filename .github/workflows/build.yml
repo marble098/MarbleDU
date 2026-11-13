@@ -52,9 +52,15 @@ jobs:
           ./gradlew --no-daemon testDebugUnitTest --stacktrace > gradle-test.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
+            # خطاهای کامپایل و تست‌های ناموفق را مستقیم نشان بده تا لازم نباشد لاگ دانلود شود.
+            grep -E '^e: |^w: .*error|FAILED|AssertionError|ComparisonFailure' gradle-test.log | head -60 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
             awk '/What went wrong/{flag=1} flag' gradle-test.log | head -25 | while IFS= read -r line; do
               [ -n "$line" ] && echo "::error::$line"
             done
+            echo "----- last 150 lines of gradle-test.log -----"
+            tail -150 gradle-test.log
           fi
           exit $code
 
@@ -65,9 +71,14 @@ jobs:
           ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace > gradle-build.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
+            grep -E '^e: |error:|ERROR:' gradle-build.log | head -60 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
             awk '/What went wrong/{flag=1} flag' gradle-build.log | head -25 | while IFS= read -r line; do
               [ -n "$line" ] && echo "::error::$line"
             done
+            echo "----- last 150 lines of gradle-build.log -----"
+            tail -150 gradle-build.log
           fi
           exit $code
 

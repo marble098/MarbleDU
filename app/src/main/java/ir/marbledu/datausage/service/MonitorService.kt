@@ -14,7 +14,10 @@ import ir.marbledu.datausage.MarbleDuApp
 import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.Formats
+import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.NetworkStatsReader
+import ir.marbledu.datausage.data.OperatorCatalog
+import ir.marbledu.datausage.data.UsageLedger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,6 +55,7 @@ class MonitorService : Service() {
                 runBlocking { (application as MarbleDuApp).settingsRepository.settings.first() }
             }.getOrNull()
             val intervalSeconds = (settings?.monitorIntervalSeconds ?: 5).coerceIn(1, 60)
+            IspResolver.enabled = settings?.wifiIspLookup ?: true
             val persian = when (settings?.language) {
                 AppLanguage.PERSIAN -> true
                 AppLanguage.ENGLISH -> false
@@ -72,10 +76,16 @@ class MonitorService : Service() {
                 val down = max(0L, rx - lastRx) * 1000.0 / elapsed
                 val up = max(0L, tx - lastTx) * 1000.0 / elapsed
                 lastRx = rx; lastTx = tx; lastTime = now
+                // حتی وقتی اپ بسته است، مصرف به اسم اپراتورِ همان لحظه ثبت می‌شود
+                // تا گزارش ۳۰ روزه بتواند «هر اپراتور چقدر» را نشان بدهد.
+                IspResolver.ensureFresh(this@MonitorService)
                 val snapshot = NetworkStatsReader.currentNetwork(this@MonitorService)
+                UsageLedger.sample(this@MonitorService, rx, tx, snapshot, now)
+                val carrier = if (snapshot.operator.id == OperatorCatalog.ID_UNKNOWN) snapshot.carrierName
+                else snapshot.operator.name(persian)
                 notificationManager().notify(
                     NOTIFICATION_ID,
-                    buildNotification(down, up, snapshot.carrierName, persian),
+                    buildNotification(down, up, carrier, persian),
                 )
                 delay(intervalSeconds * 1000L)
             }
