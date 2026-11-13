@@ -91,7 +91,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          find app/build/outputs/apk -name '*.apk' -exec cp {} dist/ \;
+          VERSION=$(grep -E '^versionName=' version.properties | cut -d= -f2)
+          for apk in $(find app/build/outputs/apk -name '*.apk'); do
+            name=$(basename "$apk")
+            type=$(echo "$name" | sed -E 's/.*-(debug|release)\.apk/\1/')
+            arch=$(echo "$name" | sed -E 's/app-(.*)-(debug|release)\.apk/\1/')
+            cp "$apk" "dist/MarbleDU-${VERSION}-${arch}-${type}.apk"
+          done
           ls -la dist
           {
             echo "### APK ها"
