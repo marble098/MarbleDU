@@ -1,23 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- حلقه‌ی سیگنال -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:fillColor="#00000000"
-        android:pathData="M34,68 a20,20 0 1,1 40,0 a20,20 0 1,1 -40,0" />
-    <!-- نمودار مصرف -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,62 h7 v12 h-7 z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M50.5,50 h7 v24 h-7 z" />
-    <path
-        android:fillColor="#8FF3E8"
-        android:pathData="M63,40 h7 v34 h-7 z" />
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- High-contrast network pulse + traffic bars, centered within adaptive-icon safe zone. -->
+    <path android:fillColor="#FFFFFF" android:pathData="M54,23a31,31 0,1 0,0.1 0z" />
+    <path android:fillColor="#10243A" android:pathData="M54,29a25,25 0,1 0,0.1 0z" />
+    <path android:fillColor="#173B58" android:pathData="M54,33a21,21 0,1 0,0.1 0z" />
+    <path android:fillColor="#00D6C5" android:pathData="M54,33a21,21 0,0 1,20 15l-7,2a14,14 0,0 0,-13 -10z" />
+    <path android:fillColor="#00D6C5" android:pathData="M54,34l3,0l-1,14l-2,0z" />
+    <path android:fillColor="#00D6C5" android:pathData="M54,47a7,7 0,1 1,0 14a7,7 0,0 1,0 -14" />
+    <path android:fillColor="#FFFFFF" android:pathData="M33,68h9v14h-9zM49.5,62h9v20h-9zM66,55h9v27h-9z" />
+    <path android:fillColor="#00D6C5" android:pathData="M66,55h9v27h-9z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M30,86h48v3h-48z" />
 </vector>

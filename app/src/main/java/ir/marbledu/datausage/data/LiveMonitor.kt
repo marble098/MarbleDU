@@ -97,14 +97,26 @@ class LiveMonitor(private val context: Context) {
         }
     }.flowOn(Dispatchers.IO)
 
-    /** «پینگ» بدون نیاز به root: اندازه‌گیری زمان برقراری اتصال TCP. */
+    /**
+     * اندازه‌گیری RTT واقعی با ICMP echo. اتصال TCP به پورت 443 را به‌اشتباه
+     * به‌عنوان پینگ گزارش نمی‌کنیم؛ connect ممکن است به‌علت پاسخ سریعِ proxy/firewall
+     * چند میلی‌ثانیه باشد، حتی وقتی RTT واقعی اینترنت بسیار بیشتر است.
+     * در صورت نبود ابزار/مجوز، نتیجه ناموفق محسوب می‌شود و مقدار ساختگی نمایش داده نمی‌شود.
+     */
     private fun tcpPing(host: String): Long {
-        val start = System.nanoTime()
         return runCatching {
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, 443), 1500)
+            val process = ProcessBuilder("ping", "-n", "-c", "1", "-W", "2", host)
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            if (!process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                return -1L
             }
-            (System.nanoTime() - start) / 1_000_000
+            if (process.exitValue() != 0) return -1L
+            val match = Regex("time[=<]([0-9]+(?:\\.[0-9]+)?)\\s*ms", RegexOption.IGNORE_CASE)
+                .find(output) ?: return -1L
+            match.groupValues[1].toDoubleOrNull()?.toLong()?.coerceAtLeast(1L) ?: -1L
         }.getOrDefault(-1L)
     }
 
