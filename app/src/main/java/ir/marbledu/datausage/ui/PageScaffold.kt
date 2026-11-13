@@ -245,7 +245,7 @@ fun TopTabs(
                     }
                     .clip(RoundedCornerShape(14.dp))
                     .background(container)
-                    .semantics { selected = isSelected }
+                    .semantics { this.selected = isSelected }
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
