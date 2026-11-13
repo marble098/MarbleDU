@@ -110,7 +110,7 @@ object NetworkStatsReader {
         return runCatching { sm.activeSubscriptionIdList.toIntArray() }.getOrDefault(intArrayOf())
     }
 
-    private fun localIpAddress(): String = runCatching {
+    private fun localIpAddress(): String = runCatching<String> {
         NetworkInterface.getNetworkInterfaces().asSequence()
             .filter { it.isUp && !it.isLoopback }
             .flatMap { it.inetAddresses.asSequence() }
