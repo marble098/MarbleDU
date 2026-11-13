@@ -48,6 +48,14 @@ object NetworkStatsReader {
         }
     }
 
+    /** مجموع و دیتای موبایل را جدا می‌خواند تا ترافیک وای‌فای به سیم‌کارت نسبت داده نشود. */
+    fun byteCounters(): NetworkByteCounters {
+        val (totalRx, totalTx) = totalInterfaceBytes()
+        val mobileRx = runCatching { TrafficStats.getMobileRxBytes() }.getOrDefault(-1L)
+        val mobileTx = runCatching { TrafficStats.getMobileTxBytes() }.getOrDefault(-1L)
+        return NetworkByteCounters(totalRx, totalTx, mobileRx, mobileTx)
+    }
+
     private fun readLong(file: File): Long = runCatching {
         if (file.canRead()) file.readText().trim().toLong() else 0L
     }.getOrDefault(0L)
@@ -69,6 +77,7 @@ object NetworkStatsReader {
             else -> ConnectionType.OTHER
         }
         val sim = simOperator(context)
+        val simIdentity = defaultDataSim(context)
 
         var ispRaw = ""
         var ispAsn = 0
@@ -118,6 +127,7 @@ object NetworkStatsReader {
             linkUpKbps = caps?.linkUpstreamBandwidthKbps ?: 0,
             operator = operator,
             simOperator = sim,
+            simIdentity = simIdentity,
             vpnActive = vpn,
             ispName = ispRaw,
             ispAsn = ispAsn,
@@ -173,9 +183,26 @@ object NetworkStatsReader {
         context.resources.configuration.locales[0].language == "fa"
     }.getOrDefault(true)
 
+    /** اطلاعات سیم‌کارت انتخاب‌شده برای داده؛ IMSI و شماره تلفن هرگز خوانده یا ذخیره نمی‌شوند. */
+    @SuppressLint("MissingPermission")
+    private fun defaultDataSim(context: Context): SimIdentity? {
+        val subscriptionId = runCatching { SubscriptionManager.getDefaultDataSubscriptionId() }
+            .getOrNull()
+            ?.takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+        val info = subscriptionId?.let { id ->
+            runCatching {
+                context.getSystemService(SubscriptionManager::class.java)?.getActiveSubscriptionInfo(id)
+            }.getOrNull()
+        }
+        val slot = info?.simSlotIndex?.takeIf { it >= 0 }
+        val displayName = info?.displayName?.toString()?.trim().orEmpty()
+        if (subscriptionId == null && slot == null && displayName.isBlank()) return null
+        return SimIdentity(subscriptionId, slot, displayName)
+    }
+
     /**
-     * اپراتور سیم‌کارتی که اینترنت موبایل روی آن است. به هیچ مجوزی نیاز ندارد
-     * و حتی وقتی گوشی روی وای‌فای است هم جواب می‌دهد.
+     * اپراتور سیم‌کارتی که سیستم برای داده‌ی موبایل انتخاب کرده است؛ حتی روی
+     * وای‌فای هم برگردانده می‌شود تا ترافیک موبایلِ پس‌زمینه به آن نسبت داده شود.
      */
     fun simOperator(context: Context): OperatorCatalog.Operator? {
         val base = context.getSystemService(TelephonyManager::class.java) ?: return null
@@ -219,6 +246,8 @@ data class NetworkSnapshot(
     val operator: OperatorCatalog.Operator = OperatorCatalog.byId(OperatorCatalog.ID_UNKNOWN),
     /** اپراتور سیم‌کارتِ داده؛ روی وای‌فای هم پر است. */
     val simOperator: OperatorCatalog.Operator? = null,
+    /** سیم‌کارت پیش‌فرض داده؛ شناسه‌ی اشتراک و نام نمایشی، بدون شناسه‌ی شخصی. */
+    val simIdentity: SimIdentity? = null,
     val vpnActive: Boolean = false,
     /** نام خام ISP و شماره‌ی AS (فقط وقتی اپراتور وای‌فای پیدا شده). */
     val ispName: String = "",

@@ -59,7 +59,6 @@ import ir.marbledu.datausage.ui.screens.LiveScreen
 import ir.marbledu.datausage.ui.screens.OnboardingScreen
 import ir.marbledu.datausage.ui.screens.ReportsScreen
 import ir.marbledu.datausage.ui.screens.SettingsScreen
-import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import ir.marbledu.datausage.util.UsageAccess
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -85,11 +84,6 @@ fun AppRoot(
     val dashboard by vm.dashboard.collectAsState()
     val scope = rememberCoroutineScope()
 
-    // بازگشت از صفحه‌ی «دسترسی به داده‌های مصرف» => همان لحظه وضعیت و آمار تازه شود.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        vm.refreshAll()
-    }
-
     if (!settings.onboarded) {
         OnboardingScreen(
             persian = persian,
@@ -98,6 +92,20 @@ fun AppRoot(
             onFinish = { vm.completeOnboarding() },
         )
         return
+    }
+
+    // بارگیری و پایش فقط بعد از راه‌اندازی آغاز می‌شود؛ بازگشت از تنظیمات سیستم
+    // هم وضعیت دسترسی‌ها و داده‌ها را تازه می‌کند.
+    LaunchedEffect(settings.onboarded) {
+        vm.startLive()
+        vm.refreshAll()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        vm.startLive()
+        vm.refreshAll()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        vm.stopLive()
     }
 
     val tabs = Tab.entries
@@ -122,10 +130,10 @@ fun AppRoot(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(300.dp)
+                .height(220.dp)
                 .background(
                     Brush.verticalGradient(
-                        listOf(scheme.primary.copy(alpha = 0.16f), Color.Transparent),
+                        listOf(scheme.primary.copy(alpha = 0.055f), Color.Transparent),
                     ),
                 ),
         )
@@ -167,32 +175,23 @@ private fun FloatingNavBar(
 ) {
     val tabs = Tab.entries
     val scheme = MaterialTheme.colorScheme
-    val marble = LocalMarbleColors.current
-    val shape = RoundedCornerShape(32.dp)
+    val shape = RoundedCornerShape(24.dp)
     val position = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
         .coerceIn(0f, (tabs.size - 1).toFloat())
-    // فاصله تا نزدیک‌ترین تب (۰ تا ۰٫۵) برای افکت کش آمدن
-    val travel = abs(position - position.roundToInt())
 
     Box(
         modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 8.dp),
     ) {
         BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
-                .height(66.dp)
+                .height(58.dp)
                 .clip(shape)
-                .background(lerp(scheme.surface, scheme.primary, 0.10f).copy(alpha = 0.82f))
-                .border(
-                    1.dp,
-                    Brush.linearGradient(
-                        listOf(scheme.primary.copy(alpha = 0.45f), scheme.tertiary.copy(alpha = 0.30f)),
-                    ),
-                    shape,
-                ),
+                .background(scheme.surfaceContainerHigh.copy(alpha = 0.97f))
+                .border(1.dp, scheme.outlineVariant.copy(alpha = 0.7f), shape),
         ) {
             val tabWidth = maxWidth / tabs.size
             Box(
@@ -200,13 +199,9 @@ private fun FloatingNavBar(
                     .offset { IntOffset((tabWidth.toPx() * position).roundToInt(), 0) }
                     .width(tabWidth)
                     .fillMaxHeight()
-                    .padding(horizontal = 5.dp, vertical = 6.dp)
-                    .graphicsLayer {
-                        scaleX = 1f + 0.5f * travel
-                        scaleY = 1f - 0.22f * travel
-                    }
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(Brush.linearGradient(listOf(marble.heroStart, marble.heroEnd))),
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(scheme.primaryContainer),
             )
             Row(Modifier.fillMaxSize()) {
                 tabs.forEachIndexed { index, tab ->
@@ -219,7 +214,7 @@ private fun FloatingNavBar(
                         ),
                         label = "tab-pop",
                     )
-                    val tint = lerp(scheme.onSurfaceVariant, marble.onHero, closeness)
+                    val tint = lerp(scheme.onSurfaceVariant, scheme.onPrimaryContainer, closeness)
                     val text = label(tab)
                     Box(
                         Modifier
@@ -249,8 +244,8 @@ private fun FloatingNavBar(
                             Text(
                                 text = text,
                                 color = tint,
-                                fontSize = 10.sp,
-                                lineHeight = 14.sp,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
                                 fontWeight = if (closeness > 0.5f) FontWeight.Bold else FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Clip,

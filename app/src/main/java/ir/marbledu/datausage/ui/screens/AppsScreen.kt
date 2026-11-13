@@ -74,8 +74,8 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = ir.marbledu.datausage.ui.FloatingBarClearance),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = ir.marbledu.datausage.ui.FloatingBarClearance),
     ) {
         item { SectionTitle(text = context.getString(R.string.per_app)) }
 

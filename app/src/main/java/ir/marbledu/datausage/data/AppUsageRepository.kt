@@ -120,6 +120,16 @@ class AppUsageRepository(private val context: Context) {
         result.values.sortedByDescending { it.bytes }
     }
 
+    /** مجموع بایت‌های کل دستگاه از تاریخچه‌ی رسمی اندروید (نه جمع تخمینی اپ‌ها). */
+    @SuppressLint("MissingPermission")
+    suspend fun aggregateTraffic(fromMillis: Long, toMillis: Long, type: ConnectionType): Traffic =
+        withContext(Dispatchers.IO) {
+            val manager = nsm ?: return@withContext Traffic()
+            val networkType = if (type == ConnectionType.WIFI) ConnectivityManager.TYPE_WIFI
+            else ConnectivityManager.TYPE_MOBILE
+            deviceTraffic(manager, networkType, if (type == ConnectionType.WIFI) null else subscriberId(), fromMillis, toMillis)
+        }
+
     /** نوع اتصال فعلی (برای این‌که «مصرف امروز» همان چیزی باشد که کاربر انتظار دارد). */
     fun currentType(): ConnectionType =
         NetworkStatsReader.currentNetwork(context).type.let {
@@ -372,24 +382,54 @@ class AppUsageRepository(private val context: Context) {
     suspend fun hourlyOperatorTraffic(
         dayStart: Long,
         operatorId: String,
+        sim: SimIdentity?,
     ): List<HourOperatorTraffic> = withContext(Dispatchers.IO) {
-        UsageLedger.hourlyForDay(context, dayStart).filter { it.operatorId == operatorId }
+        val byHour = UsageLedger.hourlyForDay(context, dayStart)
+            .filter { it.operatorId == operatorId && it.sim == sim }
+            .groupBy { it.hour }
+            .mapValues { (_, rows) -> rows.fold(Traffic()) { acc, row -> acc + row.traffic } }
+        if (byHour.values.none { it.total > 0L }) return@withContext emptyList()
+        (0..23).map { hour ->
+            HourOperatorTraffic(
+                hour = hour,
+                operatorId = operatorId,
+                transport = "mixed",
+                traffic = byHour[hour] ?: Traffic(),
+                sim = sim,
+            )
+        }
     }
 
-    /** گزارش کامل یک روز. */
-    suspend fun dayReport(summary: DaySummary): DayReport {
+    /** گزارش کامل یک روز. فایل محلی و پرس‌وجوهای شبکه همگی روی IO اجرا می‌شوند. */
+    suspend fun dayReport(summary: DaySummary): DayReport = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val end = minOf(summary.endMillis, now)
         val hours = dayHours(summary.startMillis, summary.endMillis)
         val apps = appTraffic(summary.startMillis, end)
+        val recorded = UsageLedger.forDay(context, summary.startMillis)
+        val sessions = UsageLedger.sessionsForDay(context, summary.startMillis)
+        val operatorHours = UsageLedger.hourlyForDay(context, summary.startMillis)
+        val observedMobile = recorded.filter { it.transport == UsageLedger.MOBILE }
+            .fold(Traffic()) { acc, row -> acc + row.traffic }
+        val observedWifi = recorded.filter { it.transport == UsageLedger.WIFI }
+            .fold(Traffic()) { acc, row -> acc + row.traffic }
         val sim = NetworkStatsReader.simOperator(context)
         val operators = UsageLedger.reconcile(
-            recorded = UsageLedger.forDay(context, summary.startMillis),
+            recorded = recorded,
             systemMobile = summary.mobile,
             systemWifi = summary.wifi,
             defaultMobileId = sim?.id ?: OperatorCatalog.ID_MOBILE,
         )
-        return DayReport(summary, hours, apps, operators)
+        DayReport(
+            summary = summary,
+            hours = hours,
+            apps = apps,
+            operators = operators,
+            sessions = sessions,
+            operatorHours = operatorHours,
+            observedMobile = observedMobile,
+            observedWifi = observedWifi,
+        )
     }
 
     /** مصرف تک‌تک اپ‌ها به تفکیک وای‌فای و موبایل (نمای جزئیات). */
@@ -446,6 +486,13 @@ data class DayReport(
     val hours: List<HourTraffic>,
     val apps: List<AppTraffic>,
     val operators: List<OperatorTraffic>,
+    /** نشست‌های واقعیِ مشاهده‌شده با شمارنده‌ی موبایل و شناسه‌ی سیم فعال. */
+    val sessions: List<UsageSession> = emptyList(),
+    /** مصرف ساعت‌به‌ساعت ثبت‌شده برای هر اپراتور و شناسه‌ی سیم. */
+    val operatorHours: List<HourOperatorTraffic> = emptyList(),
+    /** مقدار خامِ ثبت‌شده از TrafficStats قبل از مقایسه با آمار تجمیعی Android. */
+    val observedMobile: Traffic = Traffic(),
+    val observedWifi: Traffic = Traffic(),
 )
 
 /** مصرف تجمیعی در یک ساعت شبانه‌روز (۰ تا ۲۳). */

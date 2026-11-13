@@ -111,8 +111,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         lifecycleScope.launch {
-            val enabled = app().settingsRepository.settings.first().monitorInBackground
-            if (enabled) MonitorService.start(this@MainActivity) else MonitorService.stop(this@MainActivity)
+            val settings = app().settingsRepository.settings.first()
+            if (settings.onboarded && settings.monitorInBackground) {
+                MonitorService.start(this@MainActivity)
+            } else {
+                MonitorService.stop(this@MainActivity)
+            }
         }
     }
 

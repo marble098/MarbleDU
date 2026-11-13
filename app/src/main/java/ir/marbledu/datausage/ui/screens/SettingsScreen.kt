@@ -87,8 +87,8 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = FloatingBarClearance),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = FloatingBarClearance),
     ) {
         item { SectionTitle(text = context.getString(R.string.settings)) }
 
@@ -229,8 +229,11 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.padding(top = 4.dp),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(5, 10, 30).forEach { seconds ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 2.dp),
+                ) {
+                    items(listOf(1, 3, 5, 10, 30)) { seconds ->
                         OptionChip(
                             label = if (persian) "${Formats.integer(seconds.toLong(), true)} ثانیه"
                             else "$seconds s",
@@ -240,6 +243,15 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         }
                     }
                 }
+                Text(
+                    text = if (persian) {
+                        "فاصله‌ی کوتاه‌تر مرز جلسه‌ها را دقیق‌تر ثبت می‌کند، اما مصرف باتری و اعلان پایش را بیشتر می‌کند."
+                    } else {
+                        "A shorter interval captures session boundaries more closely, but uses more battery and keeps monitoring active."
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 

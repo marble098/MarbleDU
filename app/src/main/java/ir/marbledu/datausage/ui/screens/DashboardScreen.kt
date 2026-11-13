@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -78,15 +80,14 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
     val context = LocalContext.current
     val dashboard by vm.dashboard.collectAsState()
     val usage by vm.usage.collectAsState()
-    val tick by vm.tick.collectAsState()
     val history by vm.history.collectAsState()
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = FloatingBarClearance),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = FloatingBarClearance),
     ) {
         item {
             Column {
@@ -112,7 +113,7 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
 
         item {
             ConnectionCard(
-                network = tick?.network,
+                vm = vm,
                 settings = settings,
                 persian = persian,
                 onRetry = { vm.refreshWifiOperator() },
@@ -143,6 +144,10 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                     }
                 }
             }
+        }
+
+        item {
+            ActiveMobileSessionCard(vm, persian)
         }
 
         if (settings.uiMode == UiMode.MINIMAL) {
@@ -224,64 +229,12 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatCard(
-                        title = context.getString(R.string.cellular),
-                        value = Formats.bytes(dashboard.monthMobileBytes, persian),
-                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
-                        icon = MIcons.Signal,
-                        accent = marble.mobile,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StatCard(
-                        title = context.getString(R.string.wifi),
-                        value = Formats.bytes(dashboard.monthWifiBytes, persian),
-                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
-                        icon = MIcons.Wifi,
-                        accent = marble.wifi,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-
-            item {
-                StatCard(
-                    title = if (persian) "سرعت همین حالا" else "Current speed",
-                    value = Formats.speed(
-                        (tick?.downBytesPerSecond ?: 0.0) + (tick?.upBytesPerSecond ?: 0.0),
-                        persian,
-                    ),
-                    subtitle = "↓ ${Formats.speed(tick?.downBytesPerSecond ?: 0.0, persian)}   " +
-                        "↑ ${Formats.speed(tick?.upBytesPerSecond ?: 0.0, persian)}",
-                    icon = MIcons.Speed,
-                    accent = scheme.secondary,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                CompactMetricsCard(dashboard = dashboard, vm = vm, persian = persian)
             }
 
             if (history.days.takeLast(7).any { it.total > 0 }) {
                 item {
                     WeeklyTrendCard(history.days.takeLast(7), persian)
-                }
-            }
-
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatCard(
-                        title = context.getString(R.string.average_speed),
-                        value = Formats.speed(tick?.averageSpeed ?: 0.0, persian),
-                        icon = MIcons.Speed,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StatCard(
-                        title = context.getString(R.string.average_ping),
-                        value = if (dashboard.averagePingMs > 0) {
-                            "${Formats.number(dashboard.averagePingMs, persian, 0)} ${context.getString(R.string.ms)}"
-                        } else "—",
-                        icon = MIcons.Timer,
-                        accent = scheme.tertiary,
-                        modifier = Modifier.weight(1f),
-                    )
                 }
             }
 
@@ -302,8 +255,8 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                                 fraction = fraction,
                                 startColor = if (danger) scheme.error else marble.heroStart,
                                 endColor = if (danger) scheme.error else marble.heroEnd,
-                                diameter = 128.dp,
-                                stroke = 14.dp,
+                                diameter = 108.dp,
+                                stroke = 12.dp,
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
@@ -402,12 +355,6 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 }
             }
 
-            if (tick != null) {
-                item {
-                    SessionCard(vm, persian)
-                }
-            }
-
             if (dashboard.hasUsageAccess) {
                 item {
                     SectionTitle(
@@ -454,11 +401,13 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
  */
 @Composable
 private fun ConnectionCard(
-    network: NetworkSnapshot?,
+    vm: MainViewModel,
     settings: AppSettings,
     persian: Boolean,
     onRetry: () -> Unit,
 ) {
+    val tick by vm.tick.collectAsState()
+    val network = tick?.network
     val scheme = MaterialTheme.colorScheme
     val type = network?.type ?: ConnectionType.OFFLINE
     val onWifi = type == ConnectionType.WIFI || type == ConnectionType.ETHERNET
@@ -473,20 +422,31 @@ private fun ConnectionCard(
     val status = network?.wifiLookupStatus ?: IspResolver.LookupStatus.IDLE
     val sourceKind = network?.wifiSourceKind ?: IspResolver.WifiSourceKind.UNKNOWN
     val sourceLabel = NotificationFormatter.wifiSourceLabel(sourceKind, persian)
+    val simLabel = network?.simIdentity?.let { identity ->
+        val slot = identity.slotIndex?.let { index ->
+            if (persian) "سیم‌کارت ${Formats.integer((index + 1).toLong(), true)}" else "SIM ${index + 1}"
+        }
+        when {
+            slot != null && identity.displayName.isNotBlank() -> "$slot · ${identity.displayName}"
+            slot != null -> slot
+            identity.displayName.isNotBlank() -> identity.displayName
+            else -> null
+        }
+    }
 
-    MarbleCard {
+    MarbleCard(padding = 14.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OperatorBadge(
                 operator,
-                size = 56.dp,
+                size = 42.dp,
                 transportIcon = when (type) {
                     ConnectionType.WIFI, ConnectionType.ETHERNET -> MIcons.Wifi
                     ConnectionType.CELLULAR -> MIcons.Signal
                     else -> null
                 },
             )
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
                     text = if (persian) "اینترنت فعلی" else "Current internet",
                     style = MaterialTheme.typography.labelMedium,
@@ -506,7 +466,7 @@ private fun ConnectionCard(
                         }
                         else -> operator.name(persian)
                     },
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -558,7 +518,7 @@ private fun ConnectionCard(
                 }
             }
         }
-        if (onWifi && resolved) {
+        if (settings.uiMode == UiMode.ADVANCED && onWifi && resolved) {
             val detailParts = buildList {
                 val ispName = network?.ispName.orEmpty()
                 if (ispName.isNotBlank()) {
@@ -577,28 +537,32 @@ private fun ConnectionCard(
                 )
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (network?.isValidated == true) {
-                InfoChip(text = if (persian) "آنلاین" else "Online", color = scheme.secondary)
-            }
-            if (network?.vpnActive == true) {
-                InfoChip(text = if (persian) "VPN روشن" else "VPN on", color = scheme.tertiary)
-            }
-            if (onWifi && sourceLabel.isNotBlank()) {
-                InfoChip(text = sourceLabel, color = scheme.primary)
-            }
-            if (onWifi && !network?.wifiSsid.isNullOrBlank()) {
-                InfoChip(text = network?.wifiSsid.orEmpty(), color = scheme.secondary)
-            }
-            if (onWifi && sim != null) {
-                InfoChip(
-                    text = (if (persian) "سیم‌کارت: " else "SIM: ") + sim.name(persian),
-                    color = Color(sim.brandColor).let { c -> if (LocalMarbleColors.current.dark) scheme.primary else c },
-                )
+        if (settings.uiMode == UiMode.ADVANCED || type == ConnectionType.CELLULAR) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (settings.uiMode == UiMode.ADVANCED && network?.isValidated == true) {
+                    InfoChip(text = if (persian) "آنلاین" else "Online", color = scheme.secondary)
+                }
+                if (settings.uiMode == UiMode.ADVANCED && network?.vpnActive == true) {
+                    InfoChip(text = if (persian) "VPN روشن" else "VPN on", color = scheme.tertiary)
+                }
+                if (settings.uiMode == UiMode.ADVANCED && onWifi && sourceLabel.isNotBlank()) {
+                    InfoChip(text = sourceLabel, color = scheme.primary)
+                }
+                if (settings.uiMode == UiMode.ADVANCED && onWifi && !network?.wifiSsid.isNullOrBlank()) {
+                    InfoChip(text = network?.wifiSsid.orEmpty(), color = scheme.secondary)
+                }
+                if (type == ConnectionType.CELLULAR && simLabel != null) {
+                    InfoChip(text = simLabel, color = scheme.primary)
+                } else if (settings.uiMode == UiMode.ADVANCED && onWifi && sim != null) {
+                    InfoChip(
+                        text = (if (persian) "سیم‌کارت داده: " else "Data SIM: ") + sim.name(persian),
+                        color = Color(sim.brandColor).let { c -> if (LocalMarbleColors.current.dark) scheme.primary else c },
+                    )
+                }
             }
         }
     }
@@ -636,7 +600,7 @@ private fun WeeklyTrendCard(week: List<DaySummary>, persian: Boolean) {
                 )
             },
             colors = listOf(marble.mobile, marble.wifi),
-            height = 170.dp,
+            height = 144.dp,
             selected = selection,
             onSelect = { selection = if (selection == it) null else it },
             maxLabel = Formats.bytes(week.maxOf { it.total }, persian),
@@ -668,74 +632,100 @@ private fun WeeklyTrendCard(week: List<DaySummary>, persian: Boolean) {
 }
 
 @Composable
-private fun SessionCard(vm: MainViewModel, persian: Boolean) {
-    val tick by vm.tick.collectAsState()
+private fun CompactMetricsCard(dashboard: DashboardUi, vm: MainViewModel, persian: Boolean) {
     val context = LocalContext.current
-    val t = tick ?: return
-    val start = remember(t.sessionStart, persian) { LiveMonitor.formatHourMinute(t.sessionStart, persian) }
-    val now = remember(t.timestamp, persian) { LiveMonitor.formatHourMinute(t.timestamp, persian) }
-    Card(
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(MIcons.Clock, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.size(8.dp))
+    val tick by vm.tick.collectAsState()
+    val scheme = MaterialTheme.colorScheme
+    val mobile = tick?.downBytesPerSecond ?: 0.0
+    val upload = tick?.upBytesPerSecond ?: 0.0
+    MarbleCard(padding = 14.dp) {
+        CardHeader(
+            title = if (persian) "آمار این ماه و لحظه‌ای" else "This month & live",
+            icon = MIcons.Chart,
+            subtitle = if (persian) "مجموع دستگاه در ۳۰ روز گذشته" else "Device totals for the last 30 days",
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Metric(context.getString(R.string.cellular), Formats.bytes(dashboard.monthMobileBytes, persian),
+                LocalMarbleColors.current.mobile, Modifier.weight(1f), MIcons.Signal)
+            Metric(context.getString(R.string.wifi), Formats.bytes(dashboard.monthWifiBytes, persian),
+                LocalMarbleColors.current.wifi, Modifier.weight(1f), MIcons.Wifi)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Metric(
+                if (persian) "سرعت فعلی" else "Current speed",
+                Formats.speed(mobile + upload, persian),
+                scheme.secondary,
+                Modifier.weight(1f),
+                MIcons.Speed,
+            )
+            Metric(
+                context.getString(R.string.average_ping),
+                if (dashboard.averagePingMs > 0) {
+                    "${Formats.number(dashboard.averagePingMs, persian, 0)} ${context.getString(R.string.ms)}"
+                } else "—",
+                scheme.tertiary,
+                Modifier.weight(1f),
+                MIcons.Timer,
+            )
+        }
+    }
+}
+
+/** جلسه‌ی فعالِ مسیر موبایل؛ بر خلاف uptime اپ، به سیم‌کارت و شمارنده‌ی موبایل متصل است. */
+@Composable
+private fun ActiveMobileSessionCard(vm: MainViewModel, persian: Boolean) {
+    val tick by vm.tick.collectAsState()
+    val session = tick?.mobileSession ?: return
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val operator = OperatorCatalog.byId(session.operatorId)
+    val slotLabel = session.sim?.slotIndex?.let { slot ->
+        if (persian) "سیم‌کارت ${Formats.integer((slot + 1).toLong(), true)}" else "SIM ${slot + 1}"
+    }
+    val simLabel = session.sim?.displayName?.takeIf { it.isNotBlank() }?.let { name ->
+        if (slotLabel != null) "$slotLabel · $name" else name
+    } ?: slotLabel ?: if (persian) "سیم‌کارت نامشخص" else "SIM not identified"
+    val from = LiveMonitor.formatHourMinute(session.startMillis, persian)
+    val to = if (session.isOpen) {
+        if (persian) "اکنون" else "now"
+    } else {
+        LiveMonitor.formatHourMinute(session.endMillis ?: session.lastSampleMillis, persian)
+    }
+
+    MarbleCard(padding = 14.dp) {
+        CardHeader(
+            title = if (persian) "جلسه‌ی فعال داده‌ی موبایل" else "Active mobile data session",
+            icon = MIcons.Signal,
+            tint = scheme.primary,
+            trailing = Formats.bytes(session.totalBytes, persian),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OperatorBadge(operator, size = 34.dp, transportIcon = MIcons.Signal)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    context.getString(R.string.session_timeline),
-                    style = MaterialTheme.typography.titleSmall,
+                    "$simLabel · ${operator.name(persian)}",
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "$from – $to",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
                 )
             }
-            Text(
-                text = context.getString(R.string.from_to, start, now),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column {
-                    Text(
-                        context.getString(R.string.download),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        Formats.bytes(t.sessionRxBytes, persian),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Column {
-                    Text(
-                        context.getString(R.string.upload),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        Formats.bytes(t.sessionTxBytes, persian),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
-                Column {
-                    Text(
-                        context.getString(R.string.peak_speed),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        Formats.speed(t.peakSpeed, persian),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary,
-                    )
-                }
-            }
         }
+        Text(
+            text = "↓ ${Formats.bytes(session.rxBytes, persian)}   ↑ ${Formats.bytes(session.txBytes, persian)}" +
+                if (session.samplingGaps > 0) {
+                    if (persian) "  ·  وقفه‌ی پایش ${Formats.integer(session.samplingGaps.toLong(), true)} بار"
+                    else "  ·  ${session.samplingGaps} monitoring gap(s)"
+                } else "",
+            style = MaterialTheme.typography.labelSmall,
+            color = scheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -753,57 +743,57 @@ private fun MinimalDashboardCard(
     val week = history.days.takeLast(7)
     val max = week.maxOfOrNull { it.total } ?: 1L
 
-    MarbleCard {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+    MarbleCard(padding = 14.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    text = context.getString(R.string.this_month),
+                    context.getString(R.string.today_usage),
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = dashboard.operatorName.ifEmpty { context.getString(R.string.network_unknown) },
-                    style = MaterialTheme.typography.titleMedium,
+                    Formats.bytes(dashboard.todayMobileBytes + dashboard.todayWifiBytes, persian),
+                    style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
-                    color = scheme.primary,
-                    modifier = Modifier.weight(1f, fill = false),
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard(
-                    title = context.getString(R.string.today_usage),
-                    value = Formats.bytes(dashboard.todayMobileBytes + dashboard.todayWifiBytes, persian),
-                    icon = MIcons.Chart,
-                    modifier = Modifier.weight(1f),
-                )
-                StatCard(
-                    title = context.getString(R.string.remaining),
-                    value = if (settings.dataCapBytes > 0L) {
-                        Formats.bytes((settings.dataCapBytes - dashboard.monthMobileBytes).coerceAtLeast(0), persian)
-                    } else "—",
-                    icon = MIcons.Shield,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            if (week.any { it.total > 0 }) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    week.forEach { day ->
-                        val fraction = (day.total.toFloat() / max)
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .height(32.dp)
-                                .background(marble.mobile.copy(alpha = 0.15f + 0.55f * fraction)),
-                        )
-                    }
+            InfoChip(
+                text = dashboard.operatorName.ifEmpty { context.getString(R.string.network_unknown) },
+                color = scheme.primary,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Metric(context.getString(R.string.cellular), Formats.bytes(dashboard.todayMobileBytes, persian),
+                marble.mobile, Modifier.weight(1f), MIcons.Signal)
+            Metric(context.getString(R.string.wifi), Formats.bytes(dashboard.todayWifiBytes, persian),
+                marble.wifi, Modifier.weight(1f), MIcons.Wifi)
+        }
+        if (settings.dataCapBytes > 0L) {
+            Text(
+                text = (if (persian) "باقی‌مانده‌ی بسته: " else "Plan remaining: ") +
+                    Formats.bytes((settings.dataCapBytes - dashboard.monthMobileBytes).coerceAtLeast(0), persian),
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+        if (week.any { it.total > 0 }) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                week.forEach { day ->
+                    val fraction = (day.total.toFloat() / max).coerceIn(0f, 1f)
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(24.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(marble.mobile.copy(alpha = 0.12f + 0.58f * fraction)),
+                    )
                 }
-                Text(
-                    text = if (persian) "۷ روز اخیر" else "Last 7 days",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                )
             }
+            Text(
+                text = if (persian) "مصرف ۷ روز اخیر" else "Last 7 days",
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+            )
         }
     }
 }

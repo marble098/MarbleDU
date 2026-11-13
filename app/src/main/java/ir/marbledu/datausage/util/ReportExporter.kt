@@ -103,9 +103,44 @@ object ReportExporter {
         b.append("day,total,all,${report.summary.all.rx},${report.summary.all.tx},${report.summary.total}\n")
         b.append("day,total,mobile,${report.summary.mobile.rx},${report.summary.mobile.tx},${report.summary.mobile.total}\n")
         b.append("day,total,wifi,${report.summary.wifi.rx},${report.summary.wifi.tx},${report.summary.wifi.total}\n")
+        b.append("audit,Android system total,mobile,${report.summary.mobile.rx},${report.summary.mobile.tx},${report.summary.mobile.total}\n")
+        b.append("audit,TrafficStats observed,mobile,${report.observedMobile.rx},${report.observedMobile.tx},${report.observedMobile.total}\n")
+        val notObservedRx = (report.summary.mobile.rx - report.observedMobile.rx).coerceAtLeast(0L)
+        val notObservedTx = (report.summary.mobile.tx - report.observedMobile.tx).coerceAtLeast(0L)
+        val observedOverRx = (report.observedMobile.rx - report.summary.mobile.rx).coerceAtLeast(0L)
+        val observedOverTx = (report.observedMobile.tx - report.summary.mobile.tx).coerceAtLeast(0L)
+        b.append("audit,Android not observed,mobile,$notObservedRx,$notObservedTx,${notObservedRx + notObservedTx}\n")
+        b.append("audit,Monitor above Android,mobile,$observedOverRx,$observedOverTx,${observedOverRx + observedOverTx}\n")
         report.operators.forEach { o ->
-            val name = OperatorCatalog.byId(o.operatorId).en + if (o.estimated) " (unattributed)" else ""
+            val simLabel = o.sim?.let { sim ->
+                val slot = sim.slotIndex?.let { "SIM ${it + 1}" }
+                listOfNotNull(slot, sim.displayName.takeIf { it.isNotBlank() }).joinToString(" · ")
+            }.orEmpty()
+            val name = listOfNotNull(
+                OperatorCatalog.byId(o.operatorId).en.takeIf { o.operatorId != OperatorCatalog.ID_UNKNOWN },
+                simLabel.takeIf { it.isNotBlank() },
+                if (o.estimated) "unassigned / estimate" else null,
+            ).joinToString(" · ").ifBlank { "unassigned / unknown" }
             b.append("operator,${csvEscape(name)},${o.transport},${o.traffic.rx},${o.traffic.tx},${o.traffic.total}\n")
+        }
+        report.operatorHours.forEach { hour ->
+            val hourLabel = "%02d:00".format(java.util.Locale.US, hour.hour)
+            val simLabel = if (hour.transport == "mobile") {
+                hour.sim?.let { sim ->
+                    val slot = sim.slotIndex?.let { "SIM ${it + 1}" }
+                    listOfNotNull(slot, sim.displayName.takeIf { it.isNotBlank() })
+                        .joinToString(" · ")
+                        .ifBlank { "SIM not identified" }
+                } ?: "SIM not identified"
+            } else ""
+            val name = listOfNotNull(
+                hourLabel,
+                OperatorCatalog.byId(hour.operatorId).en,
+                simLabel.takeIf { it.isNotBlank() },
+            ).joinToString(" · ")
+            b.append(
+                "operator_hour,${csvEscape(name)},${hour.transport},${hour.traffic.rx},${hour.traffic.tx},${hour.traffic.total}\n",
+            )
         }
         report.hours.forEach { h ->
             val name = "%02d:00".format(java.util.Locale.US, h.hour)
@@ -116,6 +151,31 @@ object ReportExporter {
             val name = csvEscape(a.label + " [" + a.packageName + "]")
             if (a.mobile.total > 0) b.append("app,$name,mobile,${a.mobile.rx},${a.mobile.tx},${a.mobile.total}\n")
             if (a.wifi.total > 0) b.append("app,$name,wifi,${a.wifi.rx},${a.wifi.tx},${a.wifi.total}\n")
+        }
+        b.append("session_start,session_end,sim_slot,sim_name,operator,download,upload,total,start_estimated,end_estimated,sampling_gaps\n")
+        report.sessions.forEach { session ->
+            val sim = session.sim
+            val start = LiveMonitor.formatDate(session.startMillis) + " " + LiveMonitor.formatHourMinute(session.startMillis)
+            val end = session.endMillis?.let {
+                LiveMonitor.formatDate(it) + " " + LiveMonitor.formatHourMinute(it)
+            } ?: "open"
+            val slot = sim?.slotIndex?.let { "SIM ${it + 1}" }.orEmpty()
+            val operator = OperatorCatalog.byId(session.operatorId).en
+            b.append(
+                listOf(
+                    start,
+                    end,
+                    csvEscape(slot),
+                    csvEscape(sim?.displayName.orEmpty()),
+                    csvEscape(operator),
+                    session.rxBytes,
+                    session.txBytes,
+                    session.totalBytes,
+                    session.startEstimated,
+                    session.endEstimated,
+                    session.samplingGaps,
+                ).joinToString(","),
+            ).append('\n')
         }
         file.writeText(b.toString())
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
