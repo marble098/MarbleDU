@@ -109,10 +109,11 @@ object OffPeakWindow {
         }
         val out = ArrayList<Pair<Long, Long>>()
         var guard = 0
-        while (cal.timeInMillis < toMillis && guard < 65) {
+        while (cal.timeInMillis < toMillis && guard < 400) {
             guard++
             val dayStart = cal.timeInMillis
-            fun hourAt(hour: Int): Long = (cal.clone() as Calendar).apply {
+            val dayCal = cal.clone() as Calendar
+            fun hourAt(hour: Int): Long = (dayCal.clone() as Calendar).apply {
                 set(Calendar.HOUR_OF_DAY, hour)
             }.timeInMillis
 
