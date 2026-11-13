@@ -117,6 +117,7 @@ object OperatorCatalog {
         ),
     )
 
+
     /** اپراتورهای اینترنت ثابت، فیبر و بی‌سیم / ISPها (برای وای‌فای و مودم). */
     val fixed: List<Operator> = listOf(
         Operator(
@@ -149,7 +150,6 @@ object OperatorCatalog {
             keywords = listOf("parsonline", "پارسآنلاین", "پارسانلاین"),
         ),
         Operator(
-        Operator(
             "mobinnet", "مبین نت", "Mobin Net", "MBN", 0xFF6A1B9A, 0xFFAB47BC,
             asns = listOf(50810),
             keywords = listOf(
@@ -157,6 +157,8 @@ object OperatorCatalog {
             ),
             isMobile = true,
         ),
+        Operator(
+            "sabanet", "صبانت", "SabaNet", "SBN", 0xFF2E7D32, 0xFF9CCC65,
             asns = listOf(39501),
             keywords = listOf("sabanet", "nedagostarsaba", "صبانت"),
         ),

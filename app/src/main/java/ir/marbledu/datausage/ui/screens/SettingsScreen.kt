@@ -179,7 +179,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 title = context.getString(R.string.ui_mode),
                 description = context.getString(R.string.ui_mode_desc),
                 icon = MIcons.Layout,
-                onClick = { /* بازکردن انتخاب حالت در همین ردیف */ },
+                onClick = {},
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OptionChip(
