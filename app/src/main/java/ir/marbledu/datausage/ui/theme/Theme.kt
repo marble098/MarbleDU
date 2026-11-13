@@ -67,6 +67,9 @@ data class MarbleColors(
     val dark: Boolean,
 )
 
+/** مقیاس اندازه‌ی متن فعلی (۱ = متوسط)؛ برای تیتر بزرگ صفحه‌ها لازم است. */
+val LocalTextScale = staticCompositionLocalOf { 1f }
+
 val LocalMarbleColors = staticCompositionLocalOf {
     MarbleColors(
         chart = listOf(Color(0xFF2F6FED), Color(0xFF7B5CFA), Color(0xFF00A99D)),
@@ -167,33 +170,32 @@ val Vazirmatn = FontFamily(
     Font(R.font.vazirmatn_bold, FontWeight.Bold),
 )
 
-private fun withVazirmatn(
-    style: TextStyle,
-    sizeScale: Float = 1f,
-    lineScale: Float = 1.4f,
-): TextStyle {
-    val size = style.fontSize * sizeScale
-    return style.copy(fontFamily = Vazirmatn, fontSize = size, lineHeight = size * lineScale)
-}
-
-/** سلسله‌مراتب تایپوگرافی جمع‌وجورتر با فاصله‌ی خطوط مناسب فارسی؛ اعداد مهم‌اند، نه تیترهای غول‌آسا. */
-private val VazirTypography = Typography().let { base ->
-    Typography(
-        displayLarge = withVazirmatn(base.displayLarge, 0.72f, 1.22f),
-        displayMedium = withVazirmatn(base.displayMedium, 0.78f, 1.24f),
-        displaySmall = withVazirmatn(base.displaySmall, 0.82f, 1.28f),
-        headlineLarge = withVazirmatn(base.headlineLarge, 0.86f, 1.30f),
-        headlineMedium = withVazirmatn(base.headlineMedium, 0.90f, 1.32f),
-        headlineSmall = withVazirmatn(base.headlineSmall, 0.92f, 1.34f),
-        titleLarge = withVazirmatn(base.titleLarge, 0.92f, 1.34f),
-        titleMedium = withVazirmatn(base.titleMedium, 0.96f, 1.38f),
-        titleSmall = withVazirmatn(base.titleSmall, 0.96f, 1.38f),
-        bodyLarge = withVazirmatn(base.bodyLarge, 0.96f, 1.52f),
-        bodyMedium = withVazirmatn(base.bodyMedium, 0.96f, 1.50f),
-        bodySmall = withVazirmatn(base.bodySmall, 0.98f, 1.48f),
-        labelLarge = withVazirmatn(base.labelLarge, 0.96f, 1.38f),
-        labelMedium = withVazirmatn(base.labelMedium, 0.96f, 1.38f),
-        labelSmall = withVazirmatn(base.labelSmall, 0.96f, 1.38f),
+/**
+ * سلسله‌مراتب تایپوگرافی جمع‌وجورتر با فاصله‌ی خطوط مناسب فارسی؛ اعداد مهم‌اند، نه تیترهای غول‌آسا.
+ * [scale] از تنظیمات «اندازه‌ی متن» می‌آید (۱ = متوسط؛ پیش‌فرض اپ «کوچک» است).
+ */
+private fun scaledTypography(scale: Float): Typography {
+    val base = Typography()
+    fun scaled(style: TextStyle, sizeScale: Float, lineScale: Float): TextStyle {
+        val size = style.fontSize * sizeScale * scale
+        return style.copy(fontFamily = Vazirmatn, fontSize = size, lineHeight = size * lineScale)
+    }
+    return Typography(
+        displayLarge = scaled(base.displayLarge, 0.72f, 1.22f),
+        displayMedium = scaled(base.displayMedium, 0.78f, 1.24f),
+        displaySmall = scaled(base.displaySmall, 0.82f, 1.28f),
+        headlineLarge = scaled(base.headlineLarge, 0.86f, 1.30f),
+        headlineMedium = scaled(base.headlineMedium, 0.90f, 1.32f),
+        headlineSmall = scaled(base.headlineSmall, 0.92f, 1.34f),
+        titleLarge = scaled(base.titleLarge, 0.92f, 1.34f),
+        titleMedium = scaled(base.titleMedium, 0.96f, 1.38f),
+        titleSmall = scaled(base.titleSmall, 0.96f, 1.38f),
+        bodyLarge = scaled(base.bodyLarge, 0.96f, 1.52f),
+        bodyMedium = scaled(base.bodyMedium, 0.96f, 1.50f),
+        bodySmall = scaled(base.bodySmall, 0.98f, 1.48f),
+        labelLarge = scaled(base.labelLarge, 0.96f, 1.38f),
+        labelMedium = scaled(base.labelMedium, 0.96f, 1.38f),
+        labelSmall = scaled(base.labelSmall, 0.96f, 1.38f),
     )
 }
 
@@ -204,10 +206,12 @@ fun MarbleDuTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     palette: ThemePalette = ThemePalette.MARBLE,
+    textScale: Float = 0.82f,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val layoutDirection = if (persian) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val typography = androidx.compose.runtime.remember(textScale) { scaledTypography(textScale) }
 
     val useDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val scheme: ColorScheme = when {
@@ -230,11 +234,12 @@ fun MarbleDuTheme(
     CompositionLocalProvider(
         LocalLayoutDirection provides layoutDirection,
         LocalMarbleColors provides marble,
+        LocalTextScale provides textScale,
     ) {
         MaterialExpressiveTheme(
             colorScheme = scheme,
             motionScheme = MotionScheme.expressive(),
-            typography = VazirTypography,
+            typography = typography,
             content = content,
         )
     }

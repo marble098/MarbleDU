@@ -75,6 +75,12 @@ Kotlin · Jetpack Compose · **Material 3 Expressive** · فونت Vazirmatn
 
 - نسخه‌ها همه در `gradle/libs.versions.toml` هستند.
 - بعد از هر merge روی `main`، APK همه‌ی معماری‌ها خودکار ساخته و امضا می‌شه.
+- **نسخه روی هر merge خودش درست می‌شه:** `versionCode` دقیقاً یک واحد بالا می‌ره و
+  `versionName` فقط وقتی تغییر می‌کنه که در `CHANGELOG.md` یک بخش جدیدِ بالاتر اعلام شده باشه.
+  چیزی را در `version.properties` دستی زیاد نکن.
+- **یادداشت‌های release به زبان ساده نوشته می‌شه:** از خود `CHANGELOG.md` ساخته می‌شن.
+  هر PR که کد اپ را عوض کنه باید بخش جدیدی به بالای `CHANGELOG.md` اضافه کنه؛ وگرنه
+  بررسی CI قرمز می‌شه. جزئیات و قوانین کامل در [AGENTS.md](AGENTS.md).
 - هر هفته یک PR خودکار برای آپدیت کتابخانه‌ها ساخته می‌شه.
 - تغییرات هر نسخه در [CHANGELOG.md](CHANGELOG.md).
 

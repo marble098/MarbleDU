@@ -44,7 +44,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +59,8 @@ import ir.marbledu.datausage.BuildConfig
 import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
+import ir.marbledu.datausage.data.AppTextSize
+import ir.marbledu.datausage.data.JalaliDate
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.NotificationConfig
 import ir.marbledu.datausage.data.NotificationPreset
@@ -64,6 +68,8 @@ import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.ui.FloatingBarClearance
+import ir.marbledu.datausage.ui.LargeTitleScaffold
+import ir.marbledu.datausage.ui.JalaliDatePickerDialog
 import ir.marbledu.datausage.ui.MIcons
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.OperatorBadge
@@ -84,14 +90,22 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     var showChangelog by remember { mutableStateOf(false) }
     var showNotifSheet by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showTariffDialog by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
+    var showEpochPicker by remember { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(top = 8.dp, bottom = FloatingBarClearance),
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val settingsTabs = if (persian) listOf("ظاهری", "پایش و اعلان‌ها", "داده‌ها و درباره")
+    else listOf("Appearance", "Monitoring", "Data & about")
+    val listState = rememberLazyListState()
+    LargeTitleScaffold(
+        title = if (persian) "تنظیمات" else "Settings",
+        listState = listState,
+        tabs = settingsTabs,
+        selectedTab = selectedTab,
+        onTabSelected = { selectedTab = it },
     ) {
-        item { SectionTitle(text = context.getString(R.string.settings)) }
-
+        if (selectedTab == 0) {
         // ------------------------------------------------------------- زبان
         item {
             SettingsCard(
@@ -212,6 +226,29 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             }
         }
 
+        // ------------------------------------------------------ اندازه‌ی متن
+        item {
+            SettingsCard(
+                title = if (persian) "اندازه‌ی متن" else "Text size",
+                description = if (persian) "روی همه‌ی متن‌های برنامه اثر می‌گذارد" else "Scales text across the app",
+                icon = MIcons.Tune,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OptionChip(if (persian) "کوچک" else "Small", settings.textSize == AppTextSize.SMALL) {
+                        vm.setTextSize(AppTextSize.SMALL)
+                    }
+                    OptionChip(if (persian) "معمولی" else "Medium", settings.textSize == AppTextSize.MEDIUM) {
+                        vm.setTextSize(AppTextSize.MEDIUM)
+                    }
+                    OptionChip(if (persian) "بزرگ" else "Large", settings.textSize == AppTextSize.LARGE) {
+                        vm.setTextSize(AppTextSize.LARGE)
+                    }
+                }
+            }
+        }
+
+        }
+        if (selectedTab == 1) {
         // ------------------------------------------- پایش پس‌زمینه و اعلان
         item {
             SettingsCard(
@@ -268,10 +305,12 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 PermissionStatusRow(
                     label = context.getString(R.string.perm_notifications),
                     granted = notifGranted,
+                    onOpen = { UsageAccess.openNotificationSettings(context) },
                 )
                 PermissionStatusRow(
                     label = context.getString(R.string.perm_phone_state),
                     granted = phoneGranted,
+                    onOpen = { UsageAccess.openAppDetails(context) },
                 )
                 if (!notifGranted || !phoneGranted) {
                     Row(
@@ -410,6 +449,25 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 TextButton(onClick = { showDailyLimitDialog = true }) {
                     Text(if (persian) "تنظیم سقف روزانه" else "Set daily limit")
                 }
+                Spacer(Modifier.height(2.dp))
+                SwitchRow(
+                    label = if (persian) "هشدار جهش مصرف ساعتی" else "Hourly spike alerts",
+                    checked = settings.spikeAlertEnabled,
+                    description = if (persian) {
+                        "اگر مصرف این ساعت خیلی بیشتر از معمولِ همان ساعت باشد، به تو خبر می‌دهیم"
+                    } else {
+                        "Get notified when this hour's usage runs far above its usual level"
+                    },
+                ) { vm.setSpikeAlert(it) }
+                SwitchRow(
+                    label = if (persian) "خلاصه‌ی هفتگی" else "Weekly digest",
+                    checked = settings.weeklyDigestEnabled,
+                    description = if (persian) {
+                        "هر هفته یک جمع‌بندی از مصرف‌ات به‌همراه مقایسه با هفته‌ی قبل می‌گیری"
+                    } else {
+                        "A weekly summary of your usage, compared with the week before"
+                    },
+                ) { vm.setWeeklyDigest(it) }
             }
         }
 
@@ -444,6 +502,8 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             }
         }
 
+        }
+        if (selectedTab == 2) {
         // --------------------------------------------------- دوره‌ی صورتحساب
         item {
             SettingsCard(
@@ -464,6 +524,81 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             vm.setBillingDay(day)
                         }
                     }
+                }
+            }
+        }
+
+        // ------------------------------------------------- قیمت هر گیگابایت
+        item {
+            SettingsCard(
+                title = if (persian) "قیمت هر گیگابایت بسته" else "Price per GB",
+                description = if (persian) "هزینه‌ی تقریبی مصرف این دوره را برآورد می‌کنیم" else "We estimate this cycle's cost for you",
+                icon = MIcons.Chart,
+            ) {
+                Text(
+                    text = if (settings.tariffPerGbToman > 0) {
+                        (if (persian) "قیمت فعلی: " else "Current price: ") +
+                            Formats.integer(settings.tariffPerGbToman, persian) +
+                            (if (persian) " تومان به ازای هر گیگابایت" else " Toman per GB")
+                    } else {
+                        if (persian) "هنوز قیمتی وارد نشده" else "No price set yet"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (settings.tariffPerGbToman > 0 && dashboard.monthMobileBytes > 0) {
+                    val gb = dashboard.monthMobileBytes / (1024.0 * 1024.0 * 1024.0)
+                    val cost = (gb * settings.tariffPerGbToman).toLong()
+                    Text(
+                        text = (if (persian) "هزینه‌ی تقریبی این دوره: " else "Estimated cost this cycle: ") +
+                            Formats.integer(cost, persian) +
+                            (if (persian) " تومان" else " Toman"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                TextButton(onClick = { showTariffDialog = true }) {
+                    Text(if (persian) "تنظیم قیمت هر گیگ" else "Set price per GB")
+                }
+            }
+        }
+
+        // ----------------------------------------------------- داده‌ها و آمار
+        item {
+            SettingsCard(
+                title = if (persian) "داده‌ها و آمار" else "Data & stats",
+                description = if (persian) "آمار را صفر کن یا فقط از تاریخ انتخابی ببین"
+                else "Reset stats or show them only from a chosen date",
+                icon = MIcons.Trash,
+            ) {
+                if (settings.statsEpochMillis > 0) {
+                    Text(
+                        text = (if (persian) "آمار از " else "Stats shown from ") +
+                            JalaliDate.fromMillis(settings.statsEpochMillis).long(persian) +
+                            (if (persian) " به بعد محاسبه می‌شود" else " onwards"),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    TextButton(onClick = { vm.clearStatsEpoch() }) {
+                        Text(if (persian) "بازگشت به حالت پیش‌فرض (۳۰ روز اخیر)" else "Back to default (last 30 days)")
+                    }
+                }
+                FilledTonalButton(onClick = { showEpochPicker = true }) {
+                    Icon(MIcons.Calendar, null, Modifier.size(16.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text(if (persian) "شروع آمار از تاریخ مشخص…" else "Start stats from a date…", maxLines = 1)
+                }
+                Text(
+                    text = if (persian) "روزهای ۳۰ روز گذشته قابل انتخاب‌اند" else "Any day within the last 30 days",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { showResetDialog = true }) {
+                    Text(
+                        text = if (persian) "حذف همه‌ی آمار و شروع دوباره" else "Erase all stats and start over",
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
         }
@@ -490,6 +625,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         }
 
         item { Spacer(Modifier.height(8.dp)) }
+        }
     }
 
     if (showNotifSheet) {
@@ -571,6 +707,89 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             dismissButton = {
                 TextButton(onClick = { showDailyLimitDialog = false }) { Text(context.getString(R.string.cancel)) }
             },
+        )
+    }
+
+    if (showTariffDialog) {
+        var input by remember {
+            mutableStateOf(if (settings.tariffPerGbToman > 0) settings.tariffPerGbToman.toString() else "")
+        }
+        AlertDialog(
+            onDismissRequest = { showTariffDialog = false },
+            title = { Text(if (persian) "قیمت هر گیگابایت بسته" else "Price per GB") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (persian) {
+                            "قیمت بسته‌ات برای هر گیگابایت را به تومان وارد کن؛ برای برآورد هزینه‌ی این دوره استفاده می‌شود."
+                        } else {
+                            "Enter your plan's price per GB in Toman; used to estimate this cycle."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { raw ->
+                            input = Formats.normalizeDigits(raw).filter { it.isDigit() }.take(9)
+                        },
+                        label = { Text(if (persian) "تومان هر گیگابایت" else "Toman per GB") },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.setTariffPerGbToman(Formats.normalizeDigits(input).toLongOrNull() ?: 0L)
+                    showTariffDialog = false
+                }) { Text(context.getString(R.string.save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTariffDialog = false }) { Text(context.getString(R.string.cancel)) }
+            },
+        )
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text(if (persian) "حذف همه‌ی آمار" else "Erase all stats") },
+            text = {
+                Text(
+                    if (persian) {
+                        "همه‌ی آمار ثبت‌شده (نمونه‌های مصرف، جلسه‌ها و هیستوگرام ساعتی) برای همیشه حذف می‌شود و آمارگیری از همین لحظه از نو شروع می‌شود. این کار قابل بازگشت نیست."
+                    } else {
+                        "All recorded stats (usage samples, sessions and hourly histograms) will be permanently deleted, and tracking restarts from now. This cannot be undone."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.resetStats()
+                    showResetDialog = false
+                }) {
+                    Text(
+                        text = if (persian) "حذف همیشگی" else "Erase everything",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) { Text(context.getString(R.string.cancel)) }
+            },
+        )
+    }
+
+    if (showEpochPicker) {
+        JalaliDatePickerDialog(
+            persian = persian,
+            maxMillis = System.currentTimeMillis(),
+            minMillis = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000,
+            initialMillis = settings.statsEpochMillis.takeIf { it > 0 },
+            onPick = { dayStart ->
+                vm.setStatsEpochFromDay(dayStart)
+                showEpochPicker = false
+            },
+            onDismiss = { showEpochPicker = false },
         )
     }
 
@@ -712,18 +931,34 @@ private fun SwitchRow(
 
 /** وضعیتِ یک مجوز: لیبل و علامت (فعال / غیرفعال). */
 @Composable
-private fun PermissionStatusRow(label: String, granted: Boolean) {
+private fun PermissionStatusRow(label: String, granted: Boolean, onOpen: () -> Unit) {
     val ctx = LocalContext.current
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onOpen)
+            .padding(vertical = 6.dp, horizontal = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
+        Row(
+            Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            // آیکون پنجره به بیرون یعنی صفحه‌ی تنظیمات سیستم باز می‌شود
+            Icon(
+                imageVector = MIcons.OpenInNew,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = if (granted) MIcons.Check else MIcons.Clock,
@@ -784,6 +1019,18 @@ private fun OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 private fun changelogText(persian: Boolean): String = if (persian) {
+    "۱.۴.۰ – صفحه‌ی اپراتور تمام‌صفحه، هشدار جهش مصرف و خلاصه‌ی هفتگی\n" +
+        "• صفحه‌ی کامل جزئیات هر اپراتور: روند ۳۰ روزه، ساعت‌های اوج و تفکیک موبایل/وای‌فای؛ روی هر ستون روز بزن تا ۲۴ ساعت همان روز باز شود\n" +
+        "• کارت «اپراتورها و نوع اتصال» در خانه: امروز / ۷ روز اخیر / انتخاب تاریخ شمسی\n" +
+        "• ویجت دقیق‌تر: ردیف اختیاری دانلود/آپلود و اعمال فوری تغییرات\n" +
+        "• هشدار جهش مصرف ساعتی: اگر یک ساعت خیلی بیشتر از معمول همان ساعت مصرف کنی، خبرت می‌کنیم\n" +
+        "• خلاصه‌ی هفتگی: هر هفته جمع‌بندی مصرف با مقایسه با هفته‌ی قبل\n" +
+        "• قیمت هر گیگابایت بسته: هزینه‌ی تقریبی این دوره را نشان می‌دهیم\n" +
+        "• اندازه‌ی متن: کوچک (پیش‌فرض)، معمولی یا بزرگ\n" +
+        "• حذف همه‌ی آمار یا شروع آمار از تاریخ انتخابی (حداکثر ۳۰ روز پیش)\n" +
+        "• تیترهای بزرگ مثل iOS با نوار فشرده و تب‌های بالای صفحه؛ صفحه‌ها به تب جدا تقسیم شدند\n" +
+        "• دکمه‌های دسترسی مستقیم به صفحه‌ی خودشان در تنظیمات سیستم\n" +
+        "• «جلسه‌های سیم‌کارت و تطبیق شمارنده» حذف شد (پیچیده و کم‌فایده بود)\n\n" +
     "۱.۳.۰ – آیکون جدید، پینگ واقعی، لوگوی اپراتورها و ۴ قابلیت تازه\n" +
         "• آیکون کاملاً بازطراحی‌شده با پشتیبانی از همه‌ی شکل‌ها و آیکون تم‌دار\n" +
         "• پینگ درست شد: تأخیر واقعی تا سرور به‌جای پاسخ محلی VPN (۳–۴ میلی‌ثانیه‌ی اشتباه)\n" +
@@ -821,6 +1068,18 @@ private fun changelogText(persian: Boolean): String = if (persian) {
         "• فارسی/انگلیسی با چیدمان راست‌چین و چپ‌چین\n" +
         "• طراحی Material 3 Expressive"
 } else {
+    "1.4.0 – Full-screen operator page, spike alerts & weekly digest\n" +
+        "• Full operator details page: 30-day trend, peak hours, mobile/Wi-Fi split; tap any day bar for its 24 hours\n" +
+        "• \"Operators & transport\" card on Home: today / last 7 days / pick a Jalali date\n" +
+        "• Richer widget: optional download/upload row; settings apply instantly\n" +
+        "• Hourly spike alerts when a single hour runs far above its usual level\n" +
+        "• Weekly digest: your week vs. the week before\n" +
+        "• Price per GB: see this cycle's estimated cost\n" +
+        "• Text size: small (default), medium or large\n" +
+        "• Erase all stats or start tracking from a chosen day (up to 30 days back)\n" +
+        "• iOS-style large collapsing titles with animated top tabs; pages split into tabs\n" +
+        "• Permission rows jump straight to their own system pages\n" +
+        "• Removed \"SIM sessions & counter audit\" (complex, low value)\n\n" +
     "1.3.0 – New icon, real ping, operator logos & 4 new features\n" +
         "• Fully redesigned icon for every launcher shape, plus a themed icon\n" +
         "• Ping fixed: real round-trip delay to the server instead of the VPN's local 3–4 ms reply\n" +

@@ -122,5 +122,60 @@ data class JalaliDate(val year: Int, val month: Int, val day: Int) {
         fun axisDay(millis: Long, persian: Boolean, zone: TimeZone = TimeZone.getDefault()): String =
             if (persian) Formats.toPersianDigits("${fromMillis(millis, zone).day}")
             else "${Calendar.getInstance(zone).apply { timeInMillis = millis }.get(Calendar.DAY_OF_MONTH)}"
+
+        /** طول یک ماه شمسی (۱۲ فروردین‌ماه‌ها ۳۱ روز، ۷ تا ۱۱، و اسفند ۲۹ یا ۳۰ روز). */
+        fun monthLength(year: Int, month: Int): Int {
+            require(month in 1..12) { "month must be in 1..12, was $month" }
+            if (month <= 6) return 31
+            if (month <= 11) return 30
+            val start = toMillis(year, 12, 1, zone = TimeZone.getDefault())
+            val next = toMillis(year + 1, 1, 1, zone = TimeZone.getDefault())
+            return ((next - start) / 86_400_000L).toInt().coerceIn(29, 30)
+        }
+
+        fun isValid(year: Int, month: Int, day: Int): Boolean =
+            month in 1..12 && day in 1..monthLength(year, month)
+
+        /**
+         * شروع روز (نیمه‌شب به وقت محلی) به عنوان millis برای یک تاریخ جلالی.
+         * با جستجوی دودویی روی همان fromGregorian موجود پیاده شده تا خروجی همیشه
+         * با باقی توابع کلاس سازگار باشد و فرمول جداگانه‌ای لازم نداشته باشد.
+         */
+        fun toMillis(year: Int, month: Int, day: Int, zone: TimeZone = TimeZone.getDefault()): Long {
+            require(month in 1..12) { "month must be in 1..12, was $month" }
+            require(day in 1..31) { "day must be in 1..31, was $day" }
+            fun compareTriple(y: Int, m: Int, d: Int): Int {
+                if (y != year) return y.compareTo(year)
+                if (m != month) return m.compareTo(month)
+                return d.compareTo(day)
+            }
+            val base = Calendar.getInstance(zone).apply {
+                clear()
+                set(1900, Calendar.JANUARY, 1, 0, 0, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            var lo = 0
+            var hi = 150_000 // ~410 سال؛ همه‌ی تاریخ‌های معتبر را پوشش می‌دهد
+            var result = -1L
+            while (lo <= hi) {
+                val mid = (lo + hi) / 2
+                val cal = (base.clone() as Calendar).apply {
+                    add(Calendar.DAY_OF_MONTH, mid)
+                }
+                val converted = fromGregorian(
+                    cal.get(Calendar.YEAR),
+                    cal.get(Calendar.MONTH) + 1,
+                    cal.get(Calendar.DAY_OF_MONTH),
+                )
+                val cmp = compareTriple(converted.year, converted.month, converted.day)
+                if (cmp == 0) {
+                    result = cal.timeInMillis
+                    break
+                }
+                if (cmp < 0) lo = mid + 1 else hi = mid - 1
+            }
+            require(result >= 0) { "date out of supported range: $year/$month/$day" }
+            return result
+        }
     }
 }

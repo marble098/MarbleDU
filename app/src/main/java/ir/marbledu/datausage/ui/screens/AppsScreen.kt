@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
@@ -54,6 +56,7 @@ import ir.marbledu.datausage.ui.SplitBar
 import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import ir.marbledu.datausage.ui.InfoChip
 import ir.marbledu.datausage.ui.MainViewModel
+import ir.marbledu.datausage.ui.LargeTitleScaffold
 import ir.marbledu.datausage.ui.SectionTitle
 import ir.marbledu.datausage.ui.UsageBar
 import ir.marbledu.datausage.util.UsageAccess
@@ -72,13 +75,17 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         vm.loadUsage()
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(top = 8.dp, bottom = ir.marbledu.datausage.ui.FloatingBarClearance),
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val appsTabs = if (persian) listOf("نمودار", "همه‌ی اپ‌ها") else listOf("Chart", "All apps")
+    val listState = rememberLazyListState()
+    LargeTitleScaffold(
+        title = if (persian) "اپ‌ها" else "Apps",
+        listState = listState,
+        subtitle = if (persian) "مصرف هر اپ در بازه‌ی انتخاب‌شده" else "Per-app usage for the selected range",
+        tabs = appsTabs,
+        selectedTab = selectedTab,
+        onTabSelected = { selectedTab = it },
     ) {
-        item { SectionTitle(text = context.getString(R.string.per_app)) }
-
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(TimeRange.entries.toList()) { range ->
@@ -145,6 +152,7 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             item { EmptyState(context.getString(R.string.no_data_yet)) }
         } else {
             val max = combined.maxOf { it.first }
+            if (selectedTab == 0) {
             item {
                 val top = combined.take(5)
                 val rest = combined.drop(5).fold(0L) { acc, pair -> acc + pair.first }
@@ -203,6 +211,7 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     }
                 }
             }
+            } else {
             items(combined) { (bytes, app) ->
                 val displayName = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
                 val subLabel = if (app.packageName.startsWith("uid:")) {
@@ -253,6 +262,7 @@ fun AppsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         )
                     }
                 }
+            }
             }
         }
     }

@@ -49,4 +49,12 @@ object UsageAccess {
             if (runCatching { context.startActivity(intent) }.isSuccess) return
         }
     }
+
+    /** باز کردن صفحه‌ی جزئیات اپ در تنظیمات سیستم (مجوزها و اعلان‌ها از این‌جا قابل تغییرند). */
+    fun openAppDetails(context: Context) {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.parse("package:${context.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(intent) }
+    }
 }

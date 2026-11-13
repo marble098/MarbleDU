@@ -19,6 +19,13 @@ enum class AppLanguage { SYSTEM, PERSIAN, ENGLISH }
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** اندازه‌ی متن رابط کاربری؛ پیش‌فرض «کوچک» است و از تنظیمات قابل تغییر است. */
+enum class AppTextSize(val fa: String, val en: String, val scale: Float) {
+    SMALL("کوچک", "Small", 0.82f),
+    MEDIUM("متوسط", "Medium", 1f),
+    LARGE("بزرگ", "Large", 1.18f),
+}
+
 /** سبک نمایش اعلان پایش. */
 enum class NotificationStyle { COMPACT, BALANCED, EXPANDED }
 
@@ -204,6 +211,19 @@ data class AppSettings(
     val widgetDetailed: Boolean = false,
     /** ویجت: اندازه متن بزرگتر. */
     val widgetBigText: Boolean = false,
+    /** اندازه‌ی متن رابط کاربری؛ پیش‌فرض کوچک. */
+    val textSize: AppTextSize = AppTextSize.SMALL,
+    /**
+     * شروع آمارگیری: روزهایی قبل از این زمان در گزارش‌ها و نمودارها محاسبه و نشان داده نمی‌شوند.
+     * ۰ یعنی حالت پیش‌فرض (۳۰ روز اخیر).
+     */
+    val statsEpochMillis: Long = 0L,
+    /** تعرفه‌ی هر گیگابایت بر حسب تومان؛ ۰ یعنی تخمین هزینه خاموش است. */
+    val tariffPerGbToman: Long = 0L,
+    /** هشدار «مصرف غیرعادیِ این ساعت» روی اعلان پایش. */
+    val spikeAlertEnabled: Boolean = true,
+    /** خلاصه‌ی هفتگی: یک‌بار در هفته آمار هفته‌ی گذشته را اعلان می‌کند. */
+    val weeklyDigestEnabled: Boolean = true,
 ) {
     val dailyLimitBytes: Long get() = dailyLimitMb.toLong() * 1024L * 1024L
 }
@@ -229,6 +249,12 @@ class SettingsRepository(private val context: Context) {
         val WIDGET_CAP = booleanPreferencesKey("widget_cap")
         val WIDGET_DETAILED = booleanPreferencesKey("widget_detailed")
         val WIDGET_BIG_TEXT = booleanPreferencesKey("widget_big_text")
+
+        val TEXT_SIZE = stringPreferencesKey("text_size")
+        val STATS_EPOCH = longPreferencesKey("stats_epoch")
+        val TARIFF_PER_GB = longPreferencesKey("tariff_per_gb_toman")
+        val SPIKE_ALERT = booleanPreferencesKey("spike_alert")
+        val WEEKLY_DIGEST = booleanPreferencesKey("weekly_digest")
 
         val NOTIF_STYLE = stringPreferencesKey("notif_style")
         val NOTIF_TITLE_MODE = stringPreferencesKey("notif_title_mode")
@@ -310,6 +336,12 @@ class SettingsRepository(private val context: Context) {
             widgetShowCap = p[Keys.WIDGET_CAP] ?: true,
             widgetDetailed = p[Keys.WIDGET_DETAILED] ?: false,
             widgetBigText = p[Keys.WIDGET_BIG_TEXT] ?: false,
+            textSize = p[Keys.TEXT_SIZE]?.let { runCatching { AppTextSize.valueOf(it) }.getOrNull() }
+                ?: AppTextSize.SMALL,
+            statsEpochMillis = p[Keys.STATS_EPOCH] ?: 0L,
+            tariffPerGbToman = p[Keys.TARIFF_PER_GB] ?: 0L,
+            spikeAlertEnabled = p[Keys.SPIKE_ALERT] ?: true,
+            weeklyDigestEnabled = p[Keys.WEEKLY_DIGEST] ?: true,
         )
     }
 
@@ -337,6 +369,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setWidgetCap(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_CAP] = value }
     suspend fun setWidgetDetailed(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_DETAILED] = value }
     suspend fun setWidgetBigText(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_BIG_TEXT] = value }
+    suspend fun setTextSize(value: AppTextSize) = context.dataStore.edit { it[Keys.TEXT_SIZE] = value.name }
+    /** شروع آمارگیری را به یک روز مشخص می‌برد؛ ۰ برای بازگشت به ۳۰ روز اخیر. */
+    suspend fun setStatsEpoch(value: Long) = context.dataStore.edit { it[Keys.STATS_EPOCH] = value.coerceAtLeast(0L) }
+    suspend fun setTariffPerGb(value: Long) = context.dataStore.edit { it[Keys.TARIFF_PER_GB] = value.coerceIn(0L, 100_000_000L) }
+    suspend fun setSpikeAlert(value: Boolean) = context.dataStore.edit { it[Keys.SPIKE_ALERT] = value }
+    suspend fun setWeeklyDigest(value: Boolean) = context.dataStore.edit { it[Keys.WEEKLY_DIGEST] = value }
 
     suspend fun setOnboarded(value: Boolean) = context.dataStore.edit { it[Keys.ONBOARDED] = value }
 

@@ -24,9 +24,13 @@ import ir.marbledu.datausage.data.TimeMath
 import ir.marbledu.datausage.data.HourOperatorTraffic
 import ir.marbledu.datausage.data.SimIdentity
 import ir.marbledu.datausage.data.UiMode
+import ir.marbledu.datausage.data.AppTextSize
+import ir.marbledu.datausage.data.OperatorDayStat
+import ir.marbledu.datausage.data.OperatorRangeRow
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.TimeRange
 import ir.marbledu.datausage.data.Traffic
+import ir.marbledu.datausage.widget.UsageWidgetProvider
 import ir.marbledu.datausage.service.MonitorService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -78,13 +82,29 @@ data class DayReportUi(
     val loading: Boolean = false,
 )
 
-/** ترافیک ساعتی یک اپراتور در یک روز خاص. */
-data class OperatorHourlyUi(
-    val dayStart: Long = 0L,
+/** صفحه‌ی کامل جزئیات یک اپراتور در ۳۰ روز اخیر. */
+data class OperatorDetailUi(
     val operatorId: String = "",
     val sim: SimIdentity? = null,
-    val hours: List<HourOperatorTraffic> = emptyList(),
     val loading: Boolean = false,
+    val days: List<OperatorDayStat> = emptyList(),
+    /** هیستوگرام ساعتی جمع کل ۳۰ روز. */
+    val hours: List<HourOperatorTraffic> = emptyList(),
+    /** روز انتخاب‌شده برای نمودار ۲۴ ساعته (۰ یعنی هیچکدام). */
+    val selectedDayStart: Long = 0L,
+    val selectedDayHours: List<HourOperatorTraffic> = emptyList(),
+    val selectedDayLoading: Boolean = false,
+)
+
+/** کارت «اپراتورها»: مصرف هر اپراتور در بازه‌ی دلخواه. */
+data class OperatorRangeUi(
+    /** ۰ = امروز، ۱ = ۷ روز اخیر، ۲ = انتخاب تاریخ. */
+    val mode: Int = 0,
+    val from: Long = 0L,
+    val to: Long = 0L,
+    val rows: List<OperatorRangeRow> = emptyList(),
+    val loading: Boolean = false,
+    val loadedOnce: Boolean = false,
 )
 
 private const val HISTORY_CACHE_MS = 2L * 60 * 1000
@@ -128,12 +148,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _dayReport = MutableStateFlow(DayReportUi())
     val dayReport: StateFlow<DayReportUi> = _dayReport.asStateFlow()
 
-    private val _operatorHourly = MutableStateFlow(OperatorHourlyUi())
-    val operatorHourly: StateFlow<OperatorHourlyUi> = _operatorHourly.asStateFlow()
+
+    private val _operatorDetail = MutableStateFlow(OperatorDetailUi())
+    val operatorDetail: StateFlow<OperatorDetailUi> = _operatorDetail.asStateFlow()
+
+    private val _operatorRange = MutableStateFlow(OperatorRangeUi())
+    val operatorRange: StateFlow<OperatorRangeUi> = _operatorRange.asStateFlow()
 
     private var historyJob: Job? = null
     private var dayJob: Job? = null
-    private var operatorHourlyJob: Job? = null
+    private var operatorDetailJob: Job? = null
+    private var operatorRangeJob: Job? = null
     private var liveJob: Job? = null
     private var lastRefreshAllAt = 0L
     private var pingJob: Job? = null
@@ -158,7 +183,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 lastLanguage = language
             }
         }
-        // پایش و گزارش سنگین تا پایان راه‌اندازی/نمایش رابط شروع نمی‌شوند.
+        // با تغییر شروعِ آمارگیری (ریست یا انتخاب روز)، داشبورد و تاریخچه خودبه‌خود تازه می‌شوند.
+        viewModelScope.launch {
+            var seen = false
+            settings.map { it.statsEpochMillis }.distinctUntilChanged().collect {
+                if (!seen) {
+                    seen = true
+                    return@collect
+                }
+                refreshDashboard()
+                if (_history.value.loadedAt > 0L) loadHistory(force = true)
+                if (_operatorRange.value.loadedOnce) {
+                    loadOperatorRange(_operatorRange.value.mode)
+                }
+            }
+        }
     }
 
     private fun refreshLiveNetworkSnapshot() {
@@ -184,6 +223,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_history.value.loadedAt > 0L) loadHistory()
     }
 
+    /** مجوزهای اعطاشده را از روی دستگاه می‌خواند (به‌جای اتکا به callback نصب). */
+    fun refreshPermissions() {
+        val app = getApplication<Application>()
+        val granted = mutableSetOf<String>()
+        if (app.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) granted += android.Manifest.permission.POST_NOTIFICATIONS
+        if (app.checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) granted += android.Manifest.permission.READ_PHONE_STATE
+        MarbleDuApp.instance.permissionState.value = granted
+    }
+
     // ------------------------------------------------------------- 30 days
     /** فهرست ۳۰ روز اخیر؛ فقط در اولین ورود یا پس از منقضی شدن cache دوباره خوانده می‌شود. */
     fun loadHistory(force: Boolean = false) {
@@ -193,7 +245,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ) return
         historyJob = viewModelScope.launch(Dispatchers.IO) {
             _history.value = _history.value.copy(loading = true)
-            val days = repository.daySummaries(30)
+            val days = repository.daySummaries(30, settings.value.statsEpochMillis)
             _history.value = HistoryUi(days = days, loading = false, loadedAt = System.currentTimeMillis())
             val selected = _dayReport.value.dayStart
             val target = days.firstOrNull { it.startMillis == selected } ?: days.lastOrNull()
@@ -207,7 +259,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         dayJob = viewModelScope.launch {
             val keep = _dayReport.value.report?.takeIf { _dayReport.value.dayStart == dayStart }
             _dayReport.value = DayReportUi(dayStart = dayStart, report = keep, loading = true)
-            val report = repository.dayReport(summary)
+            val report = repository.dayReport(summary, settings.value.statsEpochMillis)
             _dayReport.value = DayReportUi(dayStart = dayStart, report = report, loading = false)
         }
     }
@@ -270,11 +322,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
             // آمار دستگاه (source of truth) را مستقیم می‌خوانیم؛ جمع UIDهای اپ‌ها
             // برای داشبورد کندتر و در بعضی نسخه‌های اندروید ناقص است.
-            val todayMobile = repository.aggregateTraffic(dayStart, now, ConnectionType.CELLULAR)
-            val todayWifi = repository.aggregateTraffic(dayStart, now, ConnectionType.WIFI)
-            val monthMobile = repository.aggregateTraffic(monthStart, now, ConnectionType.CELLULAR)
-            val monthWifi = repository.aggregateTraffic(monthStart, now, ConnectionType.WIFI)
-            val week = repository.dailyTotals(7, ConnectionType.CELLULAR)
+            val epoch = settings.value.statsEpochMillis
+            val todayMobile = repository.aggregateTraffic(dayStart, now, ConnectionType.CELLULAR, epoch)
+            val todayWifi = repository.aggregateTraffic(dayStart, now, ConnectionType.WIFI, epoch)
+            val monthMobile = repository.aggregateTraffic(monthStart, now, ConnectionType.CELLULAR, epoch)
+            val monthWifi = repository.aggregateTraffic(monthStart, now, ConnectionType.WIFI, epoch)
+            val week = repository.dailyTotals(7, ConnectionType.CELLULAR, epoch)
 
             val persian = LocaleHelper.isPersian(settings.value.language)
             val snapshot = NetworkStatsReader.currentNetwork(getApplication(), persian)
@@ -307,7 +360,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _usage.value = _usage.value.copy(range = range, loading = true)
             val now = System.currentTimeMillis()
             val from = TimeMath.rangeStart(range, now, settings.value.billingCycleDay)
-            val (mobile, wifi) = repository.detailedBreakdown(from, now)
+            val (mobile, wifi) = repository.detailedBreakdown(from, now, settings.value.statsEpochMillis)
             _usage.value = AppUsageUi(
                 range = range,
                 mobile = mobile,
@@ -321,7 +374,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setLanguage(language: AppLanguage) = viewModelScope.launch { settingsRepo.setLanguage(language) }
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { settingsRepo.setTheme(mode) }
     fun setPalette(name: String, dynamic: Boolean) = viewModelScope.launch { settingsRepo.setPalette(name, dynamic) }
-    fun setDataCap(bytes: Long) = viewModelScope.launch { settingsRepo.setDataCap(bytes) }
+    fun setDataCap(bytes: Long) = viewModelScope.launch {
+        settingsRepo.setDataCap(bytes)
+        refreshWidget()
+    }
     fun setBillingDay(day: Int) = viewModelScope.launch { settingsRepo.setBillingCycleDay(day.coerceIn(1, 28)) }
     fun setUsageAlerts(on: Boolean) = viewModelScope.launch { settingsRepo.setUsageAlerts(on) }
     fun setDailyLimitMb(mb: Int) = viewModelScope.launch { settingsRepo.setDailyLimitMb(mb) }
@@ -333,28 +389,143 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** حالت نمایشی اپ (ساده / پیشرفته). */
     fun setUiMode(mode: UiMode) = viewModelScope.launch { settingsRepo.setUiMode(mode) }
 
-    fun setWidgetOperator(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetOperator(value) }
-    fun setWidgetCap(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetCap(value) }
-    fun setWidgetDetailed(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetDetailed(value) }
-    fun setWidgetBigText(value: Boolean) = viewModelScope.launch { settingsRepo.setWidgetBigText(value) }
+    /** ویجت همیشه بعد از تغییر تنظیمات (و ذخیره‌ی مقدار) بلافاصله دوباره رسم می‌شود. */
+    private suspend fun refreshWidget() {
+        runCatching { UsageWidgetProvider.refresh(getApplication()) }
+    }
 
-    /** ترافیک ساعتی یک اپراتور در روز انتخاب‌شده (برای گزارش ۲۴ ساعت). */
-    fun loadOperatorHourly(dayStart: Long, operatorId: String, sim: SimIdentity?) {
-        operatorHourlyJob?.cancel()
-        _operatorHourly.value = OperatorHourlyUi(
-            dayStart = dayStart,
-            operatorId = operatorId,
-            sim = sim,
-            loading = true,
-        )
-        operatorHourlyJob = viewModelScope.launch(Dispatchers.IO) {
-            val hours = repository.hourlyOperatorTraffic(dayStart, operatorId, sim)
-            _operatorHourly.value = OperatorHourlyUi(
-                dayStart = dayStart,
+    fun setWidgetOperator(value: Boolean) = viewModelScope.launch {
+        settingsRepo.setWidgetOperator(value)
+        refreshWidget()
+    }
+    fun setWidgetCap(value: Boolean) = viewModelScope.launch {
+        settingsRepo.setWidgetCap(value)
+        refreshWidget()
+    }
+    fun setWidgetDetailed(value: Boolean) = viewModelScope.launch {
+        settingsRepo.setWidgetDetailed(value)
+        refreshWidget()
+    }
+    fun setWidgetBigText(value: Boolean) = viewModelScope.launch {
+        settingsRepo.setWidgetBigText(value)
+        refreshWidget()
+    }
+
+    fun setTextSize(size: AppTextSize) = viewModelScope.launch { settingsRepo.setTextSize(size) }
+    fun setTariffPerGbToman(value: Long) = viewModelScope.launch { settingsRepo.setTariffPerGb(value) }
+    fun setSpikeAlert(enabled: Boolean) = viewModelScope.launch { settingsRepo.setSpikeAlert(enabled) }
+    fun setWeeklyDigest(enabled: Boolean) = viewModelScope.launch { settingsRepo.setWeeklyDigest(enabled) }
+
+    /** پاک کردن کامل آمار فعلی و شروع آمارگیری از همین لحظه (برگشت‌ناپذیر). */
+    fun resetStats() = viewModelScope.launch {
+        val app = getApplication<Application>()
+        ir.marbledu.datausage.data.UsageLedger.clearAll(app)
+        // کلیدهای هشدار مصرف/جهش مصرف هم پاک می‌شوند تا دوباره همان ساعت‌ها اعلان نگیری
+        app.getSharedPreferences("marbledu_spike_alerts", android.content.Context.MODE_PRIVATE).edit().clear().apply()
+        app.getSharedPreferences("marbledu_usage_alerts", android.content.Context.MODE_PRIVATE).edit().clear().apply()
+        settingsRepo.setStatsEpoch(System.currentTimeMillis())
+        _history.value = HistoryUi()
+        _dayReport.value = DayReportUi()
+        refreshDashboard()
+        refreshWidget()
+    }
+
+    /** شروع آمارگیری از یک روز مشخص؛ آمار قبل از آن دیگر نشان داده نمی‌شود. */
+    fun setStatsEpochFromDay(dayStartMillis: Long) = viewModelScope.launch {
+        settingsRepo.setStatsEpoch(dayStartMillis)
+        refreshDashboard()
+        if (_history.value.loadedAt > 0L) loadHistory(force = true)
+        refreshWidget()
+    }
+
+    /** بازگشت به حالت پیش‌فرض (۳۰ روز اخیر، بدون شروعِ سفارشی). */
+    fun clearStatsEpoch() = viewModelScope.launch {
+        settingsRepo.setStatsEpoch(0L)
+        refreshDashboard()
+        if (_history.value.loadedAt > 0L) loadHistory(force = true)
+        refreshWidget()
+    }
+
+    /** باز شدن صفحه‌ی کامل جزئیات اپراتور (۳۰ روز اخیر از روی آمار دستگاه + دفتر اپراتور). */
+    fun openOperatorDetail(operatorId: String, sim: SimIdentity?) {
+        operatorDetailJob?.cancel()
+        _operatorDetail.value = OperatorDetailUi(operatorId = operatorId, sim = sim, loading = true)
+        operatorDetailJob = viewModelScope.launch(Dispatchers.IO) {
+            val data = repository.operatorDetail(
                 operatorId = operatorId,
                 sim = sim,
-                hours = hours,
+                days = 30,
+                epochMillis = settings.value.statsEpochMillis,
+            )
+            val selectedDay = data.days.lastOrNull { it.total > 0L }?.dayStart ?: 0L
+            val selectedHours = if (selectedDay > 0L) {
+                repository.hourlyOperatorTraffic(selectedDay, operatorId, sim)
+            } else {
+                emptyList()
+            }
+            _operatorDetail.value = OperatorDetailUi(
+                operatorId = operatorId,
+                sim = sim,
                 loading = false,
+                days = data.days,
+                hours = data.hours,
+                selectedDayStart = selectedDay,
+                selectedDayHours = selectedHours,
+                selectedDayLoading = false,
+            )
+        }
+    }
+
+    /** انتخاب یک روز در صفحه‌ی جزئیات اپراتور برای نمودار ۲۴ ساعته. */
+    fun selectOperatorDetailDay(dayStart: Long) {
+        val current = _operatorDetail.value
+        val operatorId = current.operatorId
+        if (operatorId.isBlank() || dayStart <= 0L) return
+        if (current.selectedDayStart == dayStart && current.selectedDayHours.isNotEmpty()) return
+        _operatorDetail.value = current.copy(selectedDayStart = dayStart, selectedDayLoading = true)
+        operatorDetailJob?.cancel()
+        operatorDetailJob = viewModelScope.launch(Dispatchers.IO) {
+            val hours = repository.hourlyOperatorTraffic(dayStart, operatorId, current.sim)
+            _operatorDetail.value = _operatorDetail.value.copy(
+                selectedDayHours = hours,
+                selectedDayLoading = false,
+            )
+        }
+    }
+
+    /** کارت «اپراتورها»: امروز / ۷ روز اخیر / انتخاب تاریخ شمسی. */
+    fun loadOperatorRange(mode: Int, pickedDayStart: Long? = null) {
+        operatorRangeJob?.cancel()
+        _operatorRange.value = _operatorRange.value.copy(mode = mode, loading = true)
+        operatorRangeJob = viewModelScope.launch(Dispatchers.IO) {
+            val now = System.currentTimeMillis()
+            val dayStart = TimeMath.dayStart(now)
+            val dayMillis = 86_400_000L
+            val from: Long
+            val to: Long
+            when (mode) {
+                0 -> {
+                    from = dayStart
+                    to = now
+                }
+                1 -> {
+                    from = dayStart - 6L * dayMillis
+                    to = now
+                }
+                else -> {
+                    val picked = pickedDayStart ?: dayStart
+                    from = picked
+                    to = minOf(picked + dayMillis, now)
+                }
+            }
+            val rows = repository.operatorRange(from, to, settings.value.statsEpochMillis)
+            _operatorRange.value = OperatorRangeUi(
+                mode = mode,
+                from = from,
+                to = to,
+                rows = rows,
+                loading = false,
+                loadedOnce = true,
             )
         }
     }

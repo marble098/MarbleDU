@@ -21,6 +21,7 @@ import ir.marbledu.datausage.data.NotificationLockVisibility
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.data.UsageLedger
+import ir.marbledu.datausage.data.TimeMath
 import ir.marbledu.datausage.widget.UsageWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -104,6 +105,12 @@ class MonitorService : Service() {
 
     @Volatile
     private var lastTopAppPersian: Boolean? = null
+
+    @Volatile
+    private var lastSpikeCheckAt: Long = 0L
+
+    @Volatile
+    private var lastDigestCheckAt: Long = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -240,6 +247,8 @@ class MonitorService : Service() {
                             todayMobileBytes = cachedTodayMobile.total,
                             capUsedBytes = cachedMonthMobileBytes,
                         )
+                        checkSpikeAlert(settings, persian)
+                        checkWeeklyDigest(settings, persian)
                         UsageWidgetProvider.push(
                             this@MonitorService,
                             UsageWidgetProvider.Snapshot(
@@ -251,12 +260,82 @@ class MonitorService : Service() {
                                 ),
                                 capUsedBytes = cachedMonthMobileBytes,
                                 capTotalBytes = settings.dataCapBytes,
+                                showOperator = settings.widgetShowOperator,
+                                showCap = settings.widgetShowCap,
+                                bigText = settings.widgetBigText,
+                                detailed = settings.widgetDetailed,
+                                rxBytes = cachedTodayMobile.rx + cachedTodayWifi.rx,
+                                txBytes = cachedTodayMobile.tx + cachedTodayWifi.tx,
                             ),
                         )
                     }
                 }
                 delay(intervalSeconds * 1000L)
             }
+        }
+    }
+
+    /**
+     * هشدار مصرف غیرعادی: اگر مصرف همین ساعت خیلی بیشتر از میانگین همان ساعت
+     * در ۷ روز گذشته (بر اساس دفتر ثبت اپراتور) باشد، یک اعلان می‌دهد.
+     * حداکثر هر ۵ دقیقه یک‌بار بررسی می‌شود تا هزینه‌ی محاسباتی نداشته باشد.
+     */
+    private fun checkSpikeAlert(settings: AppSettings, persian: Boolean) {
+        if (!settings.spikeAlertEnabled) return
+        val now = System.currentTimeMillis()
+        if (now - lastSpikeCheckAt < 5 * 60 * 1000L) return
+        lastSpikeCheckAt = now
+        val hourStart = TimeMath.dayStart(now).let { dayStart ->
+            val cal = java.util.Calendar.getInstance().apply {
+                timeInMillis = now
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            cal.timeInMillis
+        }
+        val currentHour = java.util.Calendar.getInstance().apply { timeInMillis = now }
+            .get(java.util.Calendar.HOUR_OF_DAY)
+        val hourKey = (TimeMath.dayStart(now) / 86_400_000L).toString() + "-" + currentHour
+        var hourBytes = 0L
+        var sameHourAverage = 0L
+        val dayMillis = 86_400_000L
+        var samples = 0
+        val todayStart = TimeMath.dayStart(now)
+        for (daysAgo in 0..7) {
+            val day = todayStart - daysAgo * dayMillis
+            UsageLedger.hourlyForDay(this, day).filter { it.hour == currentHour }.forEach {
+                hourBytes += if (daysAgo == 0) it.total else 0L
+                if (daysAgo > 0) sameHourAverage += it.total
+            }
+            if (daysAgo > 0) samples++
+        }
+        if (samples > 0) sameHourAverage /= samples
+        // مصرف همین ساعت را حداقل از ساعت اخیر می‌خواهیم دقیق داشته باشیم.
+        if (hourBytes <= 0L && now - hourStart >= 0) {
+            // دفتر در چند ثانیه‌ی اخیر هنوز نمونه نگرفته؛ بررسی بعدی جبران می‌کند.
+        }
+        if (hourBytes <= 0L) return
+        UsageSpikeNotifier.checkAndAlert(
+            context = this,
+            persian = persian,
+            hourBytes = hourBytes,
+            averageSameHourBytes = sameHourAverage,
+            hourKey = hourKey,
+        )
+    }
+
+    /**
+     * خلاصه‌ی هفتگی: هر ساعت یک‌بار بررسی می‌کند که آیا یک هفته از آخرین خلاصه
+     * گذشته است یا نه؛ در صورت گذشته‌بودن، اعلان جمع‌بندی هفته ارسال می‌شود.
+     */
+    private suspend fun checkWeeklyDigest(settings: AppSettings, persian: Boolean) {
+        if (!settings.weeklyDigestEnabled) return
+        val now = System.currentTimeMillis()
+        if (now - lastDigestCheckAt < 60 * 60 * 1000L) return
+        lastDigestCheckAt = now
+        runCatching {
+            WeeklyDigestNotifier.maybePost(this, persian, settings.statsEpochMillis)
         }
     }
 
@@ -278,7 +357,7 @@ class MonitorService : Service() {
                 cachedTodayMobile = m
                 cachedTodayWifi = w
                 if (settings.dataCapBytes > 0L) {
-                    cachedMonthMobileBytes = appRepo.monthMobileTotal()
+                    cachedMonthMobileBytes = appRepo.monthMobileTotal(settings.statsEpochMillis)
                 }
                 lastStatsFetchAt = now
             }

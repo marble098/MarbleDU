@@ -496,6 +496,25 @@ object UsageLedger {
     }
 
     /**
+     * پاک کردن کامل آمار ثبت‌شده (دفتر اپراتور + جلسه‌های موبایل).
+     * برگشت‌ناپذیر است؛ فقط از ریست دستی کاربر صدا زده می‌شود.
+     */
+    fun clearAll(context: Context) {
+        synchronized(lock) {
+            ensureLoaded(context)
+            entries.clear()
+            sessions.clear()
+            dirty = false
+            sessionsDirty = false
+            lastCounters = null
+            lastSampleAt = 0L
+            nextSessionId = 1L
+            ledgerFile?.let { runCatching { it.delete() } }
+            sessionsFile?.let { runCatching { it.delete() } }
+        }
+    }
+
+    /**
      * با آمار کل دستگاه تطبیق می‌دهد، اما ثبت مشاهده‌شده را تغییر نمی‌دهد.
      * اختلافِ اندازه‌گیری به‌صورت «نامشخص/تخصیص‌نیافته» اضافه می‌شود تا حجم گمشده
      * به اپراتور یا سیم‌کارتی که در آن بازه حاضر نبوده، نسبت داده نشود.

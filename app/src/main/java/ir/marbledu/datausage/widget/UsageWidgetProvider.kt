@@ -51,6 +51,9 @@ class UsageWidgetProvider : AppWidgetProvider() {
         val showOperator: Boolean = true,
         val showCap: Boolean = true,
         val bigText: Boolean = false,
+        val detailed: Boolean = false,
+        val rxBytes: Long = 0L,
+        val txBytes: Long = 0L,
     )
 
     companion object {
@@ -72,7 +75,7 @@ class UsageWidgetProvider : AppWidgetProvider() {
             val persian = LocaleHelper.isPersian(settings.language)
             val (mobile, wifi) = runCatching { app.appUsageRepository.todayDeviceTraffic() }.getOrNull() ?: return
             val capUsed = if (settings.dataCapBytes > 0L) {
-                runCatching { app.appUsageRepository.monthMobileTotal() }.getOrDefault(0L)
+                runCatching { app.appUsageRepository.monthMobileTotal(settings.statsEpochMillis) }.getOrDefault(0L)
             } else 0L
             render(
                 context,
@@ -86,6 +89,9 @@ class UsageWidgetProvider : AppWidgetProvider() {
                     showOperator = settings.widgetShowOperator,
                     showCap = settings.widgetShowCap,
                     bigText = settings.widgetBigText,
+                    detailed = settings.widgetDetailed,
+                    rxBytes = mobile.rx + wifi.rx,
+                    txBytes = mobile.tx + wifi.tx,
                 ),
             )
         }
@@ -136,6 +142,20 @@ class UsageWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_mobile, Formats.bytes(s.mobileBytes, p))
             views.setTextViewText(R.id.widget_wifi_label, if (p) "وای‌فای" else "Wi-Fi")
             views.setTextViewText(R.id.widget_wifi, Formats.bytes(s.wifiBytes, p))
+
+            if (s.detailed) {
+                views.setViewVisibility(R.id.widget_detail_row, View.VISIBLE)
+                views.setTextViewText(
+                    R.id.widget_rx,
+                    (if (p) "↓ " else "↓ ") + Formats.bytes(s.rxBytes, p),
+                )
+                views.setTextViewText(
+                    R.id.widget_tx,
+                    (if (p) "↑ " else "↑ ") + Formats.bytes(s.txBytes, p),
+                )
+            } else {
+                views.setViewVisibility(R.id.widget_detail_row, View.GONE)
+            }
 
             if (s.showCap && s.capTotalBytes > 0L) {
                 val percent = (Formats.percentOf(s.capUsedBytes, s.capTotalBytes) * 100f).toInt().coerceIn(0, 100)

@@ -32,8 +32,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import ir.marbledu.datausage.MainActivity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,10 +55,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.AppSettings
+import ir.marbledu.datausage.data.SimIdentity
 import ir.marbledu.datausage.ui.screens.AppsScreen
 import ir.marbledu.datausage.ui.screens.DashboardScreen
 import ir.marbledu.datausage.ui.screens.LiveScreen
 import ir.marbledu.datausage.ui.screens.OnboardingScreen
+import ir.marbledu.datausage.ui.screens.OperatorDetailScreen
 import ir.marbledu.datausage.ui.screens.ReportsScreen
 import ir.marbledu.datausage.ui.screens.SettingsScreen
 import ir.marbledu.datausage.util.UsageAccess
@@ -94,6 +98,19 @@ fun AppRoot(
         return
     }
 
+    // صفحه‌ی کامل جزئیات اپراتور؛ همه‌جا تمام‌صفحه است و روی تب‌ها می‌نشیند.
+    var operatorDetailTarget by remember { mutableStateOf<Pair<String, SimIdentity?>?>(null) }
+    operatorDetailTarget?.let { target ->
+        OperatorDetailScreen(
+            vm = vm,
+            operatorId = target.first,
+            sim = target.second,
+            persian = persian,
+            onBack = { operatorDetailTarget = null },
+        )
+        return
+    }
+
     // بارگیری و پایش فقط بعد از راه‌اندازی آغاز می‌شود؛ بازگشت از تنظیمات سیستم
     // هم وضعیت دسترسی‌ها و داده‌ها را تازه می‌کند.
     LaunchedEffect(settings.onboarded) {
@@ -103,6 +120,7 @@ fun AppRoot(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         vm.startLive()
         vm.refreshAll()
+        vm.refreshPermissions()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         vm.stopLive()
@@ -144,10 +162,24 @@ fun AppRoot(
                 .statusBarsPadding(),
         ) { page ->
             when (tabs[page]) {
-                Tab.HOME -> DashboardScreen(vm, settings, persian)
+                Tab.HOME -> DashboardScreen(
+                    vm,
+                    settings,
+                    persian,
+                    onOpenOperatorDetail = { operatorId, sim ->
+                        operatorDetailTarget = operatorId to sim
+                    },
+                )
                 Tab.LIVE -> LiveScreen(vm, settings, persian)
                 Tab.APPS -> AppsScreen(vm, settings, persian)
-                Tab.REPORTS -> ReportsScreen(vm, settings, persian)
+                Tab.REPORTS -> ReportsScreen(
+                    vm,
+                    settings,
+                    persian,
+                    onOpenOperatorDetail = { operatorId, sim ->
+                        operatorDetailTarget = operatorId to sim
+                    },
+                )
                 Tab.SETTINGS -> SettingsScreen(vm, settings, persian)
             }
         }

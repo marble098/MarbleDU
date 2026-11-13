@@ -18,14 +18,76 @@ permissions:
   contents: write
 
 jobs:
+  # هر PR که کد اپ یا کتابخانه‌ها را عوض می‌کند باید CHANGELOG.md را هم با
+  # توضیح ساده و فارسی/انگلیسی به‌روز کند؛ یادداشت‌های release از همین‌جا ساخته می‌شود.
+  # (PRهای خودکار آپدیت وابستگی‌ها معاف‌اند.)
+  release_notes_guard:
+    name: Plain-language release notes required
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check CHANGELOG.md was updated
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          if [[ "$ACTOR" == "dependabot[bot]" || "$GITHUB_HEAD_REF" == chore/weekly-dependency-update* ]]; then
+            echo "Automated dependency PR – changelog check skipped."
+            exit 0
+          fi
+          git diff --name-only "origin/${BASE_REF}...HEAD" > changed.txt
+          echo "Changed files:"; cat changed.txt
+          code_changed=$(grep -E '^(app/|gradle/libs\.versions\.toml|gradle/wrapper/)' changed.txt || true)
+          changelog_changed=$(grep -E '^CHANGELOG\.md$' changed.txt || true)
+          if [[ -n "$code_changed" && -z "$changelog_changed" ]]; then
+            echo "::error::این PR کد برنامه را تغییر می‌دهد ولی CHANGELOG.md را به‌روز نکرده است. یادداشت‌های release به زبان ساده از CHANGELOG.md ساخته می‌شود؛ طبق AGENTS.md یک بخش جدید در بالای CHANGELOG.md اضافه کنید (چه چیزی تغییر کرد و چرا برای کاربر مهم است)."
+            exit 1
+          fi
+          echo "CHANGELOG check passed."
+
   build:
     name: Build signed APKs
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      version_adopted: ${{ steps.bump.outputs.adopted }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Bump version on merge to main
+        # قوانین: versionCode با هر merge دقیقاً ۱ واحد بالا می‌رود؛ versionName
+        # فقط وقتی زیاد می‌شود که CHANGELOG.md یک بخش جدید معرفی کرده باشد.
+        # اجرا روی workflow_dispatch غیرفعال است تا اجرای دستی نسخه را چندبار زیاد نکند.
+        id: bump
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        shell: bash
+        run: |
+          python3 scripts/bump_version.py
+          if git diff --quiet version.properties; then
+            echo "adopted=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing to commit in version.properties"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.properties
+          VN=$(grep '^versionName=' version.properties | cut -d= -f2)
+          VC=$(grep '^versionCode=' version.properties | cut -d= -f2)
+          git commit -m "chore(release): version $VN (code $VC) [skip ci]"
+          if git push origin HEAD:main; then
+            echo "Version bump pushed to main: $VN (code $VC)"
+          else
+            echo "::warning::Push of the version bump to main was rejected (branch protection?). APKها با داده‌ی رن فعلی ساخته می‌شوند؛ قوانین AGENTS.md را برای بالا بردن versionCode بخوانید."
+          fi
 
       - name: Set up JDK 21
         uses: actions/setup-java@v6
@@ -133,7 +195,15 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      # روی main آخرین کامیت (شامل bump خودکار نسخه) بایستد تا عنوان و
+      # یادداشت‌ها با APKهای ساخته‌شده یکی باشد.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
 
       - uses: actions/download-artifact@v6
         with:
@@ -141,21 +211,36 @@ jobs:
           merge-multiple: true
           path: dist
 
+      - name: Extract plain-language release notes from CHANGELOG.md
+        id: notes
+        shell: bash
+        run: |
+          python3 scripts/release_notes.py --out release-notes.md
+          VN=$(grep '^versionName=' version.properties | cut -d= -f2)
+          VC=$(grep '^versionCode=' version.properties | cut -d= -f2)
+          echo "version_name=$VN" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VC" >> "$GITHUB_OUTPUT"
+          if [[ "${{ needs.build.outputs.version_adopted }}" != "true" && "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "::warning::این merge بخش تغییرنگاری جدید نداشت؛ یادداشت‌ها از آخرین بخش موجود در CHANGELOG.md ساخته شد. هنگام هر merge تغییرات را به زبان ساده در CHANGELOG.md بنویسید (AGENTS.md)."
+          fi
+
       - name: Publish release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          VERSION_NAME="${{ steps.notes.outputs.version_name }}"
+          VERSION_CODE="${{ steps.notes.outputs.version_code }}"
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
-            TITLE="${TAG}"
+            TITLE="MarbleDU ${TAG}"
           else
-            TAG="build-${GITHUB_RUN_NUMBER}"
-            TITLE="Build #${GITHUB_RUN_NUMBER}"
+            TAG="build-${VERSION_CODE}-${GITHUB_RUN_NUMBER}"
+            TITLE="MarbleDU v${VERSION_NAME} (build ${VERSION_CODE})"
           fi
-          echo "Publishing $TAG"
+          echo "Publishing $TAG ($TITLE)"
           gh release create "$TAG" dist/*.apk \
             --title "$TITLE" \
-            --notes-file CHANGELOG.md \
-            --target "$GITHUB_SHA" || \
+            --notes-file release-notes.md \
+            --target "${{ github.ref_name }}" || \
           gh release upload "$TAG" dist/*.apk --clobber
