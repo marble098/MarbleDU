@@ -207,14 +207,17 @@ fun InsightsCard(
 
         if (insights.daysUntilCap >= 0) {
             Text(
-                text = when (insights.daysUntilCap) {
-                    0 -> if (persian) "سقف بسته پر شده است." else "Your data plan is used up."
-                    1 -> if (persian) "با این روند، سقف بسته فردا پر می‌شود."
-                    else if (persian) {
-                        "با این روند، سقف بسته حدوداً ${Formats.integer(insights.daysUntilCap.toLong(), true)} روز دیگر پر می‌شود."
-                    } else {
+                text = when {
+                    insights.daysUntilCap == 0 ->
+                        if (persian) "سقف بسته پر شده است." else "Your data plan is used up."
+                    insights.daysUntilCap == 1 ->
+                        if (persian) "با این روند، سقف بسته فردا پر می‌شود."
+                    persian ->
+                        "با این روند، سقف بسته حدوداً " +
+                            Formats.integer(insights.daysUntilCap.toLong(), true) +
+                            " روز دیگر پر می‌شود."
+                    else ->
                         "At this pace the plan fills up in about ${insights.daysUntilCap} days."
-                    }
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.onSurfaceVariant,

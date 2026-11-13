@@ -81,6 +81,7 @@ import ir.marbledu.datausage.ui.SectionTitle
 import ir.marbledu.datausage.ui.theme.ThemePalette
 import ir.marbledu.datausage.util.SettingsBackup
 import ir.marbledu.datausage.util.UsageAccess
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {

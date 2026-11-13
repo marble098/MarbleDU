@@ -147,7 +147,10 @@ fun OperatorRangeCard(
             val visibleRows = if (showUnknown) {
                 range.rows
             } else {
-                range.rows.filter { !it.estimated || it.total.total > 0L }
+                // اپراتورهای کاملاً ناشناخته فقط وقتی دیده می‌شوند که مصرفی داشته باشند.
+                range.rows.filter {
+                    it.operatorId != OperatorCatalog.ID_UNKNOWN || it.total.total > 0L
+                }
             }
             if (visibleRows.isEmpty()) {
                 Text(

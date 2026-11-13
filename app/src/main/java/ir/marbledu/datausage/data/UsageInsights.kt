@@ -106,7 +106,8 @@ object UsageInsights {
         dayFraction: Float = 1f,
     ): DayVerdict {
         if (averageDailyBytes <= 0L) return DayVerdict.NORMAL
-        val expected = (averageDailyBytes * dayFraction.coerceIn(0.05f, 1f)).coerceAtLeast(1L)
+        val expected = (averageDailyBytes * dayFraction.coerceIn(0.05f, 1f).toDouble())
+            .coerceAtLeast(1.0)
         return when {
             todayBytes < expected * 0.5 -> DayVerdict.LIGHT
             todayBytes <= expected * 1.3 -> DayVerdict.NORMAL

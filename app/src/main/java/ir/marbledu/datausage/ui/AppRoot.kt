@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -226,12 +227,15 @@ private fun FloatingNavBar(
                 .height(62.dp),
         ) {
             val barShape = shape
+            // maxWidth را قبل از ورود به scope شیشه می‌گیریم تا با BoxScope
+            // داخل GlassBar قاطی نشود.
+            val tabSlotWidth = maxWidth / tabs.size
             GlassBar(
                 modifier = Modifier.fillMaxSize(),
                 shape = barShape,
                 tint = scheme.primary,
             ) {
-                val tabWidth = maxWidth / tabs.size
+                val tabWidth = tabSlotWidth
                 // درخشش دنبال‌کننده‌ی تب فعال، پشت آیکون‌ها
                 Box(
                     Modifier
