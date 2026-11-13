@@ -13,13 +13,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -96,10 +97,19 @@ fun SessionsCard(
     val visible = remember(sessions, safeTab, tabs, tabbed) {
         if (current == null) sessions else sessions.filter(current.filter)
     }
-    val shown = if (maxVisible <= 0) visible else visible.take(maxVisible)
-    val scrollable = visible.size > shown.size
+    // Keep a small viewport for long histories, but never truncate the data that
+    // is placed in the inner list. Previously only `shown` rows were composed,
+    // so the UI promised that the remainder could be scrolled to but it was not
+    // present in the list at all (and the nested list still captured gestures).
+    val rowLimit = if (maxVisible <= 0) visible.size.coerceAtLeast(1) else maxVisible
+    val scrollable = visible.size > rowLimit
     val rowHeight = if (tall) 92.dp else 84.dp
-    val listHeight = rowHeight * (maxVisible.coerceAtLeast(1)) + (if (scrollable) 18.dp else 0.dp)
+    val listHeight = rowHeight * rowLimit + 6.dp * (rowLimit - 1).coerceAtLeast(0)
+    val remaining = (visible.size - rowLimit).coerceAtLeast(0)
+    val sessionListState = rememberLazyListState()
+    LaunchedEffect(safeTab) {
+        sessionListState.scrollToItem(0)
+    }
 
     MarbleCard(padding = 14.dp) {
         CardHeader(
@@ -143,12 +153,31 @@ fun SessionsCard(
                 )
             }
         } else {
-            Box(Modifier.fillMaxWidth().heightIn(max = if (scrollable) listHeight else rowHeight * maxVisible)) {
+            if (scrollable) {
+                // Bound the nested list to a real viewport and provide every
+                // filtered session to it so vertical scrolling can reveal the
+                // complete history. Compose's nested-scroll dispatch then hands
+                // off remaining drag/fling distance to the page list at either end.
                 LazyColumn(
-                    Modifier.fillMaxWidth(),
+                    state = sessionListState,
+                    modifier = Modifier.fillMaxWidth().height(listHeight),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(shown) { session ->
+                    items(visible) { session ->
+                        SessionRow(
+                            session = session,
+                            persian = persian,
+                            showDate = showDate,
+                            accent = current?.color ?: scheme.primary,
+                        )
+                    }
+                }
+            } else {
+                // Avoid an unnecessary nested vertical scroll container for the
+                // usual short session history; the page itself remains the only
+                // vertical scroller in this case.
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    visible.forEach { session ->
                         SessionRow(
                             session = session,
                             persian = persian,
@@ -159,7 +188,6 @@ fun SessionsCard(
                 }
             }
             if (scrollable) {
-                val remaining = visible.size - shown.size
                 Row(
                     Modifier.fillMaxWidth().padding(top = 6.dp),
                     horizontalArrangement = Arrangement.Center,
