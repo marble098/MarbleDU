@@ -701,6 +701,7 @@ private fun SwitchRow(
 /** وضعیتِ یک مجوز: لیبل و علامت (فعال / غیرفعال). */
 @Composable
 private fun PermissionStatusRow(label: String, granted: Boolean) {
+    val ctx = LocalContext.current
     Row(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -719,8 +720,8 @@ private fun PermissionStatusRow(label: String, granted: Boolean) {
                 tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = if (granted) context.getString(R.string.perm_status_granted)
-                else context.getString(R.string.perm_status_denied),
+                text = if (granted) ctx.getString(R.string.perm_status_granted)
+                else ctx.getString(R.string.perm_status_denied),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
