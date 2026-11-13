@@ -22,19 +22,12 @@ object NetworkStatsReader {
     private val ifaceDir = File("/sys/class/net")
 
     /**
-     * مجموع بایت‌های ارسال/دریافت کل دستگاه (همه‌ی اینترفیس‌ها).
+     * مجموع بایت‌های ارسال/دریافت همه‌ی اینترفیس‌های فیزیکی.
      *
-     * منبع اصلی TrafficStats (API رسمی اندروید) است: نیازمند مجوز نیست، روی همه‌ی
-     * نسخه‌ها کار می‌کند و نه /sys را می‌خواند نه SELinux denial می‌سازد.
-     * خواندن /sys/class/net/*/statistics روی اندرویدهای جدید برای اپ‌ها مسدود است
-     * و در هر بار نمونه‌برداری avc denied ایجاد می‌کند (پر کردن لاگ و مصرف باطری/CPU), پس فقط
-     * به عنوان آخرین fallback بسیار محدود نگه‌داشته شده است.
+     * روی اندرویدهای جدید خواندن /sys برای اپ‌ها بسته است و همه‌چیز صفر
+     * برمی‌گردد؛ در آن حالت از TrafficStats (API رسمی) استفاده می‌کنیم.
      */
     fun totalInterfaceBytes(): Pair<Long, Long> {
-        val totalRx = runCatching { TrafficStats.getTotalRxBytes() }.getOrDefault(-1L)
-        val totalTx = runCatching { TrafficStats.getTotalTxBytes() }.getOrDefault(-1L)
-        if (totalRx >= 0 && totalTx >= 0) return totalRx to totalTx
-        // Fallback خیلی محدود: فقط وقتی TrafficStats پاسخ ندهد (عمدتاً دستگاه‌های قدیمی / شبیه‌ساز)
         var rx = 0L
         var tx = 0L
         runCatching {
@@ -44,6 +37,11 @@ object NetworkStatsReader {
                 rx += readLong(File(iface, "statistics/rx_bytes"))
                 tx += readLong(File(iface, "statistics/tx_bytes"))
             }
+        }
+        if (rx == 0L && tx == 0L) {
+            val totalRx = runCatching { TrafficStats.getTotalRxBytes() }.getOrDefault(-1L)
+            val totalTx = runCatching { TrafficStats.getTotalTxBytes() }.getOrDefault(-1L)
+            if (totalRx >= 0 && totalTx >= 0) return totalRx to totalTx
         }
         return rx to tx
     }
