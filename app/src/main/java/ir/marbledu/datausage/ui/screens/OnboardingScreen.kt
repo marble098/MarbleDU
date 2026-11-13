@@ -17,6 +17,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,7 +41,12 @@ import kotlinx.coroutines.launch
 private data class Slide(val icon: ImageVector, val titleRes: Int, val bodyRes: Int)
 
 @Composable
-fun OnboardingScreen(persian: Boolean, onFinish: () -> Unit) {
+fun OnboardingScreen(
+    persian: Boolean,
+    needsUsageAccess: Boolean,
+    onGrantUsageAccess: () -> Unit,
+    onFinish: () -> Unit,
+) {
     val context = LocalContext.current
     val slides = listOf(
         Slide(MIcons.Chart, R.string.onboarding_title_1, R.string.onboarding_body_1),
@@ -57,6 +64,32 @@ fun OnboardingScreen(persian: Boolean, onFinish: () -> Unit) {
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onFinish) { Text(context.getString(R.string.skip)) }
+            }
+            if (needsUsageAccess) {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            context.getString(R.string.grant_usage_access),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            context.getString(R.string.grant_usage_access_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Button(onClick = onGrantUsageAccess) {
+                            Text(context.getString(R.string.open))
+                        }
+                    }
+                }
             }
             HorizontalPager(
                 state = pager,

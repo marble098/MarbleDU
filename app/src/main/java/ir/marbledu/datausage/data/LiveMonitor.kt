@@ -2,17 +2,11 @@ package ir.marbledu.datausage.data
 
 import android.content.Context
 import android.os.SystemClock
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.text.SimpleDateFormat
@@ -30,6 +24,7 @@ class LiveMonitor(private val context: Context) {
     fun stream(intervalMillis: Long = 1000): Flow<LiveTick> = flow {
         var lastRx = 0L
         var lastTx = 0L
+        var lastTime = 0L
         var started = false
         var sessionStart = System.currentTimeMillis()
         var sessionRx = 0L
@@ -40,15 +35,18 @@ class LiveMonitor(private val context: Context) {
             val (rx, tx) = NetworkStatsReader.totalInterfaceBytes()
             val now = System.currentTimeMillis()
             if (!started) {
-                lastRx = rx; lastTx = tx; started = true
+                lastRx = rx; lastTx = tx; lastTime = now; started = true
                 sessionStart = now
             }
+            // سرعت را با زمان واقعی سپری‌شده حساب می‌کنیم، نه فاصله‌ی ثابت؛
+            // وگرنه وقتی delay دیرتر از حد معمول اجرا شود سرعت اشتباه می‌شود.
+            val elapsed = (now - lastTime).coerceAtLeast(1)
             val dRx = max(0L, rx - lastRx)
             val dTx = max(0L, tx - lastTx)
-            lastRx = rx; lastTx = tx
+            lastRx = rx; lastTx = tx; lastTime = now
             sessionRx += dRx; sessionTx += dTx
-            val down = dRx * 1000.0 / intervalMillis
-            val up = dTx * 1000.0 / intervalMillis
+            val down = dRx * 1000.0 / elapsed
+            val up = dTx * 1000.0 / elapsed
             speedHistory.addLast(down + up)
             if (speedHistory.size > 30) speedHistory.removeFirst()
             peak = max(peak, down + up)
@@ -107,22 +105,22 @@ class LiveMonitor(private val context: Context) {
         }.getOrDefault(-1L)
     }
 
-    /** پایش لحظه‌ای تغییر شبکه در سرویس پس‌زمینه. */
-    fun observeNetwork(scope: CoroutineScope): Flow<NetworkSnapshot> = channelFlow {
+    /**
+     * پایش لحظه‌ای تغییر شبکه. یک flow ساده با polling است؛ نسخه‌ی قبلی از
+     * channelFlow + launch داخلی استفاده می‌کرد که awaitClose را دوبار صدا می‌زد
+     * و flow را می‌بست.
+     */
+    fun observeNetwork(): Flow<NetworkSnapshot> = flow {
         var last: NetworkSnapshot? = null
-        val job = scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                val snapshot = NetworkStatsReader.currentNetwork(context)
-                if (snapshot.type != last?.type || snapshot.carrierName != last?.carrierName) {
-                    last = snapshot
-                    trySend(snapshot)
-                }
-                delay(5_000)
+        while (true) {
+            val snapshot = NetworkStatsReader.currentNetwork(context)
+            if (snapshot.type != last?.type || snapshot.carrierName != last?.carrierName) {
+                last = snapshot
+                emit(snapshot)
             }
-            awaitClose()
+            delay(5_000)
         }
-        awaitClose { job.cancel() }
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(Dispatchers.IO)
 
     companion object {
         fun formatHourMinute(millis: Long): String =

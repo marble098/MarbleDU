@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import ir.marbledu.datausage.MainActivity
 import ir.marbledu.datausage.MarbleDuApp
 import ir.marbledu.datausage.R
+import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.NetworkStatsReader
 import kotlinx.coroutines.CoroutineScope
@@ -20,8 +21,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlin.math.max
 
 /**
@@ -38,25 +41,41 @@ class MonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification(0.0, 0.0, "--"))
-        val interval = (application as MarbleDuApp).settingsRepository
+        // اعلان اولیه با زبان سیستم؛ در اولین دور حلقه با زبان تنظیمات اپ
+        // به‌روزرسانی می‌شود. (خواندن DataStore روی ترد اصلی انجام نمی‌شود.)
+        startForeground(NOTIFICATION_ID, buildNotification(0.0, 0.0, "--", systemPersian()))
         loop?.cancel()
         loop = scope.launch {
+            // تنظیمات یک بار خوانده می‌شود: هم فاصله‌ی به‌روزرسانی (نه ۵ ثانیه‌ی
+            // ثابت) و هم زبان اعلان؛ وگرنه اعلان همیشه به زبان سیستم می‌ماند.
+            val settings = runCatching {
+                runBlocking { (application as MarbleDuApp).settingsRepository.settings.first() }
+            }.getOrNull()
+            val intervalSeconds = (settings?.monitorIntervalSeconds ?: 5).coerceIn(1, 60)
+            val persian = when (settings?.language) {
+                AppLanguage.PERSIAN -> true
+                AppLanguage.ENGLISH -> false
+                else -> java.util.Locale.getDefault().language == "fa"
+            }
             var lastRx = 0L
             var lastTx = 0L
+            var lastTime = 0L
             var initialized = false
             while (isActive) {
                 val (rx, tx) = NetworkStatsReader.totalInterfaceBytes()
+                val now = System.currentTimeMillis()
                 if (!initialized) {
-                    lastRx = rx; lastTx = tx; initialized = true
+                    lastRx = rx; lastTx = tx; lastTime = now; initialized = true
                 }
-                val down = max(0L, rx - lastRx) * 1000.0 / (intervalSeconds * 1000)
-                val up = max(0L, tx - lastTx) * 1000.0 / (intervalSeconds * 1000)
-                lastRx = rx; lastTx = tx
+                // سرعت با زمان واقعی سپری‌شده حساب می‌شود.
+                val elapsed = (now - lastTime).coerceAtLeast(1)
+                val down = max(0L, rx - lastRx) * 1000.0 / elapsed
+                val up = max(0L, tx - lastTx) * 1000.0 / elapsed
+                lastRx = rx; lastTx = tx; lastTime = now
                 val snapshot = NetworkStatsReader.currentNetwork(this@MonitorService)
                 notificationManager().notify(
                     NOTIFICATION_ID,
-                    buildNotification(down, up, snapshot.carrierName),
+                    buildNotification(down, up, snapshot.carrierName, persian),
                 )
                 delay(intervalSeconds * 1000L)
             }
@@ -64,16 +83,21 @@ class MonitorService : Service() {
         return START_STICKY
     }
 
-    private val intervalSeconds: Long = 5L
+    private fun systemPersian(): Boolean =
+        resources.configuration.locales[0].language == "fa"
 
-    private fun buildNotification(down: Double, up: Double, carrier: String): Notification {
+    private fun buildNotification(
+        down: Double,
+        up: Double,
+        carrier: String,
+        persian: Boolean,
+    ): Notification {
         val open = PendingIntent.getActivity(
             this,
             0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val persian = resources.configuration.locales[0].language == "fa"
         val speedLine = "↓ ${Formats.speed(down, persian)}   ↑ ${Formats.speed(up, persian)}"
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)

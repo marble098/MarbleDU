@@ -24,7 +24,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import ir.marbledu.datausage.R
-import ir.marbledu.datausage.data.AppLanguage
 
 // رنگ‌های برند MarbleDU – آبی مرمری با لهجه‌ی فیروزه‌ای
 private val MarblePrimary = Color(0xFF2F6FED)
@@ -83,14 +82,13 @@ private val VazirTypography = Typography().let { base ->
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MarbleDuTheme(
-    language: AppLanguage,
+    persian: Boolean,
     darkTheme: Boolean = isSystemInDarkTheme(),
     expressive: Boolean = true,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val persian = language == AppLanguage.PERSIAN
     val layoutDirection = if (persian) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     val baseScheme: ColorScheme = when {

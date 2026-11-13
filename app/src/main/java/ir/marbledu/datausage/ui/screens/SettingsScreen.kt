@@ -203,6 +203,46 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 TextButton(onClick = { UsageAccess.openNotificationSettings(context) }) {
                     Text(if (persian) "تنظیمات اعلان‌ها" else "Notification settings")
                 }
+                // فاصله‌ی به‌روزرسانی اعلان سرعت در پس‌زمینه
+                Text(
+                    text = if (persian) "فاصله‌ی به‌روزرسانی" else "Update interval",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(5, 10, 30).forEach { seconds ->
+                        OptionChip(
+                            label = if (persian) "${Formats.integer(seconds.toLong(), true)} ثانیه"
+                            else "$seconds s",
+                            selected = settings.monitorIntervalSeconds == seconds,
+                        ) {
+                            vm.setMonitorInterval(seconds)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            SettingsCard(
+                title = context.getString(R.string.billing_cycle),
+                description = if (persian) "شروع دوره‌ی صورتحساب شما" else "Your cycle start day",
+                icon = MIcons.Chart,
+            ) {
+                Text(
+                    text = if (persian) "روز شروع دوره" else "Cycle start day",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1, 7, 15, 21, 28).forEach { day ->
+                        OptionChip(
+                            label = Formats.integer(day.toLong(), persian).toString(),
+                            selected = settings.billingCycleDay == day,
+                        ) {
+                            vm.setBillingDay(day)
+                        }
+                    }
+                }
             }
         }
 
@@ -370,7 +410,14 @@ private fun OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
 }
 
-private const val CHANGELOG = "۱.۰.۰ – اولین نسخه\n" +
+private const val CHANGELOG = "۱.۰.۱ – رفع باگ‌ها\n" +
+    "• دسترسی مصرف اپ‌ها حالا در تنظیمات دیده می‌شود\n" +
+    "• نوار تب پایین درست کار می‌کند\n" +
+    "• «امروز» از نیمه‌شب و دوره‌ی صورتحساب از روز انتخابی\n" +
+    "• ساعت‌های پرمصرف واقعی\n" +
+    "• زبان «مثل سیستم» درست شد\n" +
+    "• نمایش مصرف وای‌فای و خروجی CSV اصلاح‌شده\n\n" +
+    "۱.۰.۰ – اولین نسخه\n" +
     "• مصرف اینترنت بدون VPN، به تفکیک اپ\n" +
     "• بازه‌های مصرف از ساعت تا ساعت\n" +
     "• شناسایی اپراتورهای ایرانی\n" +

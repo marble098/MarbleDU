@@ -30,11 +30,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ir.marbledu.datausage.R
-import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.LiveMonitor
-import ir.marbledu.datausage.data.TimeRange
 import ir.marbledu.datausage.ui.EmptyState
 import ir.marbledu.datausage.ui.InfoChip
 import ir.marbledu.datausage.ui.MIcons
@@ -148,6 +146,29 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                     )
                 }
             }
+            // مصرف وای‌فای هم نمایش داده می‌شود (قبل از این فقط موبایل دیده می‌شد).
+            if (dashboard.todayWifiBytes > 0 || dashboard.monthWifiBytes > 0) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatCard(
+                            title = context.getString(R.string.wifi),
+                            value = Formats.bytes(dashboard.todayWifiBytes, persian),
+                            subtitle = if (persian) "امروز" else "today",
+                            icon = MIcons.Wifi,
+                            accent = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        StatCard(
+                            title = context.getString(R.string.this_month),
+                            value = Formats.bytes(dashboard.monthWifiBytes, persian),
+                            subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
+                            icon = MIcons.Wifi,
+                            accent = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
         }
 
         item {
@@ -228,7 +249,7 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 SectionTitle(
                     text = context.getString(R.string.per_app),
                     action = {
-                        TextButton(onClick = { vm.setRange(TimeRange.TODAY); vm.loadUsage(TimeRange.TODAY) }) {
+                        TextButton(onClick = { vm.refreshAll() }) {
                             Text(context.getString(R.string.refresh_label))
                         }
                     },
@@ -315,12 +336,14 @@ private fun WeeklyTrendCard(week: List<ir.marbledu.datausage.data.DayUsage>, per
 
 private fun dayLabel(millis: Long, persian: Boolean): String {
     val names = if (persian) {
-        listOf("ی", "د", "س", "چ", "پ", "ج", "ش")
+        // شنبه تا جمعه
+        listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
     } else {
+        // یکشنبه تا شنبه
         listOf("S", "M", "T", "W", "T", "F", "S")
     }
     val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-    // شنبه = ۰ در تقویم ایرانی
+    // Calendar.DAY_OF_WEEK: یکشنبه=1 ... شنبه=7
     val index = if (persian) (cal.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
     else cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
     return names[index]
