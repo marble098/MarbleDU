@@ -55,13 +55,16 @@ fun InsightsCard(
     val snapshot = insights.snapshot ?: return
     if (snapshot.activeDays == 0 && snapshot.averageDailyBytes == 0L) return
 
+    // رنگ‌های کهربایی/نارنجی ثابت روی کارت روشن خوانا نبودند؛ روی کارت تنظیم می‌شوند.
+    val cardBg = scheme.surfaceContainerLow
     val (verdictLabel, verdictColor) = when (insights.verdict) {
         UsageInsights.DayVerdict.LIGHT ->
             (if (persian) "سبک‌تر از همیشه" else "Lighter than usual") to marble.wifi
         UsageInsights.DayVerdict.NORMAL ->
             (if (persian) "عادی" else "Normal") to scheme.primary
         UsageInsights.DayVerdict.HEAVY ->
-            (if (persian) "سنگین‌تر از عادت" else "Heavier than usual") to Color(0xFFF59E0B)
+            (if (persian) "سنگین‌تر از عادت" else "Heavier than usual") to
+                ir.marbledu.datausage.ui.theme.accessibleColor(Color(0xFFF59E0B), cardBg)
         UsageInsights.DayVerdict.VERY_HEAVY ->
             (if (persian) "خیلی سنگین" else "Very heavy") to scheme.error
     }
@@ -126,7 +129,7 @@ fun InsightsCard(
                 value = snapshot.heaviestWeekday?.let {
                     UsageInsights.weekdayName(it, persian)
                 } ?: "—",
-                color = Color(0xFFFF8A3D),
+                color = ir.marbledu.datausage.ui.theme.accessibleColor(Color(0xFFFF8A3D), cardBg),
                 modifier = Modifier.weight(1f),
                 icon = MIcons.Chart,
             )

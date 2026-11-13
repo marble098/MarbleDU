@@ -175,6 +175,29 @@ fun ReportsScreen(
             }
         }
 
+        if (selectedTab == 0 && dashboard.hasUsageAccess && !history.loading) {
+            item {
+                val today = java.util.Calendar.getInstance().apply {
+                    set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                    set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val comparison = ir.marbledu.datausage.data.WeeklyComparison.build(days, today)
+                MarbleCard {
+                    CardHeader(title = context.getString(R.string.week_compare), icon = MIcons.Chart)
+                    if (comparison == null) {
+                        Text(context.getString(R.string.week_compare_missing))
+                    } else {
+                        Text(context.getString(R.string.week_compare_recent, Formats.bytes(comparison.recent, persian)))
+                        Text(context.getString(R.string.week_compare_previous, Formats.bytes(comparison.previous, persian)))
+                        Text(comparison.changePercent?.let { change ->
+                            context.getString(R.string.week_compare_change,
+                                (if (change > 0) "+" else "") + Formats.number(change, persian, 1))
+                        } ?: context.getString(R.string.week_compare_no_baseline))
+                    }
+                }
+            }
+        }
+
         if (selectedTab == 2) {
             item {
                 var daysAgo by rememberSaveable { mutableStateOf(0) }

@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -101,8 +102,41 @@ private val ExtraChartColors = listOf(
 
 private fun mix(a: Color, b: Color, t: Float): Color = lerp(a, b, t.coerceIn(0f, 1f))
 
+/** WCAG contrast for opaque foreground/background colors. */
+internal fun contrastRatio(a: Color, b: Color): Float =
+    (maxOf(a.luminance(), b.luminance()) + 0.05f) /
+        (minOf(a.luminance(), b.luminance()) + 0.05f)
+
+internal fun bestOnColor(background: Color): Color =
+    if (contrastRatio(Color.Black, background) >= contrastRatio(Color.White, background)) Color.Black else Color.White
+
+/** Move toward the higher-contrast endpoint, retaining the palette hue where possible. */
+internal fun accessibleColor(color: Color, background: Color, minRatio: Float = 4.5f): Color {
+    if (contrastRatio(color, background) >= minRatio) return color
+    val target = bestOnColor(background)
+    var low = 0f
+    var high = 1f
+    repeat(24) {
+        val mid = (low + high) / 2f
+        if (contrastRatio(mix(color, target, mid), background) >= minRatio) high = mid else low = mid
+    }
+    return mix(color, target, high)
+}
+
+/** Normalize accent text against every card surface, then derive its matching button label. */
+internal fun ColorScheme.withAccessibleAccents(): ColorScheme {
+    val surfaces = listOf(background, surface, surfaceContainerLow, surfaceContainer,
+        surfaceContainerHigh, surfaceContainerHighest)
+    fun accent(color: Color): Color = surfaces.fold(color) { c, bg -> accessibleColor(c, bg) }
+    val p = accent(primary)
+    val s = accent(secondary)
+    val t = accent(tertiary)
+    return copy(primary = p, onPrimary = bestOnColor(p), secondary = s,
+        onSecondary = bestOnColor(s), tertiary = t, onTertiary = bestOnColor(t))
+}
+
 /** رنگ‌های روشن و شادِ پالت؛ حداقل کنتراست برای متن حفظ می‌شود. */
-private fun paletteScheme(palette: ThemePalette, dark: Boolean): ColorScheme {
+internal fun paletteScheme(palette: ThemePalette, dark: Boolean): ColorScheme {
     val p = Color(palette.primary)
     val s = Color(palette.secondary)
     val t = Color(palette.tertiary)
@@ -179,7 +213,7 @@ private fun paletteScheme(palette: ThemePalette, dark: Boolean): ColorScheme {
  * پیکسل‌ها خاموش بمانند و مصرف باتری کمتر شود؛ رنگ پالت فقط برای تاکیدها
  * می‌ماند تا اپ روی سیاه مطلق زنده و رنگی دیده شود.
  */
-private fun amoledScheme(palette: ThemePalette): ColorScheme {
+internal fun amoledScheme(palette: ThemePalette): ColorScheme {
     val p = Color(palette.primary)
     val s = Color(palette.secondary)
     val t = Color(palette.tertiary)
@@ -274,7 +308,7 @@ fun MarbleDuTheme(
         amoled -> amoledScheme(palette)
         useDynamic -> if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         else -> paletteScheme(palette, darkTheme)
-    }
+    }.withAccessibleAccents()
 
     val marble = MarbleColors(
         chart = listOf(scheme.primary, scheme.tertiary, scheme.secondary) + ExtraChartColors,
@@ -282,19 +316,11 @@ fun MarbleDuTheme(
         upload = scheme.tertiary,
         mobile = scheme.primary,
         wifi = scheme.secondary,
-        heroStart = when {
-            amoled -> mix(Color(palette.primary), Color.Black, 0.30f)
-            useDynamic -> scheme.primary
-            darkTheme -> mix(Color(palette.primary), Color.Black, 0.22f)
-            else -> Color(palette.primary)
-        },
-        heroEnd = when {
-            amoled -> mix(Color(palette.tertiary), Color.Black, 0.34f)
-            useDynamic -> scheme.tertiary
-            darkTheme -> mix(Color(palette.tertiary), Color.Black, 0.26f)
-            else -> Color(palette.tertiary)
-        },
-        onHero = if (useDynamic) scheme.onPrimary else Color.White,
+        // A single foreground must stay readable at BOTH gradient endpoints. Darken
+        // each endpoint for white text; choosing text from the average is not safe.
+        heroStart = accessibleColor(if (useDynamic) scheme.primary else Color(palette.primary), Color.White),
+        heroEnd = accessibleColor(if (useDynamic) scheme.tertiary else Color(palette.tertiary), Color.White),
+        onHero = Color.White,
         dark = darkTheme || amoled,
         amoled = amoled,
         cardBorder = if (amoled) Color.White.copy(alpha = 0.075f) else null,
@@ -309,7 +335,14 @@ fun MarbleDuTheme(
             colorScheme = scheme,
             motionScheme = MotionScheme.expressive(),
             typography = typography,
-            content = content,
+            content = {
+                // MaterialTheme does not set LocalContentColor; its unprovided default
+                // is black, including in dark/AMOLED mode. Nested buttons/cards can
+                // still override this with their own matching foreground colors.
+                CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides scheme.onSurface) {
+                    content()
+                }
+            },
         )
     }
 }

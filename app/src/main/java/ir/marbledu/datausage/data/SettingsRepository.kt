@@ -240,8 +240,6 @@ data class AppSettings(
     val speedOverlay: Boolean = false,
     /** اعلان نوار پیشرفت زنده در پنجره‌ی عینک مصرف. */
     val speedOverlayChart: Boolean = true,
-    /** حالت «سفر»: اپراتورهای خارج از ایران هم نمایش داده شوند. */
-    val showForeignOperators: Boolean = false,
     /** کارت «نشست‌های اتصال» در خانه دیده شود. */
     val sessionsCardEnabled: Boolean = true,
     /** تب‌بندی نشست‌ها در خانه: همه / داده موبایل / وای‌فای / هر اپراتور جدا. */
@@ -283,7 +281,6 @@ class SettingsRepository(private val context: Context) {
         val WIDGET_QUICK_ACTIONS = booleanPreferencesKey("widget_quick_actions")
         val SPEED_OVERLAY = booleanPreferencesKey("speed_overlay")
         val SPEED_OVERLAY_CHART = booleanPreferencesKey("speed_overlay_chart")
-        val SHOW_FOREIGN_OPERATORS = booleanPreferencesKey("show_foreign_operators")
         val SESSIONS_CARD = booleanPreferencesKey("sessions_card")
         val SESSIONS_TABS = booleanPreferencesKey("sessions_tabs")
         val SESSIONS_VISIBLE = intPreferencesKey("sessions_visible")
@@ -378,7 +375,6 @@ class SettingsRepository(private val context: Context) {
             widgetQuickActions = p[Keys.WIDGET_QUICK_ACTIONS] ?: true,
             speedOverlay = p[Keys.SPEED_OVERLAY] ?: false,
             speedOverlayChart = p[Keys.SPEED_OVERLAY_CHART] ?: true,
-            showForeignOperators = p[Keys.SHOW_FOREIGN_OPERATORS] ?: false,
             sessionsCardEnabled = p[Keys.SESSIONS_CARD] ?: true,
             sessionsTabsEnabled = p[Keys.SESSIONS_TABS] ?: true,
             sessionsVisibleCount = p[Keys.SESSIONS_VISIBLE] ?: 4,
@@ -419,7 +415,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setWidgetQuickActions(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_QUICK_ACTIONS] = value }
     suspend fun setSpeedOverlay(value: Boolean) = context.dataStore.edit { it[Keys.SPEED_OVERLAY] = value }
     suspend fun setSpeedOverlayChart(value: Boolean) = context.dataStore.edit { it[Keys.SPEED_OVERLAY_CHART] = value }
-    suspend fun setShowForeignOperators(value: Boolean) = context.dataStore.edit { it[Keys.SHOW_FOREIGN_OPERATORS] = value }
     suspend fun setSessionsCard(value: Boolean) = context.dataStore.edit { it[Keys.SESSIONS_CARD] = value }
     suspend fun setSessionsTabs(value: Boolean) = context.dataStore.edit { it[Keys.SESSIONS_TABS] = value }
     suspend fun setSessionsVisible(value: Int) = context.dataStore.edit {
@@ -456,7 +451,6 @@ class SettingsRepository(private val context: Context) {
         p[Keys.SESSIONS_VISIBLE] = settings.sessionsVisibleCount
         p[Keys.SPEED_OVERLAY] = settings.speedOverlay
         p[Keys.SPEED_OVERLAY_CHART] = settings.speedOverlayChart
-        p[Keys.SHOW_FOREIGN_OPERATORS] = settings.showForeignOperators
         p[Keys.TEXT_SIZE] = settings.textSize.name
         p[Keys.TARIFF_PER_GB] = settings.tariffPerGbToman
         p[Keys.SPIKE_ALERT] = settings.spikeAlertEnabled

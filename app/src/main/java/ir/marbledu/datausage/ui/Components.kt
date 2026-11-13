@@ -234,7 +234,10 @@ fun OperatorBadge(
 ) {
     val brand = Color(operator.brandColor)
     val accent = Color(operator.accentColor)
-    val onBrand = if (brand.luminance() > 0.55f) Color(0xFF1B1B1F) else Color.White
+    // متن روی کاشی برند با کنتراست تضمینی انتخاب می‌شود (سیاه یا سفید، هرکدام خواناتر).
+    // آستانه‌ی قبلی (۰٫۵۵) برای بیشتر رنگ‌های برند سفید می‌داد درحالی‌که سیاه خواناتر بود.
+    val onBrand = ir.marbledu.datausage.ui.theme.bestOnColor(brand)
+    val readableAccent = ir.marbledu.datausage.ui.theme.accessibleColor(accent, onBrand)
     val logo = OperatorLogos.logoFor(operator.id)
     Box(modifier.size(size)) {
         if (logo != null) {
@@ -264,7 +267,7 @@ fun OperatorBadge(
                 Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(percent = 32))
-                    .background(Brush.linearGradient(listOf(brand, accent))),
+                    .background(Brush.linearGradient(listOf(brand, readableAccent))),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

@@ -533,7 +533,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setSpeedOverlayChart(value: Boolean) = viewModelScope.launch { settingsRepo.setSpeedOverlayChart(value) }
-    fun setShowForeignOperators(value: Boolean) = viewModelScope.launch { settingsRepo.setShowForeignOperators(value) }
 
     /** بازیابی تنظیمات از فایل پشتیبان و تازه‌سازی فوری ویجت. */
     fun applyBackup(restored: AppSettings) = viewModelScope.launch {

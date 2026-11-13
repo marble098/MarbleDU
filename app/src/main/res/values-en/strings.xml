@@ -190,8 +190,13 @@
     <string name="backup_invalid">That file is not a valid MarbleDU backup.</string>
 
     <!-- Travel mode (1.5) -->
-    <string name="travel_mode">Travel mode</string>
-    <string name="travel_mode_desc">Show estimated/unknown rows too when you use the internet outside Iran</string>
-    <string name="travel_mode_toggle">Show estimated and unknown rows</string>
-    <string name="travel_mode_toggle_desc">Handy while travelling; local carriers that are not recognized are kept visible</string>
+    <string name="apps_search">Search app name or package</string>
+    <string name="apps_network_all">All networks</string>
+    <string name="apps_no_match">No apps match this search and network.</string>
+    <string name="week_compare">Compare the last two complete weeks</string>
+    <string name="week_compare_missing">14 complete days are needed; today is excluded.</string>
+    <string name="week_compare_recent">Last 7 complete days: %1$s</string>
+    <string name="week_compare_previous">Previous 7 days: %1$s</string>
+    <string name="week_compare_change">Usage change: %1$s%%</string>
+    <string name="week_compare_no_baseline">No usage in the previous week; percentage change is unavailable.</string>
 </resources>

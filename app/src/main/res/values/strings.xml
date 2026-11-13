@@ -190,8 +190,13 @@
     <string name="backup_invalid">این فایل، پشتیبان معتبر MarbleDU نیست.</string>
 
     <!-- حالت سفر (۱.۵) -->
-    <string name="travel_mode">حالت سفر</string>
-    <string name="travel_mode_desc">اگر خارج از ایران از اینترنت استفاده می‌کنی، ردیف‌های ناشناخته را هم نشان بده</string>
-    <string name="travel_mode_toggle">نمایش ردیف‌های تخمینی و ناشناخته</string>
-    <string name="travel_mode_toggle_desc">مناسب سفر؛ اپراتورهای محلی که شناسایی نشده‌اند حذف نمی‌شوند</string>
+    <string name="apps_search">جست‌وجوی نام اپ یا نام بسته</string>
+    <string name="apps_network_all">همهٔ شبکه‌ها</string>
+    <string name="apps_no_match">اپی با این جست‌وجو و شبکه پیدا نشد.</string>
+    <string name="week_compare">مقایسهٔ دو هفتهٔ کامل اخیر</string>
+    <string name="week_compare_missing">برای مقایسه، آمار ۱۴ روز کامل لازم است؛ امروز حساب نمی‌شود.</string>
+    <string name="week_compare_recent">۷ روز کامل اخیر: %1$s</string>
+    <string name="week_compare_previous">۷ روز پیش از آن: %1$s</string>
+    <string name="week_compare_change">تغییر مصرف: %1$s٪</string>
+    <string name="week_compare_no_baseline">هفتهٔ قبلی مصرفی نداشته؛ درصد تغییر محاسبه نمی‌شود.</string>
 </resources>

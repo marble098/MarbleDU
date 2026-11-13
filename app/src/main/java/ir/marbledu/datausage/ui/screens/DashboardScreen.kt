@@ -283,7 +283,6 @@ fun DashboardScreen(
                     vm = vm,
                     persian = persian,
                     onOpenOperatorDetail = onOpenOperatorDetail,
-                    showUnknown = settings.showForeignOperators,
                 )
             }
 
