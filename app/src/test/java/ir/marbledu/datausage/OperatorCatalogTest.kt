@@ -58,4 +58,31 @@ class OperatorCatalogTest {
         assertEquals("mci", OperatorCatalog.byId("mci").id)
         assertEquals(OperatorCatalog.ID_WIFI, OperatorCatalog.byId(OperatorCatalog.ID_WIFI).id)
     }
+
+    @Test
+    fun normalizes_arabic_ye_kaf_and_zwnj_and_detects_expanded_isps() {
+        // حروف عربی ي/ك و نیم‌فاصله در نام وای‌فای یا ISP
+        assertEquals("irancell", OperatorCatalog.fromName("ايرانسل 5G")?.id)
+        assertEquals("mobinnet", OperatorCatalog.fromName("مبين‌نت")?.id)
+        assertEquals("shatel_mobile", OperatorCatalog.fromName("شاتل\u200Cموبایل")?.id)
+        assertEquals("parsonline", OperatorCatalog.fromName("پارس آنلاین")?.id)
+        assertEquals("fanava", OperatorCatalog.fromName("گروه فناوا")?.id)
+        assertEquals("pishgaman", OperatorCatalog.fromName("Pishgaman Toseeh Ertebatat")?.id)
+        assertEquals("samantel", OperatorCatalog.fromName("سامانتل")?.id)
+        assertEquals("afranet", OperatorCatalog.fromAsn(25184, null)?.id)
+    }
+
+    @Test
+    fun localized_special_uids() {
+        assertEquals("سیستم اندروید", OperatorCatalog.specialUidLabel(1000, true))
+        assertEquals("Android system", OperatorCatalog.specialUidLabel(1000, false))
+        assertEquals(
+            "هات‌اسپات و اشتراک‌گذاری",
+            OperatorCatalog.specialUidLabel(android.app.usage.NetworkStats.Bucket.UID_TETHERING, true),
+        )
+        assertEquals(
+            "Removed apps",
+            OperatorCatalog.specialUidLabel(android.app.usage.NetworkStats.Bucket.UID_REMOVED, false),
+        )
+    }
 }

@@ -96,11 +96,12 @@ class AppUsageRepository(private val context: Context) {
                 val last = bucket.endTimeStamp.takeIf { it > 0 } ?: toMillis
                 val existing = result[uid]
                 result[uid] = if (existing == null) {
-                    val pkg = runCatching { pm.getNameForUid(uid) }.getOrNull()
+                    val pkg = if (uid >= 0) runCatching { pm.getNameForUid(uid) }.getOrNull() else null
+                    val cleanPkg = pkg?.substringBefore(':')
                     AppUsage(
                         uid = uid,
-                        packageName = pkg ?: "uid:$uid",
-                        label = labelFor(pkg),
+                        packageName = cleanPkg ?: "uid:$uid",
+                        label = specialLabel(uid) ?: labelFor(cleanPkg),
                         bytes = bytes,
                         firstTimestamp = first,
                         lastTimestamp = last,
@@ -330,7 +331,41 @@ class AppUsageRepository(private val context: Context) {
         NetworkStats.Bucket.UID_TETHERING -> "Tethering"
         0 -> "root"
         1000 -> "Android system"
+        1001 -> "Phone / Radio"
+        1013 -> "Media server"
         else -> null
+    }
+
+    /** مجموع مصرف امروز (موبایل و وای‌فای) با حداقل سربار برای سرویس اعلان. */
+    suspend fun todayDeviceTraffic(): Pair<Traffic, Traffic> = withContext(Dispatchers.IO) {
+        val manager = nsm ?: return@withContext Traffic() to Traffic()
+        val now = System.currentTimeMillis()
+        val start = TimeMath.dayStart(now)
+        val subscriber = subscriberId()
+        val mobile = deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriber, start, now)
+        val wifi = deviceTraffic(manager, ConnectivityManager.TYPE_WIFI, null, start, now)
+        mobile to wifi
+    }
+
+    /** مجموع مصرف ۳۰ روزه‌ی موبایل برای محاسبه‌ی باقی‌مانده‌ی سقف بسته. */
+    suspend fun monthMobileTotal(): Long = withContext(Dispatchers.IO) {
+        val manager = nsm ?: return@withContext 0L
+        val now = System.currentTimeMillis()
+        val start = now - TimeRange.MONTH.millis()
+        val fromApps = usageByApp(start, now, ConnectionType.CELLULAR).sumOf { it.bytes }
+        if (fromApps > 0L) return@withContext fromApps
+        deviceTraffic(manager, ConnectivityManager.TYPE_MOBILE, subscriberId(), start, now).total
+    }
+
+    /** پرمصرف‌ترین اپ امروز (برای نمایش اختیاری در نوار اعلان). */
+    suspend fun topAppToday(persian: Boolean): Pair<String, Long>? = withContext(Dispatchers.IO) {
+        if (!hasUsageAccess()) return@withContext null
+        val now = System.currentTimeMillis()
+        val apps = appTraffic(TimeMath.dayStart(now), now)
+            .filter { it.uid != Process.myUid() && it.total.total > 0 }
+        val top = apps.firstOrNull() ?: return@withContext null
+        val name = OperatorCatalog.specialUidLabel(top.uid, persian) ?: top.label
+        name to top.total.total
     }
 
     /** گزارش کامل یک روز. */

@@ -1,22 +1,33 @@
 package ir.marbledu.datausage.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -25,12 +36,16 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,36 +54,34 @@ import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.Formats
+import ir.marbledu.datausage.data.NotificationConfig
+import ir.marbledu.datausage.data.NotificationPreset
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.ThemeMode
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import ir.marbledu.datausage.ui.FloatingBarClearance
 import ir.marbledu.datausage.ui.MIcons
-import ir.marbledu.datausage.ui.OperatorBadge
-import ir.marbledu.datausage.ui.theme.ThemePalette
 import ir.marbledu.datausage.ui.MainViewModel
+import ir.marbledu.datausage.ui.OperatorBadge
 import ir.marbledu.datausage.ui.SectionTitle
+import ir.marbledu.datausage.ui.theme.ThemePalette
 import ir.marbledu.datausage.util.UsageAccess
 
 @Composable
 fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val context = LocalContext.current
+    val tick by vm.tick.collectAsState()
+    val dashboard by vm.dashboard.collectAsState()
+    val usage by vm.usage.collectAsState()
+
     var showCapDialog by remember { mutableStateOf(false) }
     var showCarrierDialog by remember { mutableStateOf(false) }
     var showChangelog by remember { mutableStateOf(false) }
+    var showNotifSheet by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = ir.marbledu.datausage.ui.FloatingBarClearance),
+        contentPadding = PaddingValues(top = 12.dp, bottom = FloatingBarClearance),
     ) {
         item { SectionTitle(text = context.getString(R.string.settings)) }
 
@@ -153,95 +166,10 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                HorizontalDivider()
-                SwitchRow(
-                    label = context.getString(R.string.expressive_design),
-                    description = context.getString(R.string.expressive_desc),
-                    checked = settings.expressiveDesign,
-                    onCheckedChange = { vm.setExpressive(it) },
-                )
             }
         }
 
-        // ------------------------------------------------- گزینه‌های ایرانی
-        item {
-            SettingsCard(
-                title = context.getString(R.string.iran_options),
-                description = context.getString(R.string.iran_options_desc),
-                icon = MIcons.Carrier,
-                accent = MaterialTheme.colorScheme.tertiary,
-            ) {
-                val iran = settings.iran
-                SwitchRow(context.getString(R.string.detect_operator), checked = iran.detectOperator) {
-                    vm.updateIran { o -> o.copy(detectOperator = !o.detectOperator) }
-                }
-                SwitchRow(
-                    label = if (persian) "شناسایی اپراتور روی وای‌فای" else "Identify operator on Wi-Fi",
-                    description = if (persian) {
-                        "برای فهمیدن اپراتورِ مودم، یک درخواست کوچک به سرویس «IP من» فرستاده می‌شود (ipwho.is و مشابه). " +
-                            "هیچ آمار مصرفی ارسال نمی‌شود."
-                    } else {
-                        "Sends one small request to a “what is my IP” service (ipwho.is and similar) to learn the router's ISP. " +
-                            "No usage data is sent."
-                    },
-                    checked = settings.wifiIspLookup,
-                    onCheckedChange = { vm.setWifiIspLookup(it) },
-                )
-                HorizontalDivider()
-                SwitchRow(context.getString(R.string.show_usage_report), checked = iran.showDataUsageReport) {
-                    vm.updateIran { o -> o.copy(showDataUsageReport = !o.showDataUsageReport) }
-                }
-                SwitchRow(context.getString(R.string.show_average_speed), checked = iran.showAverageSpeed) {
-                    vm.updateIran { o -> o.copy(showAverageSpeed = !o.showAverageSpeed) }
-                }
-                SwitchRow(context.getString(R.string.show_average_ping), checked = iran.showAveragePing) {
-                    vm.updateIran { o -> o.copy(showAveragePing = !o.showAveragePing) }
-                }
-                SwitchRow(context.getString(R.string.show_timeline), checked = iran.showSessionTimeline) {
-                    vm.updateIran { o -> o.copy(showSessionTimeline = !o.showSessionTimeline) }
-                }
-                SwitchRow(context.getString(R.string.show_per_app), checked = iran.showPerAppBreakdown) {
-                    vm.updateIran { o -> o.copy(showPerAppBreakdown = !o.showPerAppBreakdown) }
-                }
-                SwitchRow(context.getString(R.string.show_peak), checked = iran.showPeakHours) {
-                    vm.updateIran { o -> o.copy(showPeakHours = !o.showPeakHours) }
-                }
-                SwitchRow(context.getString(R.string.show_billing), checked = iran.showBillingCycle) {
-                    vm.updateIran { o -> o.copy(showBillingCycle = !o.showBillingCycle) }
-                }
-            }
-        }
-
-        item {
-            SettingsCard(
-                title = context.getString(R.string.carrier_settings),
-                description = context.getString(R.string.ir_operator_hint),
-                icon = MIcons.Signal,
-            ) {
-                Text(
-                    text = settings.operatorOverride.ifBlank { context.getString(R.string.carrier_auto) },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                TextButton(onClick = { showCarrierDialog = true }) {
-                    Text(if (persian) "انتخاب اپراتور" else "Choose carrier")
-                }
-            }
-        }
-
-        item {
-            SettingsCard(
-                title = context.getString(R.string.data_cap),
-                description = if (settings.dataCapBytes > 0) {
-                    Formats.bytes(settings.dataCapBytes, persian)
-                } else context.getString(R.string.set_cap_hint),
-                icon = MIcons.Shield,
-            ) {
-                TextButton(onClick = { showCapDialog = true }) {
-                    Text(if (persian) "تنظیم سقف" else "Set limit")
-                }
-            }
-        }
-
+        // ------------------------------------------- پایش پس‌زمینه و اعلان
         item {
             SettingsCard(
                 title = context.getString(R.string.monitor_background),
@@ -253,14 +181,10 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     checked = settings.monitorInBackground,
                     onCheckedChange = { vm.setMonitorBackground(it) },
                 )
-                TextButton(onClick = { UsageAccess.openNotificationSettings(context) }) {
-                    Text(if (persian) "تنظیمات اعلان‌ها" else "Notification settings")
-                }
-                // فاصله‌ی به‌روزرسانی اعلان سرعت در پس‌زمینه
                 Text(
                     text = if (persian) "فاصله‌ی به‌روزرسانی" else "Update interval",
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = 4.dp),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(5, 10, 30).forEach { seconds ->
@@ -276,6 +200,95 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             }
         }
 
+        // ------------------------------------------- شخصی‌سازی اعلان پایش
+        item {
+            SettingsCard(
+                title = context.getString(R.string.notif_customization),
+                description = context.getString(R.string.notif_customization_desc),
+                icon = MIcons.Bell,
+                accent = MaterialTheme.colorScheme.tertiary,
+            ) {
+                NotificationPreviewCard(
+                    settings = settings,
+                    tick = tick,
+                    dashboard = dashboard,
+                    usage = usage,
+                    persian = persian,
+                )
+
+                Text(
+                    text = if (persian) "چیدمان‌های سریع" else "Quick presets",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(NotificationPreset.entries.toList()) { preset ->
+                        OptionChip(
+                            label = presetLabel(preset, persian),
+                            selected = settings.notification == NotificationConfig.fromPreset(preset),
+                            onClick = { vm.applyNotificationPreset(preset) },
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilledTonalButton(
+                        onClick = { showNotifSheet = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(MIcons.Tune, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(context.getString(R.string.notif_open_customizer), maxLines = 1)
+                    }
+                    TextButton(onClick = { UsageAccess.openNotificationSettings(context) }) {
+                        Text(if (persian) "اعلان سیستم" else "System", maxLines = 1)
+                    }
+                }
+            }
+        }
+
+        // --------------------------------------------- اپراتور سیم‌کارت
+        item {
+            val selectedCarrierLabel = if (settings.operatorOverride.isBlank()) {
+                context.getString(R.string.carrier_auto)
+            } else {
+                OperatorCatalog.resolveName(settings.operatorOverride).name(persian)
+            }
+            SettingsCard(
+                title = context.getString(R.string.carrier_settings),
+                description = context.getString(R.string.ir_operator_hint),
+                icon = MIcons.Signal,
+            ) {
+                Text(
+                    text = selectedCarrierLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                TextButton(onClick = { showCarrierDialog = true }) {
+                    Text(if (persian) "انتخاب اپراتور" else "Choose carrier")
+                }
+            }
+        }
+
+        // ----------------------------------------------------- سقف مصرف
+        item {
+            SettingsCard(
+                title = context.getString(R.string.data_cap),
+                description = if (settings.dataCapBytes > 0) {
+                    Formats.bytes(settings.dataCapBytes, persian)
+                } else context.getString(R.string.set_cap_hint),
+                icon = MIcons.Shield,
+            ) {
+                TextButton(onClick = { showCapDialog = true }) {
+                    Text(if (persian) "تنظیم سقف" else "Set limit")
+                }
+            }
+        }
+
+        // --------------------------------------------------- دوره‌ی صورتحساب
         item {
             SettingsCard(
                 title = context.getString(R.string.billing_cycle),
@@ -289,7 +302,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(1, 7, 15, 21, 28).forEach { day ->
                         OptionChip(
-                            label = Formats.integer(day.toLong(), persian).toString(),
+                            label = Formats.integer(day.toLong(), persian),
                             selected = settings.billingCycleDay == day,
                         ) {
                             vm.setBillingDay(day)
@@ -299,14 +312,18 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             }
         }
 
+        // --------------------------------------------------------- درباره
         item {
+            val versionLabel = if (persian) {
+                Formats.toPersianDigits(BuildConfig.VERSION_NAME)
+            } else BuildConfig.VERSION_NAME
             SettingsCard(
                 title = context.getString(R.string.about),
                 description = context.getString(R.string.about_text),
                 icon = MIcons.Shield,
             ) {
                 Text(
-                    text = "${context.getString(R.string.version)}: ${BuildConfig.VERSION_NAME}",
+                    text = "${context.getString(R.string.version)}: $versionLabel",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 TextButton(onClick = { showChangelog = true }) {
@@ -318,22 +335,42 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
         item { Spacer(Modifier.height(8.dp)) }
     }
 
+    if (showNotifSheet) {
+        NotificationCustomizerSheet(
+            settings = settings,
+            tick = tick,
+            dashboard = dashboard,
+            usage = usage,
+            persian = persian,
+            onUpdate = { transform -> vm.updateNotification(transform) },
+            onPreset = { preset -> vm.applyNotificationPreset(preset) },
+            onDismiss = { showNotifSheet = false },
+        )
+    }
+
     if (showCapDialog) {
-        var input by remember { mutableStateOf(if (settings.dataCapBytes > 0) (settings.dataCapBytes / 1024 / 1024 / 1024).toString() else "") }
+        var input by remember {
+            mutableStateOf(
+                if (settings.dataCapBytes > 0) (settings.dataCapBytes / 1024 / 1024 / 1024).toString() else "",
+            )
+        }
         AlertDialog(
             onDismissRequest = { showCapDialog = false },
             title = { Text(context.getString(R.string.data_cap)) },
             text = {
                 OutlinedTextField(
                     value = input,
-                    onValueChange = { input = it.filter { c -> c.isDigit() } },
+                    onValueChange = { raw ->
+                        input = Formats.normalizeDigits(raw).filter { it.isDigit() }
+                    },
                     label = { Text(context.getString(R.string.gb)) },
                     singleLine = true,
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    vm.setDataCap((input.toLongOrNull() ?: 0L) * 1024 * 1024 * 1024)
+                    val gb = Formats.normalizeDigits(input).toLongOrNull() ?: 0L
+                    vm.setDataCap(gb * 1024 * 1024 * 1024)
                     showCapDialog = false
                 }) { Text(context.getString(R.string.save)) }
             },
@@ -348,19 +385,25 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             onDismissRequest = { showCarrierDialog = false },
             title = { Text(context.getString(R.string.carrier_settings)) },
             text = {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
                     OperatorCatalog.iranian.forEach { operator ->
+                        val selected = settings.operatorOverride == operator.fa ||
+                            settings.operatorOverride == operator.id
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .selectable(selected = settings.operatorOverride == operator.fa) {
+                                .selectable(selected = selected) {
                                     vm.setOperator(operator.fa)
                                     showCarrierDialog = false
                                 },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             RadioButton(
-                                selected = settings.operatorOverride == operator.fa,
+                                selected = selected,
                                 onClick = {
                                     vm.setOperator(operator.fa)
                                     showCarrierDialog = false
@@ -368,7 +411,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             )
                             OperatorBadge(operator, size = 28.dp)
                             Spacer(Modifier.size(10.dp))
-                            Text(if (persian) operator.fa else operator.en)
+                            Text(operator.name(persian))
                         }
                     }
                     TextButton(onClick = {
@@ -388,7 +431,13 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             onDismissRequest = { showChangelog = false },
             title = { Text(context.getString(R.string.changelog)) },
             text = {
-                Text(CHANGELOG, style = MaterialTheme.typography.bodySmall)
+                Box(
+                    Modifier
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Text(changelogText(persian), style = MaterialTheme.typography.bodySmall)
+                }
             },
             confirmButton = {
                 TextButton(onClick = { showChangelog = false }) { Text(if (persian) "باشه" else "OK") }
@@ -403,7 +452,7 @@ private fun SettingsCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     modifier: Modifier = Modifier,
     description: String? = null,
-    accent: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    accent: Color = MaterialTheme.colorScheme.primary,
     content: @Composable () -> Unit,
 ) {
     Card(
@@ -502,25 +551,47 @@ private fun OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
 }
 
-private const val CHANGELOG = "۱.۱.۰ – گزارش ۳۰ روزه و تم‌های رنگی\n" +
-    "• شناسایی اپراتور حتی روی وای‌فای + نشان هر اپراتور\n" +
-    "• تب «۳۰ روز»: گزارش کامل هر روز با تاریخ شمسی و میلادی\n" +
-    "• مصرف هر اپراتور، هر اپ و نمودار ۲۴ ساعتِ هر روز\n" +
-    "• نمودارهای جدید، رنگی و قابل لمس\n" +
-    "• ۸ تم رنگی + رنگ والپیپر\n" +
-    "• نوار پایین شناور با انیمیشن\n\n" +
-    "۱.۰.۱ – رفع باگ‌ها\n" +
-    "• دسترسی مصرف اپ‌ها حالا در تنظیمات دیده می‌شود\n" +
-    "• نوار تب پایین درست کار می‌کند\n" +
-    "• «امروز» از نیمه‌شب و دوره‌ی صورتحساب از روز انتخابی\n" +
-    "• ساعت‌های پرمصرف واقعی\n" +
-    "• زبان «مثل سیستم» درست شد\n" +
-    "• نمایش مصرف وای‌فای و خروجی CSV اصلاح‌شده\n\n" +
-    "۱.۰.۰ – اولین نسخه\n" +
-    "• مصرف اینترنت بدون VPN، به تفکیک اپ\n" +
-    "• بازه‌های مصرف از ساعت تا ساعت\n" +
-    "• شناسایی اپراتورهای ایرانی\n" +
-    "• سرعت، میانگین سرعت و پینگ\n" +
-    "• گزارش CSV و اشتراک‌گذاری\n" +
-    "• فارسی/انگلیسی با چیدمان راست‌چین و چپ‌چین\n" +
-    "• طراحی Material 3 Expressive"
+private fun changelogText(persian: Boolean): String = if (persian) {
+    "۱.۲.۰ – شناسایی هوشمند وای‌فای، فارسی کامل و اعلان دلخواه\n" +
+        "• تشخیص چندلایه‌ی اپراتور وای‌فای و هات‌اسپات (IP عمومی، DNS اپراتور، IPv6، دامنه DHCP و نام شبکه)\n" +
+        "• تفکیک مودم/روتر از هات‌اسپات آیفون/اندروید و نمایش دلیل در صورت مسدود شدن توسط VPN\n" +
+        "• شخصی‌سازی کامل اعلان پایش با ۴ چیدمان آماده، الگوهای دلخواه، نوار پیشرفت، صفحه قفل و دکمه‌های سریع\n" +
+        "• فارسی‌سازی کامل در کل رابط کاربری و نوار اعلان مستقل از زبان سیستم\n" +
+        "• فعال‌سازی همیشگی امکانات بومی ایران و طراحی Material 3 Expressive\n\n" +
+        "۱.۱.۰ – گزارش ۳۰ روزه و تم‌های رنگی\n" +
+        "• شناسایی اپراتور حتی روی وای‌فای + نشان هر اپراتور\n" +
+        "• تب «۳۰ روز»: گزارش کامل هر روز با تاریخ شمسی و میلادی\n" +
+        "• مصرف هر اپراتور، هر اپ و نمودار ۲۴ ساعتِ هر روز\n" +
+        "• نمودارهای جدید، رنگی و قابل لمس\n" +
+        "• ۸ تم رنگی + رنگ والپیپر\n" +
+        "• نوار پایین شناور با انیمیشن\n\n" +
+        "۱.۰.۱ – رفع باگ‌ها\n" +
+        "• دسترسی مصرف اپ‌ها حالا در تنظیمات دیده می‌شود\n" +
+        "• نوار تب پایین درست کار می‌کند\n" +
+        "• «امروز» از نیمه‌شب و دوره‌ی صورتحساب از روز انتخابی\n" +
+        "• ساعت‌های پرمصرف واقعی\n" +
+        "• زبان «مثل سیستم» درست شد\n" +
+        "• نمایش مصرف وای‌فای و خروجی CSV اصلاح‌شده\n\n" +
+        "۱.۰.۰ – اولین نسخه\n" +
+        "• مصرف اینترنت بدون VPN، به تفکیک اپ\n" +
+        "• بازه‌های مصرف از ساعت تا ساعت\n" +
+        "• شناسایی اپراتورهای ایرانی\n" +
+        "• سرعت، میانگین سرعت و پینگ\n" +
+        "• گزارش CSV و اشتراک‌گذاری\n" +
+        "• فارسی/انگلیسی با چیدمان راست‌چین و چپ‌چین\n" +
+        "• طراحی Material 3 Expressive"
+} else {
+    "1.2.0 – Multi-tier Wi-Fi ISP detection, full Persian localization & rich notifications\n" +
+        "• Multi-tier Wi-Fi & hotspot operator detection (parallel GeoIP, ISP DNS, IPv6 prefix, DHCP domain & SSID)\n" +
+        "• Router vs. iPhone/Android hotspot detection and explicit VPN/captive-portal diagnostics\n" +
+        "• Granular notification customization with live preview, 4 presets, custom templates, progress bars, lockscreen visibility & quick actions\n" +
+        "• Complete Persian localization across service notifications and all screens regardless of system locale\n" +
+        "• Always-on Iran features & Material 3 Expressive design\n\n" +
+        "1.1.0 – 30-day reports & color themes\n" +
+        "• Operator detection over Wi-Fi + carrier badges\n" +
+        "• 30-day interactive reports with Jalali & Gregorian dates\n" +
+        "• Per-operator, per-app and 24-hour breakdowns\n" +
+        "• 8 color themes + wallpaper dynamic color\n\n" +
+        "1.0.1 – Bug fixes & billing cycle improvements\n" +
+        "1.0.0 – Initial release"
+}

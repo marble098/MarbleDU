@@ -11,7 +11,17 @@ object Formats {
     fun bytes(value: Long, persian: Boolean): String {
         val units = if (persian) listOf("بایت", "کیلوبایت", "مگابایت", "گیگابایت", "ترابایت")
         else listOf("B", "KB", "MB", "GB", "TB")
-        if (value <= 0) return "0 ${units[0]}"
+        if (value <= 0) return if (persian) "۰ ${units[0]}" else "0 ${units[0]}"
+        val i = (ln(value.toDouble()) / ln(1024.0)).toInt().coerceIn(0, units.lastIndex)
+        val scaled = value / 1024.0.pow(i.toDouble())
+        return "${number(scaled, persian, if (scaled >= 100) 0 else 1)} ${units[i]}"
+    }
+
+    /** قالب فشرده برای نوار اعلان (مثل «۱۲.۴ م.ب» یا «12.4 MB»). */
+    fun compactBytes(value: Long, persian: Boolean): String {
+        val units = if (persian) listOf("ب", "ک.ب", "م.ب", "گ.ب", "ت.ب")
+        else listOf("B", "KB", "MB", "GB", "TB")
+        if (value <= 0) return if (persian) "۰ ${units[0]}" else "0 ${units[0]}"
         val i = (ln(value.toDouble()) / ln(1024.0)).toInt().coerceIn(0, units.lastIndex)
         val scaled = value / 1024.0.pow(i.toDouble())
         return "${number(scaled, persian, if (scaled >= 100) 0 else 1)} ${units[i]}"
@@ -20,6 +30,12 @@ object Formats {
     fun speed(bytesPerSecond: Double, persian: Boolean): String {
         val unit = if (persian) "بر ثانیه" else "/s"
         return "${bytes(abs(bytesPerSecond).toLong(), persian)} $unit"
+    }
+
+    /** سرعت فشرده برای اعلان (مثل «۱۲.۴ ک.ب/ث» یا «12.4 KB/s»). */
+    fun compactSpeed(bytesPerSecond: Double, persian: Boolean): String {
+        val unit = if (persian) "/ث" else "/s"
+        return "${compactBytes(abs(bytesPerSecond).toLong(), persian)}$unit"
     }
 
     fun number(value: Double, persian: Boolean, decimals: Int = 1): String {
@@ -36,6 +52,17 @@ object Formats {
         val map = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
         return buildString {
             text.forEach { c -> append(if (c in '0'..'9') map[c - '0'] else c) }
+        }
+    }
+
+    /** تبدیل ارقام فارسی و عربی به لاتین برای پردازش ورودی عددی کاربر. */
+    fun normalizeDigits(text: String): String = buildString {
+        text.forEach { c ->
+            when (c) {
+                in '۰'..'۹' -> append(('0'.code + (c.code - '۰'.code)).toChar())
+                in '٠'..'٩' -> append(('0'.code + (c.code - '٠'.code)).toChar())
+                else -> append(c)
+            }
         }
     }
 

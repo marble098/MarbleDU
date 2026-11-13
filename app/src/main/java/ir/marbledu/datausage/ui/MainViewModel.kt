@@ -10,23 +10,28 @@ import ir.marbledu.datausage.data.AppUsage
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.DayReport
 import ir.marbledu.datausage.data.DaySummary
-import ir.marbledu.datausage.data.IspResolver
-import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.data.HourUsage
-import ir.marbledu.datausage.data.IranOptions
+import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.LiveTick
+import ir.marbledu.datausage.data.LocaleHelper
 import ir.marbledu.datausage.data.NetworkStatsReader
+import ir.marbledu.datausage.data.NotificationConfig
+import ir.marbledu.datausage.data.NotificationPreset
 import ir.marbledu.datausage.data.PingResult
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.data.TimeMath
 import ir.marbledu.datausage.data.TimeRange
+import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.service.MonitorService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -109,13 +114,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var pingJob: Job? = null
 
     init {
+        IspResolver.enabled = true
+        // با هر تغییر نتیجه‌ی شناسایی وای‌فای یا تغییر زبان، کارت اتصال بلافاصله تازه می‌شود.
+        viewModelScope.launch(Dispatchers.IO) {
+            IspResolver.updates.collect {
+                refreshLiveNetworkSnapshot()
+            }
+        }
         viewModelScope.launch {
-            settings.collect { IspResolver.enabled = it.wifiIspLookup }
+            settings.map { it.language }.distinctUntilChanged().collect {
+                refreshLiveNetworkSnapshot()
+                refreshDashboard()
+            }
         }
         startLive()
-        // پیش از این فقط داشبورد لود می‌شد و لیست اپ‌ها/گزارش‌ها تا وقتی کاربر
-        // دکمه‌ی «به‌روزرسانی» را می‌زد خالی می‌ماند.
         refreshAll()
+    }
+
+    private fun refreshLiveNetworkSnapshot() {
+        val current = _tick.value ?: return
+        val persian = LocaleHelper.isPersian(settings.value.language)
+        val snapshot = NetworkStatsReader.currentNetwork(getApplication(), persian)
+        _tick.value = current.copy(network = snapshot)
     }
 
     /**
@@ -163,7 +183,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startLive() {
         if (liveJob?.isActive == true) return
         liveJob = viewModelScope.launch {
-            monitor.stream(1000).collect { value ->
+            monitor.stream(1000) { LocaleHelper.isPersian(settings.value.language) }.collect { value ->
                 _tick.value = value
                 _speedHistory.value = (_speedHistory.value + SpeedPoint(value.downBytesPerSecond, value.upBytesPerSecond))
                     .takeLast(60)
@@ -204,7 +224,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val monthMobile = repository.usageByApp(monthStart, now, ConnectionType.CELLULAR)
             val monthWifi = repository.usageByApp(monthStart, now, ConnectionType.WIFI)
 
-            val snapshot = NetworkStatsReader.currentNetwork(getApplication())
+            val persian = LocaleHelper.isPersian(settings.value.language)
+            val snapshot = NetworkStatsReader.currentNetwork(getApplication(), persian)
             val averageSpeed = _tick.value?.averageSpeed ?: 0.0
 
             val todaySummary = repository.daySummaries(1).lastOrNull()
@@ -233,10 +254,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** تغییر بازه فقط یک بار لود می‌کند (قبل از این دو coroutine روی هم ساخته می‌شد). */
+    /** تغییر بازه فقط یک بار لود می‌کند. */
     fun setRange(range: TimeRange) = loadUsage(range)
 
-    /** ساعت‌های پرمصرف بر اساس مصرف واقعی هر ساعت (نه ساعت آخرین استفاده‌ی اپ). */
+    /** ساعت‌های پرمصرف بر اساس مصرف واقعی هر ساعت. */
     fun loadPeakHours(range: TimeRange = _usage.value.range) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
@@ -263,10 +284,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // -------------------------------------------------------------- settings
     fun setLanguage(language: AppLanguage) = viewModelScope.launch { settingsRepo.setLanguage(language) }
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { settingsRepo.setTheme(mode) }
-    fun setExpressive(on: Boolean) = viewModelScope.launch { settingsRepo.setExpressive(on) }
-    fun setDynamicColor(on: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(on) }
     fun setPalette(name: String, dynamic: Boolean) = viewModelScope.launch { settingsRepo.setPalette(name, dynamic) }
-    fun setWifiIspLookup(on: Boolean) = viewModelScope.launch { settingsRepo.setWifiIspLookup(on) }
     fun setDataCap(bytes: Long) = viewModelScope.launch { settingsRepo.setDataCap(bytes) }
     fun setBillingDay(day: Int) = viewModelScope.launch { settingsRepo.setBillingCycleDay(day.coerceIn(1, 28)) }
     fun setMonitorInterval(seconds: Int) = viewModelScope.launch {
@@ -279,8 +297,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (on) MonitorService.start(context) else MonitorService.stop(context)
     }
 
-    fun updateIran(transform: (IranOptions) -> IranOptions) =
-        viewModelScope.launch { settingsRepo.updateIran(transform) }
+    fun updateNotification(transform: (NotificationConfig) -> NotificationConfig) =
+        viewModelScope.launch { settingsRepo.updateNotification(transform) }
+
+    fun applyNotificationPreset(preset: NotificationPreset) =
+        viewModelScope.launch { settingsRepo.updateNotification { NotificationConfig.fromPreset(preset) } }
 
     fun completeOnboarding() = viewModelScope.launch { settingsRepo.setOnboarded(true) }
 }

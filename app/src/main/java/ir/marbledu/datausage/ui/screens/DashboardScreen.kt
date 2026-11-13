@@ -1,5 +1,6 @@
 package ir.marbledu.datausage.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -37,10 +39,12 @@ import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.DaySummary
 import ir.marbledu.datausage.data.Formats
+import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.JalaliDate
 import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.NetworkSnapshot
 import ir.marbledu.datausage.data.OperatorCatalog
+import ir.marbledu.datausage.service.NotificationFormatter
 import ir.marbledu.datausage.ui.AppIcon
 import ir.marbledu.datausage.ui.ArcGauge
 import ir.marbledu.datausage.ui.BarEntry
@@ -72,7 +76,6 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
     val history by vm.history.collectAsState()
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
-    val iran = settings.iran
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -101,15 +104,13 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
             }
         }
 
-        if (iran.detectOperator) {
-            item {
-                ConnectionCard(
-                    network = tick?.network,
-                    settings = settings,
-                    persian = persian,
-                    onRetry = { vm.refreshWifiOperator() },
-                )
-            }
+        item {
+            ConnectionCard(
+                network = tick?.network,
+                settings = settings,
+                persian = persian,
+                onRetry = { vm.refreshWifiOperator() },
+            )
         }
 
         if (!dashboard.hasUsageAccess) {
@@ -138,94 +139,92 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
             }
         }
 
-        if (iran.showDataUsageReport) {
-            item {
-                val mobile = dashboard.todayMobile
-                val wifi = dashboard.todayWifi
-                val total = mobile.total + wifi.total
-                HeroCard {
-                    Text(
-                        context.getString(R.string.today_usage),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = LocalContentColor.current.copy(alpha = 0.85f),
+        item {
+            val mobile = dashboard.todayMobile
+            val wifi = dashboard.todayWifi
+            val total = mobile.total + wifi.total
+            HeroCard {
+                Text(
+                    context.getString(R.string.today_usage),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = LocalContentColor.current.copy(alpha = 0.85f),
+                )
+                Text(
+                    Formats.bytes(total, persian),
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = when {
+                        dashboard.todayVariationPercent > 0 ->
+                            "▲ ${Formats.integer(dashboard.todayVariationPercent.toLong(), persian)}" +
+                                (if (persian) "٪ داده‌ی موبایل بیشتر از دیروز" else "% more mobile data than yesterday")
+                        dashboard.todayVariationPercent < 0 ->
+                            "▼ ${Formats.integer((-dashboard.todayVariationPercent).toLong(), persian)}" +
+                                (if (persian) "٪ داده‌ی موبایل کمتر از دیروز" else "% less mobile data than yesterday")
+                        else -> if (persian) "از نیمه‌شب تا الان" else "since midnight"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LocalContentColor.current.copy(alpha = 0.9f),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Metric(
+                        context.getString(R.string.download),
+                        Formats.bytes(mobile.rx + wifi.rx, persian),
+                        LocalContentColor.current,
+                        Modifier.weight(1f),
+                        MIcons.Download,
                     )
-                    Text(
-                        Formats.bytes(total, persian),
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
+                    Metric(
+                        context.getString(R.string.upload),
+                        Formats.bytes(mobile.tx + wifi.tx, persian),
+                        LocalContentColor.current,
+                        Modifier.weight(1f),
+                        MIcons.Upload,
                     )
-                    Text(
-                        text = when {
-                            dashboard.todayVariationPercent > 0 ->
-                                "▲ ${Formats.integer(dashboard.todayVariationPercent.toLong(), persian)}" +
-                                    (if (persian) "٪ داده‌ی موبایل بیشتر از دیروز" else "% more mobile data than yesterday")
-                            dashboard.todayVariationPercent < 0 ->
-                                "▼ ${Formats.integer((-dashboard.todayVariationPercent).toLong(), persian)}" +
-                                    (if (persian) "٪ داده‌ی موبایل کمتر از دیروز" else "% less mobile data than yesterday")
-                            else -> if (persian) "از نیمه‌شب تا الان" else "since midnight"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = LocalContentColor.current.copy(alpha = 0.9f),
+                }
+                SplitBar(
+                    listOf(
+                        mobile.total.toFloat() to Color.White,
+                        wifi.total.toFloat() to Color.White.copy(alpha = 0.45f),
+                    ),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Metric(
+                        context.getString(R.string.cellular),
+                        Formats.bytes(mobile.total, persian),
+                        LocalContentColor.current,
+                        Modifier.weight(1f),
+                        MIcons.Signal,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Metric(
-                            context.getString(R.string.download),
-                            Formats.bytes(mobile.rx + wifi.rx, persian),
-                            LocalContentColor.current,
-                            Modifier.weight(1f),
-                            MIcons.Download,
-                        )
-                        Metric(
-                            context.getString(R.string.upload),
-                            Formats.bytes(mobile.tx + wifi.tx, persian),
-                            LocalContentColor.current,
-                            Modifier.weight(1f),
-                            MIcons.Upload,
-                        )
-                    }
-                    SplitBar(
-                        listOf(
-                            mobile.total.toFloat() to Color.White,
-                            wifi.total.toFloat() to Color.White.copy(alpha = 0.45f),
-                        ),
+                    Metric(
+                        context.getString(R.string.wifi),
+                        Formats.bytes(wifi.total, persian),
+                        LocalContentColor.current,
+                        Modifier.weight(1f),
+                        MIcons.Wifi,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Metric(
-                            context.getString(R.string.cellular),
-                            Formats.bytes(mobile.total, persian),
-                            LocalContentColor.current,
-                            Modifier.weight(1f),
-                            MIcons.Signal,
-                        )
-                        Metric(
-                            context.getString(R.string.wifi),
-                            Formats.bytes(wifi.total, persian),
-                            LocalContentColor.current,
-                            Modifier.weight(1f),
-                            MIcons.Wifi,
-                        )
-                    }
                 }
             }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatCard(
-                        title = context.getString(R.string.cellular),
-                        value = Formats.bytes(dashboard.monthMobileBytes, persian),
-                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
-                        icon = MIcons.Signal,
-                        accent = marble.mobile,
-                        modifier = Modifier.weight(1f),
-                    )
-                    StatCard(
-                        title = context.getString(R.string.wifi),
-                        value = Formats.bytes(dashboard.monthWifiBytes, persian),
-                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
-                        icon = MIcons.Wifi,
-                        accent = marble.wifi,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard(
+                    title = context.getString(R.string.cellular),
+                    value = Formats.bytes(dashboard.monthMobileBytes, persian),
+                    subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
+                    icon = MIcons.Signal,
+                    accent = marble.mobile,
+                    modifier = Modifier.weight(1f),
+                )
+                StatCard(
+                    title = context.getString(R.string.wifi),
+                    value = Formats.bytes(dashboard.monthWifiBytes, persian),
+                    subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
+                    icon = MIcons.Wifi,
+                    accent = marble.wifi,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
 
@@ -244,35 +243,29 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
             )
         }
 
-        if (iran.showDataUsageReport && history.days.takeLast(7).any { it.total > 0 }) {
+        if (history.days.takeLast(7).any { it.total > 0 }) {
             item {
                 WeeklyTrendCard(history.days.takeLast(7), persian)
             }
         }
 
-        if (iran.showAverageSpeed || iran.showAveragePing) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (iran.showAverageSpeed) {
-                        StatCard(
-                            title = context.getString(R.string.average_speed),
-                            value = Formats.speed(tick?.averageSpeed ?: 0.0, persian),
-                            icon = MIcons.Speed,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (iran.showAveragePing) {
-                        StatCard(
-                            title = context.getString(R.string.average_ping),
-                            value = if (dashboard.averagePingMs > 0) {
-                                "${Formats.number(dashboard.averagePingMs, persian, 0)} ${context.getString(R.string.ms)}"
-                            } else "--",
-                            icon = MIcons.Timer,
-                            accent = scheme.tertiary,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard(
+                    title = context.getString(R.string.average_speed),
+                    value = Formats.speed(tick?.averageSpeed ?: 0.0, persian),
+                    icon = MIcons.Speed,
+                    modifier = Modifier.weight(1f),
+                )
+                StatCard(
+                    title = context.getString(R.string.average_ping),
+                    value = if (dashboard.averagePingMs > 0) {
+                        "${Formats.number(dashboard.averagePingMs, persian, 0)} ${context.getString(R.string.ms)}"
+                    } else "—",
+                    icon = MIcons.Timer,
+                    accent = scheme.tertiary,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
 
@@ -334,13 +327,13 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
             }
         }
 
-        if (iran.showSessionTimeline && tick != null) {
+        if (tick != null) {
             item {
                 SessionCard(vm, persian)
             }
         }
 
-        if (iran.showPerAppBreakdown && dashboard.hasUsageAccess) {
+        if (dashboard.hasUsageAccess) {
             item {
                 SectionTitle(
                     text = context.getString(R.string.per_app),
@@ -357,15 +350,16 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
                 val top = usage.mobile.take(5)
                 val max = top.maxOfOrNull { it.bytes } ?: 1L
                 items(top) { app ->
+                    val label = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AppIcon(app.packageName.substringBefore(':'), app.label, size = 34.dp)
+                        AppIcon(app.packageName.substringBefore(':'), label, size = 34.dp)
                         Spacer(Modifier.width(10.dp))
                         UsageBar(
-                            label = app.label,
+                            label = label,
                             bytes = app.bytes,
                             fraction = app.bytes.toFloat() / max,
                             persian = persian,
-                            trailing = LiveMonitor.formatHourMinute(app.lastTimestamp),
+                            trailing = LiveMonitor.formatHourMinute(app.lastTimestamp, persian),
                             color = marble.chart[top.indexOf(app).coerceAtLeast(0) % marble.chart.size],
                         )
                     }
@@ -379,7 +373,8 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
 
 /**
  * کارت «اینترنت فعلی»: نشان و نام اپراتوری که همین الان اینترنت از آن می‌آید.
- * روی وای‌فای هم اپراتورِ مودم نوشته می‌شود و اپراتور سیم‌کارت جدا می‌آید.
+ * روی وای‌فای/هات‌اسپات هم اپراتور مودم یا گوشی میزبان و هم نوع منبع (هات‌اسپات/مودم)
+ * نمایش داده می‌شود و در صورت مسدود شدن توسط VPN یا خطا، دلیل صریح نشان داده می‌شود.
  */
 @Composable
 private fun ConnectionCard(
@@ -399,6 +394,10 @@ private fun ConnectionCard(
         else -> network.operator
     }
     val resolved = network?.wifiOperatorResolved == true
+    val status = network?.wifiLookupStatus ?: IspResolver.LookupStatus.IDLE
+    val sourceKind = network?.wifiSourceKind ?: IspResolver.WifiSourceKind.UNKNOWN
+    val sourceLabel = NotificationFormatter.wifiSourceLabel(sourceKind, persian)
+
     MarbleCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OperatorBadge(
@@ -420,7 +419,15 @@ private fun ConnectionCard(
                 Text(
                     text = when {
                         type == ConnectionType.OFFLINE -> if (persian) "بدون اتصال" else "Offline"
-                        onWifi && !resolved -> if (persian) "وای‌فای" else "Wi-Fi"
+                        onWifi && !resolved -> when (sourceKind) {
+                            IspResolver.WifiSourceKind.HOTSPOT_IPHONE,
+                            IspResolver.WifiSourceKind.HOTSPOT_ANDROID,
+                            IspResolver.WifiSourceKind.HOTSPOT_WINDOWS,
+                            IspResolver.WifiSourceKind.HOTSPOT_METERED,
+                            -> if (persian) "وای‌فای ($sourceLabel)" else "Wi-Fi ($sourceLabel)"
+                            IspResolver.WifiSourceKind.ETHERNET -> if (persian) "اترنت" else "Ethernet"
+                            else -> if (persian) "وای‌فای" else "Wi-Fi"
+                        }
                         else -> operator.name(persian)
                     },
                     style = MaterialTheme.typography.titleLarge,
@@ -430,35 +437,86 @@ private fun ConnectionCard(
                 )
                 Text(
                     text = when {
-                        onWifi && resolved -> (if (persian) "از طریق وای‌فای" else "over Wi-Fi") +
-                            (if ((network?.ispAsn ?: 0) > 0) "  •  AS${network?.ispAsn}" else "")
-                        onWifi && settings.wifiIspLookup ->
-                            if (persian) "در حال شناسایی اپراتور وای‌فای…" else "Identifying the Wi-Fi operator…"
-                        onWifi -> if (persian) "شناسایی اپراتور وای‌فای خاموش است" else "Wi-Fi operator lookup is off"
+                        onWifi && resolved -> buildString {
+                            append(
+                                if (sourceLabel.isNotBlank()) {
+                                    if (persian) "از طریق $sourceLabel (وای‌فای)" else "over $sourceLabel (Wi-Fi)"
+                                } else {
+                                    if (persian) "از طریق وای‌فای" else "over Wi-Fi"
+                                },
+                            )
+                            val asn = network?.ispAsn ?: 0
+                            if (asn > 0) {
+                                append("  •  ")
+                                append(if (persian) "شبکه ${Formats.toPersianDigits(asn.toString())}" else "AS$asn")
+                            }
+                        }
+                        onWifi -> when (status) {
+                            IspResolver.LookupStatus.SEARCHING, IspResolver.LookupStatus.IDLE ->
+                                if (persian) "در حال شناسایی اپراتور وای‌فای…" else "Identifying Wi-Fi operator…"
+                            IspResolver.LookupStatus.CAPTIVE_PORTAL ->
+                                if (persian) "نیاز به ورود به صفحه‌ی وای‌فای" else "Wi-Fi sign-in required"
+                            IspResolver.LookupStatus.VPN_BLOCKED ->
+                                if (persian) "VPN مانع بررسی مستقیم شد (دوباره امتحان کن)" else "VPN blocked direct check (tap re-check)"
+                            IspResolver.LookupStatus.FAILED ->
+                                if (persian) "اپراتور وای‌فای پیدا نشد — دوباره بزن" else "Couldn't detect Wi-Fi operator — tap re-check"
+                            else -> if (persian) "وای‌فای" else "Wi-Fi"
+                        }
+                        type == ConnectionType.CELLULAR && !network?.mobileTech.isNullOrBlank() ->
+                            (if (persian) "داده موبایل" else "Mobile data") + " (${network?.mobileTech})"
                         else -> networkLabel(type.name, persian)
                     },
                     style = MaterialTheme.typography.labelMedium,
+                    color = if (onWifi && !resolved && (status == IspResolver.LookupStatus.FAILED || status == IspResolver.LookupStatus.VPN_BLOCKED)) {
+                        scheme.error
+                    } else scheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (onWifi) {
+                TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                    Icon(MIcons.Refresh, null, Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (persian) "بررسی" else "Re-check", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+        if (onWifi && resolved) {
+            val detailParts = buildList {
+                val ispName = network?.ispName.orEmpty()
+                if (ispName.isNotBlank()) {
+                    add(if (persian) "سرویس‌دهنده: $ispName" else "ISP: $ispName")
+                }
+                val methodLabel = detectionMethodLabel(network?.wifiDetectionMethod, persian)
+                if (methodLabel.isNotBlank()) add(methodLabel)
+            }
+            if (detailParts.isNotEmpty()) {
+                Text(
+                    text = detailParts.joinToString("  •  "),
+                    style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        if (onWifi && resolved && !network?.ispName.isNullOrBlank()) {
-            Text(
-                text = "ISP: ${network?.ispName}",
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (network?.isValidated == true) {
                 InfoChip(text = if (persian) "آنلاین" else "Online", color = scheme.secondary)
             }
             if (network?.vpnActive == true) {
                 InfoChip(text = if (persian) "VPN روشن" else "VPN on", color = scheme.tertiary)
+            }
+            if (onWifi && sourceLabel.isNotBlank()) {
+                InfoChip(text = sourceLabel, color = scheme.primary)
+            }
+            if (onWifi && !network?.wifiSsid.isNullOrBlank()) {
+                InfoChip(text = network?.wifiSsid.orEmpty(), color = scheme.secondary)
             }
             if (onWifi && sim != null) {
                 InfoChip(
@@ -466,16 +524,17 @@ private fun ConnectionCard(
                     color = Color(sim.brandColor).let { c -> if (LocalMarbleColors.current.dark) scheme.primary else c },
                 )
             }
-            if (onWifi && settings.wifiIspLookup) {
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-                    Icon(MIcons.Refresh, null, Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (persian) "بررسی دوباره" else "Re-check", style = MaterialTheme.typography.labelMedium)
-                }
-            }
         }
     }
+}
+
+private fun detectionMethodLabel(method: IspResolver.DetectionMethod?, persian: Boolean): String = when (method) {
+    IspResolver.DetectionMethod.PUBLIC_IP_ASN -> if (persian) "تایید از روی IP عمومی" else "Verified via public IP"
+    IspResolver.DetectionMethod.DNS_SERVER_ISP -> if (persian) "تخمین از روی DNS اپراتور" else "Detected via ISP DNS"
+    IspResolver.DetectionMethod.IPV6_PREFIX -> if (persian) "تشخیص از روی IPv6 شبکه" else "Detected via IPv6"
+    IspResolver.DetectionMethod.DHCP_DOMAIN -> if (persian) "تشخیص از دامنه‌ی شبکه" else "Detected via DHCP domain"
+    IspResolver.DetectionMethod.WIFI_SSID -> if (persian) "تخمین از روی نام وای‌فای" else "Matched via Wi-Fi name"
+    else -> ""
 }
 
 /** نمودار ۷ روز اخیر: ستون‌های دورنگ (موبایل/وای‌فای)، قابل لمس. */
@@ -537,8 +596,8 @@ private fun SessionCard(vm: MainViewModel, persian: Boolean) {
     val tick by vm.tick.collectAsState()
     val context = LocalContext.current
     val t = tick ?: return
-    val start = remember(t.sessionStart) { LiveMonitor.formatHourMinute(t.sessionStart) }
-    val now = remember(t.timestamp) { LiveMonitor.formatHourMinute(t.timestamp) }
+    val start = remember(t.sessionStart, persian) { LiveMonitor.formatHourMinute(t.sessionStart, persian) }
+    val now = remember(t.timestamp, persian) { LiveMonitor.formatHourMinute(t.timestamp, persian) }
     Card(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),

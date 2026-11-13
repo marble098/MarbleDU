@@ -98,9 +98,16 @@
     <string name="gb">GB</string>
     <string name="mb">MB</string>
     <string name="notif_channel_name">Usage monitoring</string>
-    <string name="notif_channel_desc">Shows speed and usage in the notification bar</string>
+    <string name="notif_channel_desc">Shows speed, operator and data usage in the notification bar</string>
     <string name="notif_title">MarbleDU is monitoring</string>
     <string name="notif_text">%1$s • %2$s</string>
+    <string name="notif_action_recheck">Check ISP</string>
+    <string name="notif_action_reports">30d Reports</string>
+    <string name="notif_action_stop">Stop</string>
+    <string name="notif_customization">Notification customization</string>
+    <string name="notif_customization_desc">Choose metrics, layout, title style, progress bar and quick actions</string>
+    <string name="notif_open_customizer">Customize notification</string>
+    <string name="notif_system_settings">System notification settings</string>
     <string name="reports_title">Reports</string>
     <string name="share_csv_title">MarbleDU usage report</string>
     <string name="no_apps">Allow usage access to see per-app data.</string>

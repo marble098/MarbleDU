@@ -1,13 +1,15 @@
 package ir.marbledu.datausage.data
 
+import android.app.usage.NetworkStats
+import android.telephony.TelephonyManager
+
 /**
- * دیتابیس اپراتورهای ایرانی (سیم‌کارت + اینترنت ثابت).
+ * دیتابیس اپراتورهای ایرانی (سیم‌کارت + اینترنت ثابت + MVNOها).
  *
- * سه راه برای شناسایی داریم:
+ * راه‌های شناسایی:
  *  ۱) MCC/MNC سیم‌کارت (بدون هیچ مجوزی)،
- *  ۲) نام خام اپراتور که سیستم برمی‌گرداند،
- *  ۳) شماره‌ی AS و نام ISP از روی IP عمومی – همین است که روی وای‌فای هم
- *     می‌فهمیم اینترنت مودم مال کدام اپراتور است.
+ *  ۲) نام خام اپراتور، نام وای‌فای (SSID) یا دامنه‌ی DHCP،
+ *  ۳) شماره‌ی AS و نام ISP از روی IP عمومی، DNS اپراتور یا پیشوند IPv6.
  */
 object OperatorCatalog {
 
@@ -34,24 +36,27 @@ object OperatorCatalog {
     const val ID_UNKNOWN = "unknown"
     private const val CUSTOM_PREFIX = "x:"
 
-    /** اپراتورهای موبایل. ترتیب مهم است: نام‌های خاص‌تر جلوتر. */
+    /** اپراتورهای موبایل و MVNOها. ترتیب مهم است: نام‌های خاص‌تر جلوتر. */
     val iranian: List<Operator> = listOf(
         Operator(
             "mci", "همراه اول", "MCI", "MCI", 0xFF00A6C8, 0xFF0B4F8A,
             mncs = listOf("11"), asns = listOf(197207),
-            keywords = listOf("mci", "hamrah", "همراه", "mobilecommunicationcompanyofiran", "irmci"),
+            keywords = listOf(
+                "mci", "hamrah", "همراه", "mobilecommunicationcompanyofiran",
+                "irmci", "mcinet", "hamrahaval",
+            ),
             isMobile = true,
         ),
         Operator(
             "irancell", "ایرانسل", "Irancell", "MTN", 0xFFFFC61A, 0xFFF39200,
             mncs = listOf("35"), asns = listOf(44244),
-            keywords = listOf("irancell", "ایرانسل", "mtn"),
+            keywords = listOf("irancell", "ایرانسل", "mtn", "mtnirancell", "irancelltd"),
             isMobile = true,
         ),
         Operator(
             "rightel", "رایتل", "Rightel", "RTL", 0xFF9B2FD6, 0xFFE0218A,
             mncs = listOf("20"), asns = listOf(57218),
-            keywords = listOf("rightel", "رایتل"),
+            keywords = listOf("rightel", "رایتل", "tamintelecom"),
             isMobile = true,
         ),
         Operator(
@@ -77,9 +82,19 @@ object OperatorCatalog {
             isMobile = true,
         ),
         Operator(
+            "lotustel", "لوتوس‌تل", "LotusTel", "LTS", 0xFF5E35B1, 0xFF9575CD,
+            keywords = listOf("lotustel", "لوتوستل"),
+            isMobile = true,
+        ),
+        Operator(
+            "anarestan", "انارستان", "Anarestan", "ANR", 0xFFD81B60, 0xFFF06292,
+            keywords = listOf("anarestan", "انارستان"),
+            isMobile = true,
+        ),
+        Operator(
             "telekish", "تله‌کیش", "TeleKish", "TKC", 0xFF00897B, 0xFF4DB6AC,
             mncs = listOf("14"),
-            keywords = listOf("telekish", "tkc", "kifzo"),
+            keywords = listOf("telekish", "tkc", "kifzo", "تلهکیش"),
             isMobile = true,
         ),
         Operator(
@@ -90,7 +105,7 @@ object OperatorCatalog {
         ),
     )
 
-    /** اپراتورهای اینترنت ثابت / ISP ها (برای وای‌فای). */
+    /** اپراتورهای اینترنت ثابت، فیبر و بی‌سیم / ISPها (برای وای‌فای و مودم). */
     val fixed: List<Operator> = listOf(
         Operator(
             "tci", "مخابرات", "TCI", "TCI", 0xFF1565C0, 0xFF42A5F5,
@@ -98,12 +113,13 @@ object OperatorCatalog {
             keywords = listOf(
                 "tci", "mokhaberat", "مخابرات",
                 "irantelecommunicationcompany", "telecommunicationcompanyofiran",
+                "telecommunicationcompany",
             ),
         ),
         Operator(
             "shatel", "شاتل", "Shatel", "SHT", 0xFFD81B36, 0xFF1E4FA3,
             asns = listOf(31549),
-            keywords = listOf("shatel", "شاتل"),
+            keywords = listOf("shatel", "ariashatel", "شاتل"),
         ),
         Operator(
             "asiatech", "آسیاتک", "Asiatech", "AST", 0xFF1E88E5, 0xFF00B8D4,
@@ -113,7 +129,7 @@ object OperatorCatalog {
         Operator(
             "hiweb", "های‌وب", "HiWEB", "HiW", 0xFFF57C00, 0xFFFFB300,
             asns = listOf(56402),
-            keywords = listOf("hiweb", "dadehgostar", "avacell", "هایوب"),
+            keywords = listOf("hiweb", "dadehgostar", "avacell", "هایوب", "asrnovin"),
         ),
         Operator(
             "parsonline", "پارس‌آنلاین", "Pars Online", "POL", 0xFF00796B, 0xFF26A69A,
@@ -152,12 +168,33 @@ object OperatorCatalog {
         ),
         Operator(
             "zitel", "زی‌تل", "Zi-Tel", "ZTL", 0xFFAD1457, 0xFFEC407A,
-            keywords = listOf("zitel", "زیتل"),
+            keywords = listOf("zitel", "soroushrasaneh", "زیتل"),
+        ),
+        Operator(
+            "afranet", "افرانت", "Afranet", "AFR", 0xFF0277BD, 0xFF29B6F6,
+            asns = listOf(25184),
+            keywords = listOf("afranet", "افرانت"),
+        ),
+        Operator(
+            "mabna", "مبنا تلکام", "Mabna Telecom", "MBT", 0xFF37474F, 0xFF78909C,
+            keywords = listOf("mabnatelecom", "mabna", "مبنا"),
+        ),
+        Operator(
+            "petiak", "پتیاک", "Petiak", "PTK", 0xFF00695C, 0xFF4DB6AC,
+            keywords = listOf("petiak", "پتیاک"),
+        ),
+        Operator(
+            "mahannet", "ماهان‌نت", "MahanNet", "MHN", 0xFF1A237E, 0xFF5C6BC0,
+            keywords = listOf("mahannet", "ماهاننت"),
+        ),
+        Operator(
+            "laser", "لیزر", "Laser", "LSR", 0xFFBF360C, 0xFFFF7043,
+            keywords = listOf("laser", "لیزر"),
         ),
         Operator(
             "tic", "زیرساخت", "TIC", "TIC", 0xFF455A64, 0xFF90A4AE,
             asns = listOf(48159, 12880),
-            keywords = listOf("telecommunicationinfrastructure", "informationtechnologycompany"),
+            keywords = listOf("telecommunicationinfrastructure", "informationtechnologycompany", "زیرساخت"),
         ),
     )
 
@@ -174,11 +211,26 @@ object OperatorCatalog {
         0xFF5C6BC0, 0xFF26A69A, 0xFFEF6C00, 0xFFAB47BC, 0xFF29B6F6, 0xFFEC407A, 0xFF7CB342, 0xFF8D6E63,
     )
 
+    /** یکسان‌سازی حروف عربی/فارسی و حذف نیم‌فاصله برای تطبیق دقیق SSID و نام ISP. */
+    private fun normalizePersian(raw: String): String = buildString(raw.length) {
+        for (ch in raw.lowercase()) {
+            when (ch) {
+                'ي', 'ئ' -> append('ی')
+                'ك' -> append('ک')
+                'ة' -> append('ه')
+                'أ', 'إ', 'آ' -> append('ا')
+                'ؤ' -> append('و')
+                '\u200C', '\u200D', '\u200E', '\u200F' -> Unit
+                else -> append(ch)
+            }
+        }
+    }
+
     private fun collapse(raw: String): String =
-        raw.lowercase().filter { it.isLetterOrDigit() }
+        normalizePersian(raw).filter { it.isLetterOrDigit() }
 
     private fun words(raw: String): List<String> =
-        raw.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        normalizePersian(raw).split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
 
     /**
      * اپراتور از روی نام خام. کلیدواژه‌های کوتاه (تا ۳ حرف مثل mci/tci/mtn) فقط
@@ -192,8 +244,9 @@ object OperatorCatalog {
         if (collapsed.isEmpty()) return null
         for (op in all) {
             for (kw in op.keywords) {
-                val hit = if (kw.length <= 3) tokens.contains(kw) || collapsed == kw
-                else collapsed.contains(kw)
+                val nkw = collapse(kw)
+                val hit = if (nkw.length <= 3) tokens.contains(nkw) || collapsed == nkw
+                else collapsed.contains(nkw)
                 if (hit) return op
             }
         }
@@ -243,20 +296,36 @@ object OperatorCatalog {
 
     /** از روی نام خام: اگر شناخته‌شده بود همان، وگرنه یک اپراتور سفارشی. */
     fun resolveName(raw: String?): Operator =
-        if (raw.isNullOrBlank()) unknown else fromName(raw) ?: custom(raw)
+        if (raw.isNullOrBlank()) unknown else byIdOrName(raw)
+
+    private fun byIdOrName(raw: String): Operator {
+        all.firstOrNull { it.id == raw }?.let { return it }
+        return fromName(raw) ?: custom(raw)
+    }
+
+    /** نام بومی برای شناسه‌های سیستمیِ اندروید در تفکیک مصرف اپ‌ها. */
+    fun specialUidLabel(uid: Int, persian: Boolean): String? = when (uid) {
+        NetworkStats.Bucket.UID_REMOVED -> if (persian) "اپ‌های حذف‌شده" else "Removed apps"
+        NetworkStats.Bucket.UID_TETHERING -> if (persian) "هات‌اسپات و اشتراک‌گذاری" else "Hotspot / tethering"
+        0 -> if (persian) "هسته‌ی سیستم" else "System core"
+        1000 -> if (persian) "سیستم اندروید" else "Android system"
+        1001 -> if (persian) "سرویس تلفن و سیم‌کارت" else "Phone / Radio"
+        1013 -> if (persian) "سرویس رسانه" else "Media server"
+        else -> null
+    }
 
     fun networkTypeName(fa: Boolean, networkType: Int): String {
         return when (networkType) {
-            android.telephony.TelephonyManager.NETWORK_TYPE_NR -> if (fa) "۵G" else "5G"
-            android.telephony.TelephonyManager.NETWORK_TYPE_LTE -> "LTE"
-            android.telephony.TelephonyManager.NETWORK_TYPE_HSPAP,
-            android.telephony.TelephonyManager.NETWORK_TYPE_HSPA,
-            android.telephony.TelephonyManager.NETWORK_TYPE_HSDPA,
-            android.telephony.TelephonyManager.NETWORK_TYPE_HSUPA,
-            android.telephony.TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
-            android.telephony.TelephonyManager.NETWORK_TYPE_EDGE,
-            android.telephony.TelephonyManager.NETWORK_TYPE_GPRS -> "2G"
-            android.telephony.TelephonyManager.NETWORK_TYPE_UNKNOWN -> if (fa) "نامشخص" else "Unknown"
+            TelephonyManager.NETWORK_TYPE_NR -> if (fa) "۵G" else "5G"
+            TelephonyManager.NETWORK_TYPE_LTE -> "LTE"
+            TelephonyManager.NETWORK_TYPE_HSPAP,
+            TelephonyManager.NETWORK_TYPE_HSPA,
+            TelephonyManager.NETWORK_TYPE_HSDPA,
+            TelephonyManager.NETWORK_TYPE_HSUPA,
+            TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
+            TelephonyManager.NETWORK_TYPE_EDGE,
+            TelephonyManager.NETWORK_TYPE_GPRS -> "2G"
+            TelephonyManager.NETWORK_TYPE_UNKNOWN -> if (fa) "نامشخص" else "Unknown"
             else -> "—"
         }
     }

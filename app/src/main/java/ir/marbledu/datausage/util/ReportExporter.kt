@@ -149,7 +149,8 @@ object ReportExporter {
             }
             appendLine()
             usage.mobile.take(10).forEach { app ->
-                appendLine("• ${app.label}: ${Formats.bytes(app.bytes, persian)}")
+                val label = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
+                appendLine("• $label: ${Formats.bytes(app.bytes, persian)}")
             }
         }
         val intent = Intent(Intent.ACTION_SEND).apply {
