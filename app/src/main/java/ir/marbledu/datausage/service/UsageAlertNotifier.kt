@@ -2,11 +2,7 @@ package ir.marbledu.datausage.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
-import ir.marbledu.datausage.MainActivity
 import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.Formats
@@ -59,7 +55,35 @@ object UsageAlertNotifier {
         ensureChannel(context, persian)
         for (alert in decision.alerts) {
             val (title, text) = message(alert, settings, persian, todayMobileBytes, capUsedBytes)
-            post(context, if (alert == UsagePlanner.Alert.DAILY_LIMIT) ID_DAILY else ID_CAP, title, text)
+            val tone = when (alert) {
+                UsagePlanner.Alert.CAP_REACHED -> AlertNotificationStyle.Tone.CRITICAL
+                UsagePlanner.Alert.CAP_WARNING -> AlertNotificationStyle.Tone.WARNING
+                UsagePlanner.Alert.DAILY_LIMIT -> AlertNotificationStyle.Tone.WARNING
+            }
+            val progress = when (alert) {
+                UsagePlanner.Alert.DAILY_LIMIT -> if (settings.dailyLimitBytes > 0) {
+                    ((todayMobileBytes * 100.0 / settings.dailyLimitBytes).toInt()).coerceIn(0, 100)
+                } else null
+                else -> if (settings.dataCapBytes > 0) {
+                    ((capUsedBytes * 100.0 / settings.dataCapBytes).toInt()).coerceIn(0, 100)
+                } else null
+            }
+            val footer = when (alert) {
+                UsagePlanner.Alert.DAILY_LIMIT -> if (persian) "سقف روزانه" else "Daily limit"
+                else -> if (persian) "سقف بسته" else "Data plan"
+            }
+            val action = if (persian) "دیدن گزارش و بسته" else "Open usage"
+            post(
+                context = context,
+                id = if (alert == UsagePlanner.Alert.DAILY_LIMIT) ID_DAILY else ID_CAP,
+                title = title,
+                text = text,
+                persian = persian,
+                tone = tone,
+                progressPercent = progress,
+                footer = footer,
+                action = action,
+            )
         }
     }
 
@@ -111,26 +135,30 @@ object UsageAlertNotifier {
         manager.createNotificationChannel(channel)
     }
 
-    private fun post(context: Context, id: Int, title: String, text: String) {
+    private fun post(
+        context: Context,
+        id: Int,
+        title: String,
+        text: String,
+        persian: Boolean,
+        tone: AlertNotificationStyle.Tone,
+        progressPercent: Int?,
+        footer: String,
+        action: String,
+    ) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        val open = PendingIntent.getActivity(
-            context,
-            id,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
+        val notification = AlertNotificationStyle.build(
+            context = context,
+            channelId = CHANNEL_ID,
+            title = title,
+            text = text,
+            persian = persian,
+            tone = tone,
+            progressPercent = progressPercent,
+            footer = footer,
+            actionLabel = action,
+            notificationId = id,
+        ).build()
         runCatching { manager.notify(id, notification) }
     }
 }

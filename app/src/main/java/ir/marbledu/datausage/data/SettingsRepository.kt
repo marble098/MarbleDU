@@ -17,7 +17,15 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "ma
 /** زبان رابط کاربری. */
 enum class AppLanguage { SYSTEM, PERSIAN, ENGLISH }
 
-enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK,
+
+    /** تم سیاه مطلق برای پنل‌های OLED: پس‌زمینه کاملاً مشکی و مصرف باتری کمتر. */
+    AMOLED,
+    ;
+}
 
 /** اندازه‌ی متن رابط کاربری؛ پیش‌فرض «کوچک» است و از تنظیمات قابل تغییر است. */
 enum class AppTextSize(val fa: String, val en: String, val scale: Float) {
@@ -224,6 +232,22 @@ data class AppSettings(
     val spikeAlertEnabled: Boolean = true,
     /** خلاصه‌ی هفتگی: یک‌بار در هفته آمار هفته‌ی گذشته را اعلان می‌کند. */
     val weeklyDigestEnabled: Boolean = true,
+    /** ویجت: رنگ پس‌زمینه از تم فعلی اپ گرفته شود (همیشه هم‌رنگ اپ). */
+    val widgetFollowTheme: Boolean = true,
+    /** ویجت: دکمه‌های میان‌بر توقف/ادامه‌ی پایش روی ویجت. */
+    val widgetQuickActions: Boolean = true,
+    /** عینک مصرف: پنجره‌ی شیشه‌ای همیشه-روی-صفحه که سرعت را به‌صورت شناور نشان می‌دهد. */
+    val speedOverlay: Boolean = false,
+    /** اعلان نوار پیشرفت زنده در پنجره‌ی عینک مصرف. */
+    val speedOverlayChart: Boolean = true,
+    /** حالت «سفر»: اپراتورهای خارج از ایران هم نمایش داده شوند. */
+    val showForeignOperators: Boolean = false,
+    /** کارت «نشست‌های اتصال» در خانه دیده شود. */
+    val sessionsCardEnabled: Boolean = true,
+    /** تب‌بندی نشست‌ها در خانه: همه / داده موبایل / وای‌فای / هر اپراتور جدا. */
+    val sessionsTabsEnabled: Boolean = true,
+    /** حداکثر نشست‌های دیده‌شده در کارت خانه (بیشتر از این، اسکرول می‌شود). */
+    val sessionsVisibleCount: Int = 4,
 ) {
     val dailyLimitBytes: Long get() = dailyLimitMb.toLong() * 1024L * 1024L
 }
@@ -255,6 +279,14 @@ class SettingsRepository(private val context: Context) {
         val TARIFF_PER_GB = longPreferencesKey("tariff_per_gb_toman")
         val SPIKE_ALERT = booleanPreferencesKey("spike_alert")
         val WEEKLY_DIGEST = booleanPreferencesKey("weekly_digest")
+        val WIDGET_FOLLOW_THEME = booleanPreferencesKey("widget_follow_theme")
+        val WIDGET_QUICK_ACTIONS = booleanPreferencesKey("widget_quick_actions")
+        val SPEED_OVERLAY = booleanPreferencesKey("speed_overlay")
+        val SPEED_OVERLAY_CHART = booleanPreferencesKey("speed_overlay_chart")
+        val SHOW_FOREIGN_OPERATORS = booleanPreferencesKey("show_foreign_operators")
+        val SESSIONS_CARD = booleanPreferencesKey("sessions_card")
+        val SESSIONS_TABS = booleanPreferencesKey("sessions_tabs")
+        val SESSIONS_VISIBLE = intPreferencesKey("sessions_visible")
 
         val NOTIF_STYLE = stringPreferencesKey("notif_style")
         val NOTIF_TITLE_MODE = stringPreferencesKey("notif_title_mode")
@@ -342,6 +374,14 @@ class SettingsRepository(private val context: Context) {
             tariffPerGbToman = p[Keys.TARIFF_PER_GB] ?: 0L,
             spikeAlertEnabled = p[Keys.SPIKE_ALERT] ?: true,
             weeklyDigestEnabled = p[Keys.WEEKLY_DIGEST] ?: true,
+            widgetFollowTheme = p[Keys.WIDGET_FOLLOW_THEME] ?: true,
+            widgetQuickActions = p[Keys.WIDGET_QUICK_ACTIONS] ?: true,
+            speedOverlay = p[Keys.SPEED_OVERLAY] ?: false,
+            speedOverlayChart = p[Keys.SPEED_OVERLAY_CHART] ?: true,
+            showForeignOperators = p[Keys.SHOW_FOREIGN_OPERATORS] ?: false,
+            sessionsCardEnabled = p[Keys.SESSIONS_CARD] ?: true,
+            sessionsTabsEnabled = p[Keys.SESSIONS_TABS] ?: true,
+            sessionsVisibleCount = p[Keys.SESSIONS_VISIBLE] ?: 4,
         )
     }
 
@@ -375,8 +415,78 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTariffPerGb(value: Long) = context.dataStore.edit { it[Keys.TARIFF_PER_GB] = value.coerceIn(0L, 100_000_000L) }
     suspend fun setSpikeAlert(value: Boolean) = context.dataStore.edit { it[Keys.SPIKE_ALERT] = value }
     suspend fun setWeeklyDigest(value: Boolean) = context.dataStore.edit { it[Keys.WEEKLY_DIGEST] = value }
+    suspend fun setWidgetFollowTheme(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_FOLLOW_THEME] = value }
+    suspend fun setWidgetQuickActions(value: Boolean) = context.dataStore.edit { it[Keys.WIDGET_QUICK_ACTIONS] = value }
+    suspend fun setSpeedOverlay(value: Boolean) = context.dataStore.edit { it[Keys.SPEED_OVERLAY] = value }
+    suspend fun setSpeedOverlayChart(value: Boolean) = context.dataStore.edit { it[Keys.SPEED_OVERLAY_CHART] = value }
+    suspend fun setShowForeignOperators(value: Boolean) = context.dataStore.edit { it[Keys.SHOW_FOREIGN_OPERATORS] = value }
+    suspend fun setSessionsCard(value: Boolean) = context.dataStore.edit { it[Keys.SESSIONS_CARD] = value }
+    suspend fun setSessionsTabs(value: Boolean) = context.dataStore.edit { it[Keys.SESSIONS_TABS] = value }
+    suspend fun setSessionsVisible(value: Int) = context.dataStore.edit {
+        it[Keys.SESSIONS_VISIBLE] = value.coerceIn(2, 10)
+    }
 
     suspend fun setOnboarded(value: Boolean) = context.dataStore.edit { it[Keys.ONBOARDED] = value }
+
+    /**
+     * جایگزینی همه‌ی تنظیمات با یک نسخه‌ی پشتیبان (بازیابی فایل JSON).
+     * داده‌های آماری و وضعیت راه‌اندازی دست‌نخورده می‌مانند.
+     */
+    suspend fun applyBackup(settings: AppSettings) = context.dataStore.edit { p ->
+        p[Keys.LANGUAGE] = settings.language.name
+        p[Keys.THEME] = settings.themeMode.name
+        p[Keys.DYNAMIC] = settings.dynamicColor
+        p[Keys.DATA_CAP] = settings.dataCapBytes
+        p[Keys.BILLING_DAY] = settings.billingCycleDay
+        p[Keys.OPERATOR] = settings.operatorOverride
+        p[Keys.BACKGROUND] = settings.monitorInBackground
+        p[Keys.INTERVAL] = settings.monitorIntervalSeconds
+        p[Keys.PALETTE] = settings.palette
+        p[Keys.USAGE_ALERTS] = settings.usageAlerts
+        p[Keys.DAILY_LIMIT_MB] = settings.dailyLimitMb
+        p[Keys.UI_MODE] = settings.uiMode.name
+        p[Keys.WIDGET_OPERATOR] = settings.widgetShowOperator
+        p[Keys.WIDGET_CAP] = settings.widgetShowCap
+        p[Keys.WIDGET_DETAILED] = settings.widgetDetailed
+        p[Keys.WIDGET_BIG_TEXT] = settings.widgetBigText
+        p[Keys.WIDGET_FOLLOW_THEME] = settings.widgetFollowTheme
+        p[Keys.WIDGET_QUICK_ACTIONS] = settings.widgetQuickActions
+        p[Keys.SESSIONS_CARD] = settings.sessionsCardEnabled
+        p[Keys.SESSIONS_TABS] = settings.sessionsTabsEnabled
+        p[Keys.SESSIONS_VISIBLE] = settings.sessionsVisibleCount
+        p[Keys.SPEED_OVERLAY] = settings.speedOverlay
+        p[Keys.SPEED_OVERLAY_CHART] = settings.speedOverlayChart
+        p[Keys.SHOW_FOREIGN_OPERATORS] = settings.showForeignOperators
+        p[Keys.TEXT_SIZE] = settings.textSize.name
+        p[Keys.TARIFF_PER_GB] = settings.tariffPerGbToman
+        p[Keys.SPIKE_ALERT] = settings.spikeAlertEnabled
+        p[Keys.WEEKLY_DIGEST] = settings.weeklyDigestEnabled
+        val n = settings.notification
+        p[Keys.NOTIF_STYLE] = n.style.name
+        p[Keys.NOTIF_TITLE_MODE] = n.titleMode.name
+        p[Keys.NOTIF_CUSTOM_TITLE] = n.customTitle
+        p[Keys.NOTIF_DOWN] = n.showDownloadSpeed
+        p[Keys.NOTIF_UP] = n.showUploadSpeed
+        p[Keys.NOTIF_TOTAL_SPEED] = n.showTotalSpeed
+        p[Keys.NOTIF_COMPACT_UNITS] = n.compactUnits
+        p[Keys.NOTIF_HIDE_ZERO] = n.hideZeroSpeed
+        p[Keys.NOTIF_OPERATOR] = n.showOperator
+        p[Keys.NOTIF_CONN_TYPE] = n.showConnectionType
+        p[Keys.NOTIF_NET_TECH] = n.showNetworkTech
+        p[Keys.NOTIF_TODAY_TOTAL] = n.showTodayTotal
+        p[Keys.NOTIF_TODAY_SPLIT] = n.showTodayMobileWifi
+        p[Keys.NOTIF_SESSION] = n.showSessionUsage
+        p[Keys.NOTIF_AVG_SPEED] = n.showAverageSpeed
+        p[Keys.NOTIF_PEAK_SPEED] = n.showPeakSpeed
+        p[Keys.NOTIF_DATA_CAP] = n.showDataCap
+        p[Keys.NOTIF_TOP_APP] = n.showTopApp
+        p[Keys.NOTIF_IP] = n.showIpAddress
+        p[Keys.NOTIF_PROGRESS] = n.progressMode.name
+        p[Keys.NOTIF_LOCK_VIS] = n.lockVisibility.name
+        p[Keys.NOTIF_ACT_RECHECK] = n.actionRecheckIsp
+        p[Keys.NOTIF_ACT_STOP] = n.actionStop
+        p[Keys.NOTIF_ACT_REPORTS] = n.actionOpenReports
+    }
 
     suspend fun updateNotification(update: (NotificationConfig) -> NotificationConfig) {
         context.dataStore.edit { p ->

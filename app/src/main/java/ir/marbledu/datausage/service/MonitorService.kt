@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import ir.marbledu.datausage.MainActivity
@@ -16,12 +17,14 @@ import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.LocaleHelper
+import ir.marbledu.datausage.data.NotificationStyle
 import ir.marbledu.datausage.data.NetworkStatsReader
 import ir.marbledu.datausage.data.NotificationLockVisibility
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.TimeMath
+import ir.marbledu.datausage.ui.theme.ThemePalette
 import ir.marbledu.datausage.widget.UsageWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -237,6 +240,9 @@ class MonitorService : Service() {
                         )
                         checkSpikeAlert(settings, persian)
                         checkWeeklyDigest(settings, persian)
+                        val palette = ThemePalette.of(settings.palette)
+                        val widgetPrimary = palette.primary.toInt()
+                        val widgetSecondary = palette.tertiary.toInt()
                         UsageWidgetProvider.push(
                             this@MonitorService,
                             UsageWidgetProvider.Snapshot(
@@ -254,6 +260,10 @@ class MonitorService : Service() {
                                 detailed = settings.widgetDetailed,
                                 rxBytes = cachedTodayMobile.rx + cachedTodayWifi.rx,
                                 txBytes = cachedTodayMobile.tx + cachedTodayWifi.tx,
+                                themePrimary = if (settings.widgetFollowTheme) widgetPrimary else null,
+                                themeSecondary = if (settings.widgetFollowTheme) widgetSecondary else null,
+                                quickActions = settings.widgetQuickActions,
+                                monitoring = settings.monitorInBackground,
                             ),
                         )
                     }
@@ -447,6 +457,9 @@ class MonitorService : Service() {
             NotificationLockVisibility.HIDDEN -> NotificationCompat.VISIBILITY_SECRET
         }
 
+        val palette = ThemePalette.of(settings.palette)
+        val accent = MonitoringNotification.accentColor(palette)
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(content.title)
@@ -458,12 +471,29 @@ class MonitorService : Service() {
             .setVisibility(visibility)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setShowWhen(false)
+            .setColorized(true)
+            .setColor(accent)
+
+        // آیکون بزرگِ رنگی + رنگ لهجه؛ اعلان ظاهر تازه و هم‌رنگ اپ می‌گیرد.
+        runCatching {
+            builder.setLargeIcon(
+                Icon.createWithBitmap(MonitoringNotification.largeIcon(this, accent)),
+            )
+        }
 
         if (!content.subText.isNullOrBlank()) {
             builder.setSubText(content.subText)
         }
-        if (content.expandedText.isNotBlank()) {
-            builder.setStyle(NotificationCompat.BigTextStyle().bigText(content.expandedText))
+        val structured = if (config.style == NotificationStyle.EXPANDED &&
+            content.expandedLines.isNotEmpty()
+        ) {
+            MonitoringNotification.expandedBody(input, config, content, persian)
+        } else {
+            content.expandedText
+        }
+        if (structured.isNotBlank()) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(structured))
         }
         if (content.progressPercent != null) {
             builder.setProgress(100, content.progressPercent, false)
@@ -476,7 +506,7 @@ class MonitorService : Service() {
                 Intent(this, MonitorService::class.java).setAction(ACTION_RECHECK_ISP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            builder.addAction(0, context.getString(R.string.notif_action_recheck), recheckPending)
+            builder.addAction(R.drawable.ic_notif_action_check, context.getString(R.string.notif_action_recheck), recheckPending)
         }
         if (config.actionOpenReports) {
             val reportsPending = PendingIntent.getActivity(
@@ -488,7 +518,7 @@ class MonitorService : Service() {
                 },
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            builder.addAction(0, context.getString(R.string.notif_action_reports), reportsPending)
+            builder.addAction(R.drawable.ic_notif_action_reports, context.getString(R.string.notif_action_reports), reportsPending)
         }
         if (config.actionStop) {
             val stopPending = PendingIntent.getService(
@@ -497,7 +527,7 @@ class MonitorService : Service() {
                 Intent(this, MonitorService::class.java).setAction(ACTION_STOP_MONITOR),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            builder.addAction(0, context.getString(R.string.notif_action_stop), stopPending)
+            builder.addAction(R.drawable.ic_notif_action_stop, context.getString(R.string.notif_action_stop), stopPending)
         }
 
         return builder.build()

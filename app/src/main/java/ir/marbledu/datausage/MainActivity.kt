@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ir.marbledu.datausage.data.LocaleHelper
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.service.MonitorService
+import ir.marbledu.datausage.service.SpeedOverlayService
 import ir.marbledu.datausage.ui.AppRoot
 import ir.marbledu.datausage.ui.MainViewModel
 import ir.marbledu.datausage.ui.theme.MarbleDuTheme
@@ -68,7 +69,9 @@ class MainActivity : ComponentActivity() {
                         ThemeMode.SYSTEM -> isSystemInDarkTheme()
                         ThemeMode.LIGHT -> false
                         ThemeMode.DARK -> true
+                        ThemeMode.AMOLED -> true
                     },
+                    amoled = settings.themeMode == ThemeMode.AMOLED,
                     dynamicColor = settings.dynamicColor,
                     palette = ThemePalette.of(settings.palette),
                     textScale = settings.textSize.scale,
@@ -117,6 +120,15 @@ class MainActivity : ComponentActivity() {
                 MonitorService.start(this@MainActivity)
             } else {
                 MonitorService.stop(this@MainActivity)
+            }
+            // عینک مصرف: تا وقتی کاربر خودش خاموشش نکند، بعد از هر باز شدن اپ
+            // دوباره بالا می‌آید (اگر اجازه‌ی نمایش داده شده باشد).
+            if (settings.onboarded && settings.speedOverlay &&
+                ir.marbledu.datausage.util.UsageAccess.canDrawOverlays(this@MainActivity)
+            ) {
+                SpeedOverlayService.start(this@MainActivity)
+            } else if (!settings.speedOverlay) {
+                SpeedOverlayService.stop(this@MainActivity)
             }
         }
     }

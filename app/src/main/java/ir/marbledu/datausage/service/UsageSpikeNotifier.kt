@@ -2,11 +2,7 @@ package ir.marbledu.datausage.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
-import ir.marbledu.datausage.MainActivity
 import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.Formats
 
@@ -52,7 +48,7 @@ object UsageSpikeNotifier {
             "You used ${Formats.bytes(hourBytes, false)} this hour; " +
                 "the same hour recently averaged ${Formats.bytes(averageSameHourBytes, false)}."
         }
-        post(context, ID_SPIKE, title, text)
+        post(context, ID_SPIKE, title, text, persian, hourBytes, averageSameHourBytes)
     }
 
     private fun ensureChannel(context: Context, persian: Boolean) {
@@ -68,26 +64,39 @@ object UsageSpikeNotifier {
         manager.createNotificationChannel(channel)
     }
 
-    private fun post(context: Context, id: Int, title: String, text: String) {
+    private fun post(
+        context: Context,
+        id: Int,
+        title: String,
+        text: String,
+        persian: Boolean,
+        hourBytes: Long,
+        averageBytes: Long,
+    ) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        val open = PendingIntent.getActivity(
-            context,
-            id,
-            Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
+        val ratio = if (averageBytes > 0) hourBytes.toDouble() / averageBytes else 0.0
+        val footer = if (averageBytes > 0) {
+            if (persian) {
+                "${Formats.number(ratio, true, 1)} برابرِ معمولِ همین ساعت"
+            } else {
+                "${String.format(java.util.Locale.US, "%.1f", ratio)}× the usual for this hour"
+            }
+        } else if (persian) "MarbleDU · پایش مصرف" else "MarbleDU · usage monitor"
+        val progress = if (averageBytes > 0) {
+            ((hourBytes * 100.0) / (averageBytes * 3)).toInt().coerceIn(0, 100)
+        } else null
+        val notification = AlertNotificationStyle.build(
+            context = context,
+            channelId = CHANNEL_ID,
+            title = title,
+            text = text,
+            persian = persian,
+            tone = AlertNotificationStyle.Tone.WARNING,
+            progressPercent = progress,
+            footer = footer,
+            actionLabel = if (persian) "دیدن جزئیات" else "See details",
+            notificationId = id,
+        ).build()
         runCatching { manager.notify(id, notification) }
     }
 }

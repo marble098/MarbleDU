@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -63,6 +64,7 @@ import ir.marbledu.datausage.ui.screens.OnboardingScreen
 import ir.marbledu.datausage.ui.screens.OperatorDetailScreen
 import ir.marbledu.datausage.ui.screens.ReportsScreen
 import ir.marbledu.datausage.ui.screens.SettingsScreen
+import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import ir.marbledu.datausage.util.UsageAccess
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -183,7 +185,7 @@ fun AppRoot(
                 Tab.SETTINGS -> SettingsScreen(vm, settings, persian)
             }
         }
-        // نوار شناور روی محتوا می‌نشیند؛ هیچ نوار یا پس‌زمینه‌ای پشتش نیست.
+        // نوار شناورِ شیشه‌ای روی محتوا می‌نشیند؛ محتوا از زیر شیشه رد می‌شود.
         FloatingNavBar(
             pagerState = pagerState,
             onSelect = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
@@ -193,11 +195,12 @@ fun AppRoot(
 }
 
 /**
- * نوار ناوبری شناور و شیشه‌ای.
+ * نوار ناوبری شناورِ شیشه‌ای (Glass Navigation Bar).
  *
- *  - پشتش هیچ پس‌زمینه‌ای نیست و محتوای صفحه از زیرش رد می‌شود.
- *  - نشانگرِ گرادیانی بین تب‌ها «سُر می‌خورد» و وسط راه کمی کش می‌آید.
- *  - آیکون تبِ انتخاب‌شده با حرکت فنری بالا می‌پرد.
+ *  - بدنه‌ی شیشه‌ای نیمه‌شفاف با گرادیان، هاله‌ی رنگی پالت و هایلایت نور در لبه؛
+ *  - محتوای صفحه از زیر شیشه رد می‌شود و رنگِ پس‌زمینه از آن عبور می‌کند؛
+ *  - نشانگرِ کپسولیِ گرادیانی بین تب‌ها «سُر می‌خورد» و وسط راه کمی کش می‌آید؛
+ *  - آیکون تبِ انتخاب‌شده با حرکت فنری بالا می‌پرد و برچسبش پررنگ می‌شود.
  */
 @Composable
 private fun FloatingNavBar(
@@ -207,7 +210,8 @@ private fun FloatingNavBar(
 ) {
     val tabs = Tab.entries
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(24.dp)
+    val marble = LocalMarbleColors.current
+    val shape = RoundedCornerShape(28.dp)
     val position = (pagerState.currentPage + pagerState.currentPageOffsetFraction)
         .coerceIn(0f, (tabs.size - 1).toFloat())
 
@@ -215,74 +219,98 @@ private fun FloatingNavBar(
         modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
-                .height(58.dp)
-                .clip(shape)
-                .background(scheme.surfaceContainerHigh.copy(alpha = 0.97f))
-                .border(1.dp, scheme.outlineVariant.copy(alpha = 0.7f), shape),
+                .height(62.dp),
         ) {
-            val tabWidth = maxWidth / tabs.size
-            Box(
-                Modifier
-                    .offset { IntOffset((tabWidth.toPx() * position).roundToInt(), 0) }
-                    .width(tabWidth)
-                    .fillMaxHeight()
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(scheme.primaryContainer),
-            )
-            Row(Modifier.fillMaxSize()) {
-                tabs.forEachIndexed { index, tab ->
-                    val closeness = (1f - abs(position - index)).coerceIn(0f, 1f)
-                    val pop by animateFloatAsState(
-                        targetValue = if (pagerState.currentPage == index) 1f else 0f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
+            val barShape = shape
+            // maxWidth را قبل از ورود به scope شیشه می‌گیریم تا با BoxScope
+            // داخل GlassBar قاطی نشود.
+            val tabSlotWidth = maxWidth / tabs.size
+            GlassBar(
+                modifier = Modifier.fillMaxSize(),
+                shape = barShape,
+                tint = scheme.primary,
+            ) {
+                val tabWidth = tabSlotWidth
+                // درخشش دنبال‌کننده‌ی تب فعال، پشت آیکون‌ها
+                Box(
+                    Modifier
+                        .offset { IntOffset((tabWidth.toPx() * position).roundToInt(), 0) }
+                        .width(tabWidth)
+                        .fillMaxHeight()
+                        .padding(horizontal = 5.dp, vertical = 7.dp)
+                        .clip(RoundedCornerShape(21.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    if (marble.amoled) scheme.primary.copy(alpha = 0.34f)
+                                    else scheme.primary.copy(alpha = 0.22f),
+                                    scheme.tertiary.copy(alpha = 0.22f),
+                                ),
+                            ),
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = if (marble.dark) 0.16f else 0.55f),
+                            shape = RoundedCornerShape(21.dp),
                         ),
-                        label = "tab-pop",
-                    )
-                    val tint = lerp(scheme.onSurfaceVariant, scheme.onPrimaryContainer, closeness)
-                    val text = label(tab)
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(26.dp))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { onSelect(index) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = text,
-                                tint = tint,
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .graphicsLayer {
-                                        val scale = 1f + 0.2f * pop
-                                        scaleX = scale
-                                        scaleY = scale
-                                        translationY = -2.dp.toPx() * pop
-                                    },
-                            )
-                            Text(
-                                text = text,
-                                color = tint,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
-                                fontWeight = if (closeness > 0.5f) FontWeight.Bold else FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Clip,
-                                style = MaterialTheme.typography.labelSmall,
-                            )
+                )
+                Row(Modifier.fillMaxSize()) {
+                    tabs.forEachIndexed { index, tab ->
+                        val closeness = (1f - abs(position - index)).coerceIn(0f, 1f)
+                        val pop by animateFloatAsState(
+                            targetValue = if (pagerState.currentPage == index) 1f else 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                            label = "tab-pop",
+                        )
+                        val tint = lerp(scheme.onSurfaceVariant, scheme.primary, closeness)
+                        val text = label(tab)
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(26.dp))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                ) { onSelect(index) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = text,
+                                    tint = tint,
+                                    modifier = Modifier
+                                        .size(21.dp)
+                                        .graphicsLayer {
+                                            val scale = 1f + 0.18f * pop
+                                            scaleX = scale
+                                            scaleY = scale
+                                            translationY = -2.dp.toPx() * pop
+                                        },
+                                )
+                                Text(
+                                    text = text,
+                                    color = tint,
+                                    fontSize = 10.sp,
+                                    lineHeight = 13.sp,
+                                    fontWeight = if (closeness > 0.5f) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                         }
                     }
                 }

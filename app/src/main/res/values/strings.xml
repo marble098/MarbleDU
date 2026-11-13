@@ -152,4 +152,46 @@
     <string name="about_view_repo">مشاهده در گیت‌هاب</string>
 
 
+
+    <!-- تم AMOLED و نشست‌ها و عینک مصرف (۱.۵) -->
+    <string name="theme_amoled">تم کامل AMOLED</string>
+    <string name="theme_amoled_desc">سیاهِ مطلق برای پنل‌های OLED — صرفه‌جویی در باتری و ظاهری عمیق</string>
+    <string name="sessions_settings">نشست‌های اتصال</string>
+    <string name="sessions_settings_desc">کارت نشست‌های صفحه‌ی خانه، تب‌بندی هر اپراتور و تعداد ردیف‌های دیده‌شده</string>
+    <string name="sessions_show_card">نمایش کارت «نشست‌های اتصال» در خانه</string>
+    <string name="sessions_tabs">تب‌بندی داخل کارت نشست‌ها</string>
+    <string name="sessions_tabs_desc">همه / داده موبایل / وای‌فای و یک تب جدا برای هر اپراتور</string>
+    <string name="sessions_visible_count">تعداد نشست‌های دیده‌شده</string>
+    <string name="sessions_visible_hint">اگر نشست بیشتری وجود داشته باشد، فهرست داخل خود کارت اسکرول می‌شود.</string>
+    <string name="overlay_title">عینک مصرف (سرعت شناور)</string>
+    <string name="overlay_desc">یک حباب شیشه‌ای کوچک روی صفحه که سرعت زنده و مصرف امروز را نشان می‌دهد</string>
+    <string name="overlay_enable">نمایش حباب شناور سرعت</string>
+    <string name="overlay_enable_desc">برای دیدنش، اجازه‌ی «نمایش روی برنامه‌های دیگر» لازم است</string>
+    <string name="overlay_chart">نمایش نمودار کوچک سرعت</string>
+    <string name="overlay_help">حباب را می‌توانی جابه‌جا کنی؛ با یک ضربه برنامه باز می‌شود و با ✕ بسته می‌شود.</string>
+    <string name="overlay_notification_title">عینک مصرف فعال است</string>
+    <string name="overlay_notification_text">سرعت زنده و مصرف امروز روی صفحه نمایش داده می‌شود</string>
+    <string name="overlay_stop">بستن حباب</string>
+    <string name="widget_follow_theme">هم‌رنگ تم برنامه</string>
+    <string name="widget_follow_theme_desc">رنگ اعداد و دکمه‌های ویجت از تم انتخاب‌شده گرفته شود</string>
+    <string name="widget_quick_actions">میان‌بر روی ویجت</string>
+    <string name="widget_quick_actions_desc">دکمه‌های توقف/ادامه‌ی پایش و گزارش ۳۰ روز</string>
+    <string name="insights_title">بینش مصرف</string>
+    <string name="insights_desc">الگوی مصرفت را بشناس: سنگین‌ترین روز، ساعت اوج و بودجه‌ی امروز</string>
+
+    <!-- پشتیبان‌گیری تنظیمات (۱.۵) -->
+    <string name="backup_title">پشتیبان‌گیری تنظیمات</string>
+    <string name="backup_desc">تنظیمات را در یک فایل ذخیره کن و روی گوشی دیگر برگردان</string>
+    <string name="backup_hint">فقط تنظیمات ذخیره می‌شود؛ هیچ داده‌ی مصرفی یا اطلاعات شخصی در فایل نیست.</string>
+    <string name="backup_export">ذخیره‌ی فایل</string>
+    <string name="backup_import">بازیابی از فایل</string>
+    <string name="backup_share">اشتراک‌گذاری فایل پشتیبان</string>
+    <string name="backup_restored">تنظیمات با موفقیت بازیابی شد.</string>
+    <string name="backup_invalid">این فایل، پشتیبان معتبر MarbleDU نیست.</string>
+
+    <!-- حالت سفر (۱.۵) -->
+    <string name="travel_mode">حالت سفر</string>
+    <string name="travel_mode_desc">اگر خارج از ایران از اینترنت استفاده می‌کنی، ردیف‌های ناشناخته را هم نشان بده</string>
+    <string name="travel_mode_toggle">نمایش ردیف‌های تخمینی و ناشناخته</string>
+    <string name="travel_mode_toggle_desc">مناسب سفر؛ اپراتورهای محلی که شناسایی نشده‌اند حذف نمی‌شوند</string>
 </resources>

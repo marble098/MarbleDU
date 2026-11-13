@@ -62,6 +62,8 @@ fun OperatorRangeCard(
     vm: MainViewModel,
     persian: Boolean,
     onOpenOperatorDetail: (operatorId: String, sim: SimIdentity?) -> Unit,
+    /** نمایش ردیف‌های تخمینی/ناشناخته هم (حالت «سفر»). */
+    showUnknown: Boolean = false,
 ) {
     val context = LocalContext.current
     val range by vm.operatorRange.collectAsState()
@@ -139,8 +141,30 @@ fun OperatorRangeCard(
                 color = scheme.onSurfaceVariant,
             )
         } else {
-            val grandTotal = range.rows.sumOf { it.total.total }.coerceAtLeast(1L)
-            range.rows.sortedByDescending { it.total.total }.forEach { row ->
+            // حالت «فقط اپراتورهای ایران» (پیش‌فرض): ردیف‌های ناشناخته که فقط
+            // اختلاف شمارنده‌ی سیستم‌اند، در این نما پنهان می‌شوند تا عددها
+            // شفاف بمانند. در تنظیمات می‌توان همه را دید.
+            val visibleRows = if (showUnknown) {
+                range.rows
+            } else {
+                // اپراتورهای کاملاً ناشناخته فقط وقتی دیده می‌شوند که مصرفی داشته باشند.
+                range.rows.filter {
+                    it.operatorId != OperatorCatalog.ID_UNKNOWN || it.total.total > 0L
+                }
+            }
+            if (visibleRows.isEmpty()) {
+                Text(
+                    text = if (persian) {
+                        "برای این بازه مصرفی ثبت نشده. پایش پس‌زمینه را روشن نگه دار."
+                    } else {
+                        "No usage recorded for this range yet. Keep background monitoring on."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            val grandTotal = visibleRows.sumOf { it.total.total }.coerceAtLeast(1L)
+            visibleRows.sortedByDescending { it.total.total }.forEach { row ->
                 OperatorTransportRow(
                     row = row,
                     grandTotal = grandTotal,

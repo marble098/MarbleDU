@@ -4,6 +4,7 @@ import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.CompositionLocalProvider
@@ -20,6 +21,7 @@ import ir.marbledu.datausage.ui.theme.LocalMarbleColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.layout.ContentScale
@@ -29,7 +31,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -48,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -338,7 +340,12 @@ fun AppIcon(
     }
 }
 
-/** کارت استاندارد اپ. */
+/**
+ * کارت استاندارد اپ.
+ *
+ * در تم AMOLED سطح‌ها کاملاً تیره‌اند، بنابراین یک خط موییِ روشن دور کارت
+ * کشیده می‌شود تا مرز کارت‌ها دیده شود و کارت‌ها «شناور» به‌نظر برسند.
+ */
 @Composable
 fun MarbleCard(
     modifier: Modifier = Modifier,
@@ -346,28 +353,84 @@ fun MarbleCard(
     padding: androidx.compose.ui.unit.Dp = 16.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val marble = LocalMarbleColors.current
+    val shape = RoundedCornerShape(24.dp)
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (marble.cardBorder != null) {
+                    Modifier.border(1.dp, marble.cardBorder, shape)
+                } else Modifier,
+            ),
+        shape = shape,
         colors = CardDefaults.cardColors(containerColor = container),
     ) {
         Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
 
-/** کارت بزرگ گرادیانی بالای صفحه‌ها. */
+/**
+ * کارت بزرگ گرادیانی بالای صفحه‌ها.
+ *
+ * گرادیان سه‌رنگ + دو هاله‌ی نوری محو، عمق و زنده‌بودن بیشتری می‌دهد؛
+ * لبه‌ی بالا هم بازتاب نور دارد تا شبیه شیشه‌ی رنگی دیده شود.
+ */
 @Composable
 fun HeroCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalMarbleColors.current
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(28.dp)
     Box(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(Brush.linearGradient(listOf(colors.heroStart, colors.heroEnd))),
+            .clip(shape)
+            .background(
+                Brush.linearGradient(
+                    listOf(colors.heroStart, colors.heroEnd, colors.heroStart.copy(alpha = 0.92f)),
+                ),
+            ),
     ) {
+        // هاله‌های نوری
+        Canvas(Modifier.fillMaxSize().clip(shape)) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(Color.White.copy(alpha = if (colors.dark) 0.16f else 0.28f), Color.Transparent),
+                    center = Offset(size.width * 0.88f, size.height * 0.05f),
+                    radius = size.width * 0.6f,
+                ),
+                radius = size.width * 0.6f,
+                center = Offset(size.width * 0.88f, size.height * 0.05f),
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(scheme.secondary.copy(alpha = 0.30f), Color.Transparent),
+                    center = Offset(size.width * 0.05f, size.height * 0.95f),
+                    radius = size.width * 0.55f,
+                ),
+                radius = size.width * 0.55f,
+                center = Offset(size.width * 0.05f, size.height * 0.95f),
+            )
+            drawRect(
+                brush = Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = if (colors.dark) 0.10f else 0.22f), Color.Transparent),
+                    endY = size.height * 0.42f,
+                ),
+                size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.42f),
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .border(
+                    1.dp,
+                    Color.White.copy(alpha = if (colors.dark) 0.14f else 0.30f),
+                    shape,
+                ),
+        )
         CompositionLocalProvider(LocalContentColor provides colors.onHero) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
         }
