@@ -68,6 +68,7 @@ import ir.marbledu.datausage.data.JalaliDate
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.NotificationConfig
 import ir.marbledu.datausage.data.NotificationPreset
+import ir.marbledu.datausage.data.OffPeakWindow
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.data.UiMode
@@ -91,6 +92,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val usage by vm.usage.collectAsState()
 
     var showCapDialog by remember { mutableStateOf(false) }
+    var showOffPeakDialog by remember { mutableStateOf(false) }
     var showDailyLimitDialog by remember { mutableStateOf(false) }
     var showCarrierDialog by remember { mutableStateOf(false) }
     var showChangelog by remember { mutableStateOf(false) }
@@ -476,6 +478,37 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             ) {
                 TextButton(onClick = { showCapDialog = true }) {
                     Text(if (persian) "تنظیم سقف" else "Set limit")
+                }
+            }
+        }
+
+        // --------------------------------------------- ساعات رایگان / شبانه
+        item {
+            val windowText = OffPeakWindow.windowLabel(settings.offPeakStartHour, settings.offPeakEndHour, persian)
+            val descText = if (settings.offPeakEnabled) {
+                buildString {
+                    append(windowText)
+                    if (settings.offPeakCapBytes > 0L) {
+                        append("  •  ").append(Formats.bytes(settings.offPeakCapBytes, persian))
+                    }
+                    if (settings.offPeakExcludeFromMainCap) {
+                        append("  •  ").append(if (persian) "کسر از بسته‌ی اصلی" else "Excluded from main cap")
+                    }
+                }
+            } else {
+                context.getString(R.string.off_peak_desc)
+            }
+            SettingsCard(
+                title = context.getString(R.string.off_peak_title),
+                description = descText,
+                icon = MIcons.Clock,
+            ) {
+                SwitchRow(
+                    label = if (persian) "تفکیک ساعات رایگان فعال باشد" else "Enable off-peak tracking",
+                    checked = settings.offPeakEnabled,
+                ) { vm.setOffPeakEnabled(it) }
+                TextButton(onClick = { showOffPeakDialog = true }) {
+                    Text(if (persian) "تنظیم بازه و سقف شبانه" else "Set hours & night cap")
                 }
             }
         }
@@ -1003,6 +1036,21 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 showEpochPicker = false
             },
             onDismiss = { showEpochPicker = false },
+        )
+    }
+
+    if (showOffPeakDialog) {
+        OffPeakConfigDialog(
+            settings = settings,
+            persian = persian,
+            onDismiss = { showOffPeakDialog = false },
+            onSave = { enabled, startH, endH, capBytes, excludeMain ->
+                vm.setOffPeakEnabled(enabled)
+                vm.setOffPeakWindow(startH, endH)
+                vm.setOffPeakCapBytes(capBytes)
+                vm.setOffPeakExcludeFromMainCap(excludeMain)
+                showOffPeakDialog = false
+            },
         )
     }
 

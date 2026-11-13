@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -146,22 +145,9 @@ fun AppRoot(
             .fillMaxSize()
             .background(scheme.background),
     ) {
-        // هاله‌ی رنگیِ ملایم بالای صفحه
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(scheme.primary.copy(alpha = 0.055f), Color.Transparent),
-                    ),
-                ),
-        )
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding(),
+            modifier = Modifier.fillMaxSize(),
         ) { page ->
             when (tabs[page]) {
                 Tab.HOME -> DashboardScreen(

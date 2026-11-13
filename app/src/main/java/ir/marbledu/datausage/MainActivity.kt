@@ -7,11 +7,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,15 +64,36 @@ class MainActivity : ComponentActivity() {
                 LocaleHelper.localizedContext(this@MainActivity, languageTag)
             }
 
+            val darkTheme = when (settings.themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK, ThemeMode.AMOLED -> true
+            }
+            SideEffect {
+                enableEdgeToEdge(
+                    statusBarStyle = if (darkTheme) {
+                        SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.light(
+                            android.graphics.Color.TRANSPARENT,
+                            android.graphics.Color.TRANSPARENT,
+                        )
+                    },
+                    navigationBarStyle = if (darkTheme) {
+                        SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.light(
+                            android.graphics.Color.TRANSPARENT,
+                            android.graphics.Color.TRANSPARENT,
+                        )
+                    },
+                )
+            }
+
             CompositionLocalProvider(LocalContext provides localized) {
                 MarbleDuTheme(
                     persian = persian,
-                    darkTheme = when (settings.themeMode) {
-                        ThemeMode.SYSTEM -> isSystemInDarkTheme()
-                        ThemeMode.LIGHT -> false
-                        ThemeMode.DARK -> true
-                        ThemeMode.AMOLED -> true
-                    },
+                    darkTheme = darkTheme,
                     amoled = settings.themeMode == ThemeMode.AMOLED,
                     dynamicColor = settings.dynamicColor,
                     palette = ThemePalette.of(settings.palette),

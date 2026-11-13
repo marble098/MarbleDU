@@ -7,7 +7,9 @@ import androidx.lifecycle.viewModelScope
 import ir.marbledu.datausage.MarbleDuApp
 import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
+import ir.marbledu.datausage.data.AppSurgeDetector
 import ir.marbledu.datausage.data.AppUsage
+import ir.marbledu.datausage.data.BackgroundDrainAnalyzer
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.DayReport
 import ir.marbledu.datausage.data.DaySummary
@@ -18,6 +20,7 @@ import ir.marbledu.datausage.data.LocaleHelper
 import ir.marbledu.datausage.data.NetworkStatsReader
 import ir.marbledu.datausage.data.NotificationConfig
 import ir.marbledu.datausage.data.NotificationPreset
+import ir.marbledu.datausage.data.OffPeakWindow
 import ir.marbledu.datausage.data.PingResult
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.data.TimeMath
@@ -50,6 +53,25 @@ data class AppUsageUi(
     val mobile: List<AppUsage> = emptyList(),
     val wifi: List<AppUsage> = emptyList(),
     val loading: Boolean = false,
+    val drainSummary: BackgroundDrainAnalyzer.Summary? = null,
+)
+
+data class AppSurgesUi(
+    val loading: Boolean = false,
+    val loadedAt: Long = 0L,
+    val baselineDays: Int = 7,
+    val items: List<AppSurgeDetector.SurgeItem> = emptyList(),
+)
+
+data class OffPeakUi(
+    val loading: Boolean = false,
+    val loadedAt: Long = 0L,
+    val startHour: Int = 2,
+    val endHour: Int = 7,
+    val todayMobileOffPeak: Long = 0L,
+    val todayWifiOffPeak: Long = 0L,
+    val monthMobileOffPeak: Long = 0L,
+    val monthWifiOffPeak: Long = 0L,
 )
 
 data class DashboardUi(
@@ -172,7 +194,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _insights = MutableStateFlow(InsightsUi())
     val insights: StateFlow<InsightsUi> = _insights.asStateFlow()
 
+    private val _appSurges = MutableStateFlow(AppSurgesUi())
+    val appSurges: StateFlow<AppSurgesUi> = _appSurges.asStateFlow()
+
+    private val _offPeak = MutableStateFlow(OffPeakUi())
+    val offPeak: StateFlow<OffPeakUi> = _offPeak.asStateFlow()
+
     private var insightsJob: Job? = null
+    private var surgesJob: Job? = null
+    private var offPeakJob: Job? = null
 
     private val _operatorRange = MutableStateFlow(OperatorRangeUi())
     val operatorRange: StateFlow<OperatorRangeUi> = _operatorRange.asStateFlow()
@@ -214,10 +244,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     return@collect
                 }
                 refreshDashboard()
+                loadAppSurges(force = true)
+                loadOffPeak(force = true)
                 if (_history.value.loadedAt > 0L) loadHistory(force = true)
                 if (_operatorRange.value.loadedOnce) {
                     loadOperatorRange(_operatorRange.value.mode)
                 }
+            }
+        }
+        // با تغییر تنظیمات ساعات رایگان/شبانه، محاسبه‌ی سهم رایگان بلافاصله به‌روز می‌شود.
+        viewModelScope.launch {
+            settings.map {
+                (it.offPeakEnabled to it.offPeakExcludeFromMainCap) to
+                    (it.offPeakStartHour to it.offPeakEndHour)
+            }.distinctUntilChanged().collect { (flags, _) ->
+                if (flags.first) loadOffPeak(force = true)
+                else _offPeak.value = OffPeakUi()
+                if (_insights.value.loadedAt > 0L) loadInsights(force = true)
             }
         }
     }
@@ -241,6 +284,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshDashboard()
         loadInsights()
         loadUsage(_usage.value.range)
+        loadAppSurges()
+        if (settings.value.offPeakEnabled) loadOffPeak()
         // تاریخچه‌ی ۳۰روزه فقط بعد از باز شدن تب گزارش خوانده می‌شود؛ بار اول
         // ورود به خانه نباید ده‌ها query تاریخی را هم‌زمان اجرا کند.
         if (_history.value.loadedAt > 0L) loadHistory()
@@ -327,7 +372,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .coerceIn(0.05f, 1f)
             val verdict = UsageInsights.classify(todayBytes, snapshot.averageDailyBytes, elapsedFraction)
             val cap = settings.value.dataCapBytes
-            val usedMobile = summaries.sumOf { it.mobile.total }
+            val rawUsedMobile = summaries.sumOf { it.mobile.total }
+            val excludedOffPeak = if (settings.value.offPeakEnabled && settings.value.offPeakExcludeFromMainCap) {
+                repository.offPeakDeviceTraffic(
+                    fromMillis = now - TimeRange.MONTH.millis(),
+                    toMillis = now,
+                    startHour = settings.value.offPeakStartHour,
+                    endHour = settings.value.offPeakEndHour,
+                    epochMillis = epoch,
+                ).first.total
+            } else 0L
+            val usedMobile = (rawUsedMobile - excludedOffPeak).coerceAtLeast(0L)
             val forecast = if (cap > 0L) {
                 UsagePlanner.forecast(
                     capBytes = cap,
@@ -452,16 +507,102 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setRange(range: TimeRange) = loadUsage(range)
 
     fun loadUsage(range: TimeRange = _usage.value.range) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _usage.value = _usage.value.copy(range = range, loading = true)
             val now = System.currentTimeMillis()
             val from = TimeMath.rangeStart(range, now, settings.value.billingCycleDay)
             val (mobile, wifi) = repository.detailedBreakdown(from, now, settings.value.statsEpochMillis)
+            val drainSummary = BackgroundDrainAnalyzer.summarize(mobile, wifi)
             _usage.value = AppUsageUi(
                 range = range,
                 mobile = mobile,
                 wifi = wifi,
                 loading = false,
+                drainSummary = drainSummary,
+            )
+        }
+    }
+
+    /** تشخیص جهش غیرعادی اپ‌ها: مصرف امروز هر برنامه با میانگین روزانه‌ی ۷ روز قبل مقایسه می‌شود. */
+    fun loadAppSurges(force: Boolean = false) {
+        if (!repository.hasUsageAccess()) return
+        if (surgesJob?.isActive == true) return
+        val loaded = _appSurges.value.loadedAt
+        if (!force && loaded > 0L && System.currentTimeMillis() - loaded < 3 * 60 * 1000L) return
+        surgesJob = viewModelScope.launch(Dispatchers.IO) {
+            _appSurges.value = _appSurges.value.copy(loading = true)
+            val now = System.currentTimeMillis()
+            val todayStart = TimeMath.dayStart(now)
+            val epoch = settings.value.statsEpochMillis
+            val rawBaseStart = todayStart - 7L * 86_400_000L
+            val effectiveBaseStart = if (epoch > 0L) maxOf(rawBaseStart, epoch) else rawBaseStart
+            if (effectiveBaseStart >= todayStart) {
+                _appSurges.value = AppSurgesUi(loading = false, loadedAt = now, baselineDays = 0, items = emptyList())
+                return@launch
+            }
+            val actualDays = kotlin.math.ceil(
+                (todayStart - effectiveBaseStart).toDouble() / 86_400_000.0,
+            ).toInt().coerceIn(1, 7)
+
+            val (todayMob, todayWifi) = repository.detailedBreakdown(todayStart, now, epoch)
+            val (baseMob, baseWifi) = repository.detailedBreakdown(effectiveBaseStart, todayStart, epoch)
+            val inputs = AppSurgeDetector.buildInputs(todayMob, todayWifi, baseMob, baseWifi)
+            val detected = AppSurgeDetector.detect(inputs, baselineDays = actualDays)
+            _appSurges.value = AppSurgesUi(
+                loading = false,
+                loadedAt = now,
+                baselineDays = actualDays,
+                items = detected,
+            )
+        }
+    }
+
+    /** تفکیک مصرف ساعات رایگان/شبانه برای امروز و ۳۰ روز اخیر. */
+    fun loadOffPeak(force: Boolean = false) {
+        val currentSettings = settings.value
+        if (!currentSettings.offPeakEnabled || !repository.hasUsageAccess()) {
+            _offPeak.value = OffPeakUi(
+                startHour = currentSettings.offPeakStartHour,
+                endHour = currentSettings.offPeakEndHour,
+            )
+            return
+        }
+        if (offPeakJob?.isActive == true) return
+        val loaded = _offPeak.value.loadedAt
+        if (!force && loaded > 0L && System.currentTimeMillis() - loaded < 2 * 60 * 1000L) return
+        offPeakJob = viewModelScope.launch(Dispatchers.IO) {
+            _offPeak.value = _offPeak.value.copy(
+                loading = true,
+                startHour = currentSettings.offPeakStartHour,
+                endHour = currentSettings.offPeakEndHour,
+            )
+            val now = System.currentTimeMillis()
+            val dayStart = TimeMath.dayStart(now)
+            val monthStart = now - TimeRange.MONTH.millis()
+            val epoch = currentSettings.statsEpochMillis
+            val (todayMob, todayWifi) = repository.offPeakDeviceTraffic(
+                fromMillis = dayStart,
+                toMillis = now,
+                startHour = currentSettings.offPeakStartHour,
+                endHour = currentSettings.offPeakEndHour,
+                epochMillis = epoch,
+            )
+            val (monthMob, monthWifi) = repository.offPeakDeviceTraffic(
+                fromMillis = monthStart,
+                toMillis = now,
+                startHour = currentSettings.offPeakStartHour,
+                endHour = currentSettings.offPeakEndHour,
+                epochMillis = epoch,
+            )
+            _offPeak.value = OffPeakUi(
+                loading = false,
+                loadedAt = now,
+                startHour = currentSettings.offPeakStartHour,
+                endHour = currentSettings.offPeakEndHour,
+                todayMobileOffPeak = todayMob.total,
+                todayWifiOffPeak = todayWifi.total,
+                monthMobileOffPeak = monthMob.total,
+                monthWifiOffPeak = monthWifi.total,
             )
         }
     }
@@ -545,6 +686,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setTariffPerGbToman(value: Long) = viewModelScope.launch { settingsRepo.setTariffPerGb(value) }
     fun setSpikeAlert(enabled: Boolean) = viewModelScope.launch { settingsRepo.setSpikeAlert(enabled) }
     fun setWeeklyDigest(enabled: Boolean) = viewModelScope.launch { settingsRepo.setWeeklyDigest(enabled) }
+    fun setOffPeakEnabled(enabled: Boolean) = viewModelScope.launch { settingsRepo.setOffPeakEnabled(enabled) }
+    fun setOffPeakWindow(startHour: Int, endHour: Int) = viewModelScope.launch {
+        if (OffPeakWindow.isValidWindow(startHour, endHour)) {
+            settingsRepo.setOffPeakWindow(startHour, endHour)
+        }
+    }
+    fun setOffPeakCapBytes(bytes: Long) = viewModelScope.launch { settingsRepo.setOffPeakCapBytes(bytes) }
+    fun setOffPeakExcludeFromMainCap(exclude: Boolean) = viewModelScope.launch {
+        settingsRepo.setOffPeakExcludeFromMainCap(exclude)
+    }
 
     /** پاک کردن کامل آمار فعلی و شروع آمارگیری از همین لحظه (برگشت‌ناپذیر). */
     fun resetStats() = viewModelScope.launch {
@@ -556,6 +707,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         settingsRepo.setStatsEpoch(System.currentTimeMillis())
         _history.value = HistoryUi()
         _dayReport.value = DayReportUi()
+        _appSurges.value = AppSurgesUi()
+        _offPeak.value = OffPeakUi()
         refreshDashboard()
         refreshWidget()
     }

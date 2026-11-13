@@ -82,4 +82,21 @@ object UsageAccess {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { context.startActivity(intent) }
     }
+
+    /** باز کردن تنظیمات داده‌ی پس‌زمینه یا اطلاعات سیستمی یک اپ خاص برای محدود کردن مصرف مخفی. */
+    fun openAppDataUsageSettings(context: Context, packageName: String) {
+        if (packageName.isBlank() || packageName.startsWith("uid:")) return
+        val pkgUri = Uri.parse("package:$packageName")
+        val candidates = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                add(Intent(Settings.ACTION_IGNORE_BACKGROUND_DATA_RESTRICTIONS_SETTINGS, pkgUri))
+            }
+            add(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkgUri))
+        }
+        for (intent in candidates) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val resolvable = runCatching { context.packageManager.resolveActivity(intent, 0) != null }.getOrDefault(false)
+            if (resolvable && runCatching { context.startActivity(intent) }.isSuccess) return
+        }
+    }
 }
