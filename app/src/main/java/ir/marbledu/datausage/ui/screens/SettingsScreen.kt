@@ -1,4 +1,5 @@
 package ir.marbledu.datausage.ui.screens
+import android.content.Intent
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,6 +60,7 @@ import ir.marbledu.datausage.data.NotificationConfig
 import ir.marbledu.datausage.data.NotificationPreset
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.ThemeMode
+import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.ui.FloatingBarClearance
 import ir.marbledu.datausage.ui.MIcons
 import ir.marbledu.datausage.ui.MainViewModel
@@ -78,6 +81,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     var showCarrierDialog by remember { mutableStateOf(false) }
     var showChangelog by remember { mutableStateOf(false) }
     var showNotifSheet by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -166,6 +170,42 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                         (if (dynamicOn) context.getString(R.string.dynamic_color) else current.name(persian)),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+
+        // ------------------------------------------------------- حالت نمایش
+        item {
+            SettingsCard(
+                title = context.getString(R.string.ui_mode),
+                description = context.getString(R.string.ui_mode_desc),
+                icon = MIcons.Layout,
+                onClick = {},
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OptionChip(
+                        context.getString(R.string.ui_mode_minimal),
+                        settings.uiMode == UiMode.MINIMAL,
+                    ) { vm.setUiMode(UiMode.MINIMAL) }
+                    OptionChip(
+                        context.getString(R.string.ui_mode_advanced),
+                        settings.uiMode == UiMode.ADVANCED,
+                    ) { vm.setUiMode(UiMode.ADVANCED) }
+                }
+                Text(
+                    text = if (persian) {
+                        when (settings.uiMode) {
+                            UiMode.MINIMAL -> "رابطی آرام، مرتب و ساده‌تر برای مبتدیان و کاربران عادی"
+                            UiMode.ADVANCED -> "جزئیات کامل، گزارش‌های پیشرفته و امکانات حرفه‌ای"
+                        }
+                    } else {
+                        when (settings.uiMode) {
+                            UiMode.MINIMAL -> "Calm, neat and simple UI for beginners and regular users"
+                            UiMode.ADVANCED -> "Full details, advanced reports and professional features"
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -319,6 +359,37 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             }
         }
 
+        // ------------------------------------------------------- ویجت صفحه‌ی اصلی
+        item {
+            SettingsCard(
+                title = context.getString(R.string.widget_settings),
+                description = context.getString(R.string.widget_settings_desc),
+                icon = MIcons.Widget,
+                onClick = null,
+            ) {
+                SwitchRow(
+                    label = context.getString(R.string.widget_show_operator),
+                    checked = settings.widgetShowOperator,
+                    onCheckedChange = { vm.setWidgetOperator(it) },
+                )
+                SwitchRow(
+                    label = context.getString(R.string.widget_show_cap),
+                    checked = settings.widgetShowCap,
+                    onCheckedChange = { vm.setWidgetCap(it) },
+                )
+                SwitchRow(
+                    label = context.getString(R.string.widget_detailed),
+                    checked = settings.widgetDetailed,
+                    onCheckedChange = { vm.setWidgetDetailed(it) },
+                )
+                SwitchRow(
+                    label = context.getString(R.string.widget_big_text),
+                    checked = settings.widgetBigText,
+                    onCheckedChange = { vm.setWidgetBigText(it) },
+                )
+            }
+        }
+
         // --------------------------------------------------- دوره‌ی صورتحساب
         item {
             SettingsCard(
@@ -352,6 +423,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                 title = context.getString(R.string.about),
                 description = context.getString(R.string.about_text),
                 icon = MIcons.Shield,
+                onClick = { showAboutDialog = true },
             ) {
                 Text(
                     text = "${context.getString(R.string.version)}: $versionLabel",
@@ -512,6 +584,10 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
             },
         )
     }
+
+    if (showAboutDialog) {
+        AboutDialog(onDismiss = { showAboutDialog = false }, persian = persian)
+    }
 }
 
 @Composable
@@ -521,12 +597,15 @@ private fun SettingsCard(
     modifier: Modifier = Modifier,
     description: String? = null,
     accent: Color = MaterialTheme.colorScheme.primary,
+    onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Card(
         shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(enabled = onClick != null, onClick = { onClick?.invoke() }),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -679,3 +758,89 @@ private fun changelogText(persian: Boolean): String = if (persian) {
         "1.0.1 – Bug fixes & billing cycle improvements\n" +
         "1.0.0 – Initial release"
 }
+/** پنجره‌ی «درباره ما»: هدف اپ، آدرس ریپو، مجوز و حریم خصوصی. */
+@Composable
+private fun AboutDialog(
+    onDismiss: () -> Unit,
+    persian: Boolean,
+) {
+    val context = LocalContext.current
+    val versionLabel = if (persian) Formats.toPersianDigits(BuildConfig.VERSION_NAME) else BuildConfig.VERSION_NAME
+    val repoUrl = "https://github.com/marble098/MarbleDU"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = if (persian) "درباره MarbleDU" else "About MarbleDU", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
+        text = {
+            Box(
+                modifier = Modifier
+                    .widthIn(min = 280.dp)
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                contentAlignment = Alignment.TopStart,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(MIcons.Shield, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.size(12.dp))
+                        Column {
+                            Text(
+                                text = context.getString(R.string.app_name),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = "${context.getString(R.string.version)}: $versionLabel",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    SectionTitle(text = if (persian) "هدف برنامه" else "Purpose")
+                    Text(
+                        text = if (persian) {
+                            "نظارت دقیق و منظم بر سمت و سمتِ مصرف اینترنت شما، بدون نیاز به VPN یا روت. مصرف هر اپ، هر ساعت و هر اپراتور به شکل واضح قابل مشاهده است و همه داده‌ها روی خود گوشی شما باقی می‌مانند."
+                        } else {
+                            "Accurate and steady monitoring of where your mobile data goes — no VPN, no root. See per-app usage, per-operator attribution, hourly sessions and 30-day reports, all kept on your phone."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SectionTitle(text = if (persian) "آدرس کد منبع (ریپو)" else "Source repository")
+                    Text(
+                        text = repoUrl,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable(onClick = {
+                            context.startActivity(
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_VIEW).apply { data = android.net.Uri.parse(repoUrl) },
+                                    context.getString(R.string.about_view_repo),
+                                ),
+                            )
+                        }),
+                    )
+                    SectionTitle(text = if (persian) "حریم خصوصی" else "Privacy")
+                    Text(
+                        text = if (persian) {
+                            "هیچ آمار مصرفی از گوشی شما خارج نمی‌شود. تمام داده‌ها صرفاً روی دستگاه باقی می‌مانند و " +
+                                "فقط برای شناسایی اپراتور اینترنت یک بررسی کم‌خطر روی شبکه‌ی محلی انجام می‌شود."
+                        } else {
+                            "No usage data ever leaves your phone. Everything stays on the device; only a light local " +
+                                "network check is performed to identify your Wi-Fi ISP, and no user data is sent anywhere."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SectionTitle(text = if (persian) "ساخته‌شده با" else "Built with")
+                    Text(
+                        text = "Kotlin • Jetpack Compose • Material 3 Expressive • فونت Vazirmatn (SIL OFL 1.1)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(if (persian) "بسته شود" else "Dismiss") } },
+    )
+}
+

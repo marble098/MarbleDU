@@ -122,4 +122,22 @@
     <string name="widget_usage_desc">Today\'s mobile and Wi-Fi usage, current operator and data left</string>
     <string name="widget_today">Today</string>
     <string name="widget_mobile">Mobile</string>
+
+    <string name="ui_mode">UI mode</string>
+    <string name="ui_mode_desc">Simple UI for beginners or advanced for pros</string>
+    <string name="ui_mode_minimal">Minimal</string>
+    <string name="ui_mode_minimal_desc">Calm, neat and light UI for beginners and regular users</string>
+    <string name="ui_mode_advanced">Advanced</string>
+    <string name="ui_mode_advanced_desc">Full details, advanced reports and professional features</string>
+
+    <string name="widget_settings">Widget settings</string>
+    <string name="widget_settings_desc">Choose widget content and appearance</string>
+    <string name="widget_show_operator">Show operator name and logo</string>
+    <string name="widget_show_cap">Show data cap and progress</string>
+    <string name="widget_detailed">Detailed mode</string>
+    <string name="widget_big_text">Big text</string>
+
+    <string name="about_view_repo">View on GitHub</string>
+
+
 </resources>

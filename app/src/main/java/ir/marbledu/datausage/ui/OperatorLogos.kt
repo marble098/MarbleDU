@@ -27,6 +27,8 @@ object OperatorLogos {
         "hiweb" to R.drawable.op_hiweb,
         "parsonline" to R.drawable.op_parsonline,
         "mobinnet" to R.drawable.op_mobinnet,
+        "fanapmobile" to R.drawable.op_fanapmobile,
+        "arintel" to R.drawable.op_arintel,
         "sabanet" to R.drawable.op_sabanet,
         "respina" to R.drawable.op_respina,
         "datak" to R.drawable.op_datak,

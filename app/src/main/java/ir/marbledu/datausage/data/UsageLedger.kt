@@ -22,6 +22,16 @@ data class OperatorTraffic(
     val estimated: Boolean = false,
 )
 
+/** مصرف یک اپراتور در یک ساعت خاص از یک روز (۰ تا ۲۳). */
+data class HourOperatorTraffic(
+    val hour: Int,
+    val operatorId: String,
+    val transport: String,
+    val traffic: Traffic,
+) {
+    val total: Long get() = traffic.total
+}
+
 /**
  * دفتر مصرف به تفکیک اپراتور.
  *
@@ -29,6 +39,9 @@ data class OperatorTraffic(
  * تفکیک اپراتور. برای این‌که بگوییم «دیروز روی وای‌فای چقدر از ایرانسل و چقدر
  * از مخابرات مصرف شد» باید خودمان همان لحظه یادداشت کنیم که اینترنت مال کدام
  * اپراتور بود. این کلاس همان یادداشت‌هاست: یک فایل متنی ساده روی خود گوشی.
+ *
+ * فرمت هر خط فایل:
+ *   روز \t نوع اتصال \t اپراتور \t ساعت(-1=جمع روزانه) \r \t tx
  */
 object UsageLedger {
 
@@ -38,6 +51,7 @@ object UsageLedger {
     private const val FLUSH_INTERVAL_MS = 20_000L
 
     private val lock = Any()
+    /** روزانه (ساعت=-1) و ساعتی، کلید: روز\tنوع\tاپراتور\sاعت. */
     private val entries = HashMap<String, LongArray>()
     private var file: File? = null
     private var loaded = false
@@ -52,40 +66,49 @@ object UsageLedger {
             cal.get(Calendar.DAY_OF_MONTH)
     }
 
-    private fun key(day: Int, operatorId: String, transport: String) = "$day\t$transport\t$operatorId"
+    private fun key(day: Int, transport: String, operatorId: String, hour: Int) =
+        if (hour == -1) "$day\t$transport\t$operatorId" else "$day\t$transport\t$operatorId\t$hour"
 
     private fun ensureLoaded(context: Context) {
         if (loaded) return
         loaded = true
         val f = File(context.applicationContext.filesDir, "operator_ledger.tsv")
         file = f
-        runCatching {
-            if (f.exists()) parse(f.readText()).forEach { (k, v) -> entries[k] = v }
-        }
+        runCatching { parse(f.readText()).forEach { (k, v) -> entries[k] = v } }
     }
 
-    /** متن فایل → نقشه. خط‌های خراب نادیده گرفته می‌شوند. */
+    /** متن فایل → نقشه. خط‌های خراب نادیده گرفته می‌شوند. فرمت ۵ قسمتی (قدیم) و ۶ قسمتی جدید. */
     fun parse(text: String): Map<String, LongArray> {
         val out = HashMap<String, LongArray>()
         text.lineSequence().forEach { line ->
             val parts = line.split('\t')
             if (parts.size < 5) return@forEach
             val day = parts[0].toIntOrNull() ?: return@forEach
-            val rx = parts[3].toLongOrNull() ?: return@forEach
-            val tx = parts[4].toLongOrNull() ?: return@forEach
-            out["$day\t${parts[1]}\t${parts[2]}"] = longArrayOf(rx, tx)
+            val transport = parts[1]
+            val operatorId = parts[2]
+            val hour = if (parts.size >= 6) parts[3].toIntOrNull() else -1
+            if (hour == null) return@forEach
+            val rx = parts[parts.size - 2].toLongOrNull() ?: return@forEach
+            val tx = parts[parts.size - 1].toLongOrNull() ?: return@forEach
+            out[key(day, transport, operatorId, hour)] = longArrayOf(rx, tx)
         }
         return out
     }
 
     fun serialize(map: Map<String, LongArray>): String = buildString {
-        map.forEach { (k, v) -> append(k).append('\t').append(v[0]).append('\t').append(v[1]).append('\n') }
+        map.forEach { (k, v) ->
+            val parts = k.split('\t')
+            val hour = parts.getOrNull(3)?.toIntOrNull()
+            // divisão: ان_entries روزانه (ساعت=-۱) بدون ساعت ذخیره می‌شوند تا با فرمت قدیمی سازگار باشند
+            val keyOut = if (hour == -1) parts.take(3).joinToString("\t") else k
+            append(keyOut).append('\t').append(v[0]).append('\t').append(v[1]).append('\n')
+        }
     }
 
     /**
      * یک نمونه‌برداری: اختلاف شمارنده‌ها با نمونه‌ی قبلی به اپراتور فعلی نسبت
-     * داده می‌شود. وضعیتِ «آخرین شمارنده» مشترک است، پس اگر هم اپ و هم سرویس
-     * پس‌زمینه صدا بزنند چیزی دوبار شمرده نمی‌شود.
+     * داده می‌شود. هر ثبت هم در شمارنده‌ی روزانه و هم در شمارنده‌ی ساعتی آن روز
+     * ثبت می‌شود تا گزارش «۲۴ ساعت» دقیق باشد.
      */
     fun sample(context: Context, rx: Long, tx: Long, snapshot: NetworkSnapshot, now: Long = System.currentTimeMillis()) {
         synchronized(lock) {
@@ -104,10 +127,20 @@ object UsageLedger {
                     else -> null
                 }
                 if (transport != null) {
-                    val k = key(dayKey(now), snapshot.operator.id, transport)
-                    val slot = entries.getOrPut(k) { LongArray(2) }
+                    val day = dayKey(now)
+                    val operatorId = snapshot.operator.id
+                    val daily = key(day, transport, operatorId, -1)
+                    val slot = entries.getOrPut(daily) { LongArray(2) }
                     slot[0] += dRx
                     slot[1] += dTx
+
+                    val cal = Calendar.getInstance(TimeZone.getDefault())
+                    cal.timeInMillis = now
+                    val hour = cal.get(Calendar.HOUR_OF_DAY)
+                    val hourlyKey = key(day, transport, operatorId, hour)
+                    val hSlot = entries.getOrPut(hourlyKey) { LongArray(2) }
+                    hSlot[0] += dRx
+                    hSlot[1] += dTx
                     dirty = true
                 }
             }
@@ -118,8 +151,11 @@ object UsageLedger {
     private fun flushLocked(now: Long) {
         val f = file ?: return
         val cutoff = dayKey(now - KEEP_DAYS * 24L * 60 * 60 * 1000)
-        entries.keys.filter { (it.substringBefore('\t').toIntOrNull() ?: 0) < cutoff }
-            .forEach { entries.remove(it) }
+        entries.keys.filter {
+            val parts = it.split('\t')
+            val dayNum = parts.firstOrNull()?.toIntOrNull() ?: Int.MAX_VALUE
+            dayNum < cutoff
+        }.forEach { entries.remove(it) }
         runCatching {
             val tmp = File(f.parentFile, f.name + ".tmp")
             tmp.writeText(serialize(entries))
@@ -132,14 +168,28 @@ object UsageLedger {
         lastFlush = now
     }
 
-    /** یادداشت‌های یک روز. */
+    /** یادداشت‌های یک روز (جمع روزانه، ساعت=-1). */
     fun forDay(context: Context, dayStartMillis: Long): List<OperatorTraffic> = synchronized(lock) {
         ensureLoaded(context)
         val prefix = "${dayKey(dayStartMillis)}\t"
-        entries.filterKeys { it.startsWith(prefix) }.map { (k, v) ->
+        entries.filterKeys {
+            it.startsWith(prefix) && it.split('\t').getOrNull(3) == "-1"
+        }.map { (k, v) ->
             val parts = k.split('\t')
             OperatorTraffic(parts[2], parts[1], Traffic(v[0], v[1]))
         }
+    }
+
+    /** یادداشت‌های ساعتی یک روز به تفکیک اپراتور و نوع اتصال. */
+    fun hourlyForDay(context: Context, dayStartMillis: Long): List<HourOperatorTraffic> = synchronized(lock) {
+        ensureLoaded(context)
+        val prefix = "${dayKey(dayStartMillis)}\t"
+        entries.filterKeys {
+            it.startsWith(prefix) && it.split('\t').getOrNull(3) != "-1"
+        }.map { (k, v) ->
+            val parts = k.split('\t')
+            HourOperatorTraffic(parts[3].toIntOrNull() ?: -1, parts[2], parts[1], Traffic(v[0], v[1]))
+        }.sortedBy { it.hour }
     }
 
     /**

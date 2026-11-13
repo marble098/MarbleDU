@@ -16,6 +16,7 @@ import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.LocaleHelper
 import ir.marbledu.datausage.data.NetworkStatsReader
 import ir.marbledu.datausage.data.OperatorCatalog
+import ir.marbledu.datausage.data.UiMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +48,9 @@ class UsageWidgetProvider : AppWidgetProvider() {
         val operatorName: String,
         val capUsedBytes: Long,
         val capTotalBytes: Long,
+        val showOperator: Boolean = true,
+        val showCap: Boolean = true,
+        val bigText: Boolean = false,
     )
 
     companion object {
@@ -79,6 +83,9 @@ class UsageWidgetProvider : AppWidgetProvider() {
                     operatorName = operatorName(context, persian, settings.operatorOverride),
                     capUsedBytes = capUsed,
                     capTotalBytes = settings.dataCapBytes,
+                    showOperator = settings.widgetShowOperator,
+                    showCap = settings.widgetShowCap,
+                    bigText = settings.widgetBigText,
                 ),
             )
         }
@@ -109,14 +116,28 @@ class UsageWidgetProvider : AppWidgetProvider() {
             if (ids.isEmpty()) return
             val views = RemoteViews(context.packageName, R.layout.widget_usage)
             val p = s.persian
+
             views.setTextViewText(R.id.widget_title, if (p) "مصرف امروز" else "Today")
+            if (s.bigText) {
+                views.setTextViewTextSize(R.id.widget_total, 2, 32f)
+            } else {
+                views.setTextViewTextSize(R.id.widget_total, 2, 26f)
+            }
             views.setTextViewText(R.id.widget_total, Formats.bytes(s.mobileBytes + s.wifiBytes, p))
+
+            if (s.showOperator) {
+                views.setViewVisibility(R.id.widget_operator, View.VISIBLE)
+                views.setTextViewText(R.id.widget_operator, s.operatorName.ifBlank { "MarbleDU" })
+            } else {
+                views.setViewVisibility(R.id.widget_operator, View.GONE)
+            }
+
             views.setTextViewText(R.id.widget_mobile_label, if (p) "موبایل" else "Mobile")
             views.setTextViewText(R.id.widget_mobile, Formats.bytes(s.mobileBytes, p))
             views.setTextViewText(R.id.widget_wifi_label, if (p) "وای‌فای" else "Wi-Fi")
             views.setTextViewText(R.id.widget_wifi, Formats.bytes(s.wifiBytes, p))
-            views.setTextViewText(R.id.widget_operator, s.operatorName.ifBlank { "MarbleDU" })
-            if (s.capTotalBytes > 0L) {
+
+            if (s.showCap && s.capTotalBytes > 0L) {
                 val percent = (Formats.percentOf(s.capUsedBytes, s.capTotalBytes) * 100f).toInt().coerceIn(0, 100)
                 views.setViewVisibility(R.id.widget_cap_row, View.VISIBLE)
                 views.setProgressBar(R.id.widget_cap_progress, 100, percent, false)

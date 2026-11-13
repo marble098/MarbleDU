@@ -1,7 +1,9 @@
 package ir.marbledu.datausage.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -38,7 +40,10 @@ import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.UsagePlanner
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.ConnectionType
+import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.data.DaySummary
+import ir.marbledu.datausage.ui.DashboardUi
+import ir.marbledu.datausage.ui.HistoryUi
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.JalaliDate
@@ -140,296 +145,307 @@ fun DashboardScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) 
             }
         }
 
-        item {
-            val mobile = dashboard.todayMobile
-            val wifi = dashboard.todayWifi
-            val total = mobile.total + wifi.total
-            HeroCard {
-                Text(
-                    context.getString(R.string.today_usage),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = LocalContentColor.current.copy(alpha = 0.85f),
+        if (settings.uiMode == UiMode.MINIMAL) {
+            item {
+                MinimalDashboardCard(
+                    dashboard = dashboard,
+                    history = history,
+                    settings = settings,
+                    persian = persian,
                 )
-                Text(
-                    Formats.bytes(total, persian),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = when {
-                        dashboard.todayVariationPercent > 0 ->
-                            "▲ ${Formats.integer(dashboard.todayVariationPercent.toLong(), persian)}" +
-                                (if (persian) "٪ داده‌ی موبایل بیشتر از دیروز" else "% more mobile data than yesterday")
-                        dashboard.todayVariationPercent < 0 ->
-                            "▼ ${Formats.integer((-dashboard.todayVariationPercent).toLong(), persian)}" +
-                                (if (persian) "٪ داده‌ی موبایل کمتر از دیروز" else "% less mobile data than yesterday")
-                        else -> if (persian) "از نیمه‌شب تا الان" else "since midnight"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = LocalContentColor.current.copy(alpha = 0.9f),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Metric(
-                        context.getString(R.string.download),
-                        Formats.bytes(mobile.rx + wifi.rx, persian),
-                        LocalContentColor.current,
-                        Modifier.weight(1f),
-                        MIcons.Download,
+            }
+        } else {
+            item {
+                val mobile = dashboard.todayMobile
+                val wifi = dashboard.todayWifi
+                val total = mobile.total + wifi.total
+                HeroCard {
+                    Text(
+                        context.getString(R.string.today_usage),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = LocalContentColor.current.copy(alpha = 0.85f),
                     )
-                    Metric(
-                        context.getString(R.string.upload),
-                        Formats.bytes(mobile.tx + wifi.tx, persian),
-                        LocalContentColor.current,
-                        Modifier.weight(1f),
-                        MIcons.Upload,
+                    Text(
+                        Formats.bytes(total, persian),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = when {
+                            dashboard.todayVariationPercent > 0 ->
+                                "▲ ${Formats.integer(dashboard.todayVariationPercent.toLong(), persian)}" +
+                                    (if (persian) "٪ داده‌ی موبایل بیشتر از دیروز" else "% more mobile data than yesterday")
+                            dashboard.todayVariationPercent < 0 ->
+                                "▼ ${Formats.integer((-dashboard.todayVariationPercent).toLong(), persian)}" +
+                                    (if (persian) "٪ داده‌ی موبایل کمتر از دیروز" else "% less mobile data than yesterday")
+                            else -> if (persian) "از نیمه‌شب تا الان" else "since midnight"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LocalContentColor.current.copy(alpha = 0.9f),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Metric(
+                            context.getString(R.string.download),
+                            Formats.bytes(mobile.rx + wifi.rx, persian),
+                            LocalContentColor.current,
+                            Modifier.weight(1f),
+                            MIcons.Download,
+                        )
+                        Metric(
+                            context.getString(R.string.upload),
+                            Formats.bytes(mobile.tx + wifi.tx, persian),
+                            LocalContentColor.current,
+                            Modifier.weight(1f),
+                            MIcons.Upload,
+                        )
+                    }
+                    SplitBar(
+                        listOf(
+                            mobile.total.toFloat() to Color.White,
+                            wifi.total.toFloat() to Color.White.copy(alpha = 0.45f),
+                        ),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Metric(
+                            context.getString(R.string.cellular),
+                            Formats.bytes(mobile.total, persian),
+                            LocalContentColor.current,
+                            Modifier.weight(1f),
+                            MIcons.Signal,
+                        )
+                        Metric(
+                            context.getString(R.string.wifi),
+                            Formats.bytes(wifi.total, persian),
+                            LocalContentColor.current,
+                            Modifier.weight(1f),
+                            MIcons.Wifi,
+                        )
+                    }
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatCard(
+                        title = context.getString(R.string.cellular),
+                        value = Formats.bytes(dashboard.monthMobileBytes, persian),
+                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
+                        icon = MIcons.Signal,
+                        accent = marble.mobile,
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatCard(
+                        title = context.getString(R.string.wifi),
+                        value = Formats.bytes(dashboard.monthWifiBytes, persian),
+                        subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
+                        icon = MIcons.Wifi,
+                        accent = marble.wifi,
+                        modifier = Modifier.weight(1f),
                     )
                 }
-                SplitBar(
-                    listOf(
-                        mobile.total.toFloat() to Color.White,
-                        wifi.total.toFloat() to Color.White.copy(alpha = 0.45f),
+            }
+
+            item {
+                StatCard(
+                    title = if (persian) "سرعت همین حالا" else "Current speed",
+                    value = Formats.speed(
+                        (tick?.downBytesPerSecond ?: 0.0) + (tick?.upBytesPerSecond ?: 0.0),
+                        persian,
                     ),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Metric(
-                        context.getString(R.string.cellular),
-                        Formats.bytes(mobile.total, persian),
-                        LocalContentColor.current,
-                        Modifier.weight(1f),
-                        MIcons.Signal,
-                    )
-                    Metric(
-                        context.getString(R.string.wifi),
-                        Formats.bytes(wifi.total, persian),
-                        LocalContentColor.current,
-                        Modifier.weight(1f),
-                        MIcons.Wifi,
-                    )
-                }
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard(
-                    title = context.getString(R.string.cellular),
-                    value = Formats.bytes(dashboard.monthMobileBytes, persian),
-                    subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
-                    icon = MIcons.Signal,
-                    accent = marble.mobile,
-                    modifier = Modifier.weight(1f),
-                )
-                StatCard(
-                    title = context.getString(R.string.wifi),
-                    value = Formats.bytes(dashboard.monthWifiBytes, persian),
-                    subtitle = if (persian) "۳۰ روز گذشته" else "last 30 days",
-                    icon = MIcons.Wifi,
-                    accent = marble.wifi,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-
-        item {
-            StatCard(
-                title = if (persian) "سرعت همین حالا" else "Current speed",
-                value = Formats.speed(
-                    (tick?.downBytesPerSecond ?: 0.0) + (tick?.upBytesPerSecond ?: 0.0),
-                    persian,
-                ),
-                subtitle = "↓ ${Formats.speed(tick?.downBytesPerSecond ?: 0.0, persian)}   " +
-                    "↑ ${Formats.speed(tick?.upBytesPerSecond ?: 0.0, persian)}",
-                icon = MIcons.Speed,
-                accent = scheme.secondary,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        if (history.days.takeLast(7).any { it.total > 0 }) {
-            item {
-                WeeklyTrendCard(history.days.takeLast(7), persian)
-            }
-        }
-
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard(
-                    title = context.getString(R.string.average_speed),
-                    value = Formats.speed(tick?.averageSpeed ?: 0.0, persian),
+                    subtitle = "↓ ${Formats.speed(tick?.downBytesPerSecond ?: 0.0, persian)}   " +
+                        "↑ ${Formats.speed(tick?.upBytesPerSecond ?: 0.0, persian)}",
                     icon = MIcons.Speed,
-                    modifier = Modifier.weight(1f),
-                )
-                StatCard(
-                    title = context.getString(R.string.average_ping),
-                    value = if (dashboard.averagePingMs > 0) {
-                        "${Formats.number(dashboard.averagePingMs, persian, 0)} ${context.getString(R.string.ms)}"
-                    } else "—",
-                    icon = MIcons.Timer,
-                    accent = scheme.tertiary,
-                    modifier = Modifier.weight(1f),
+                    accent = scheme.secondary,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-        }
 
-        if (settings.dataCapBytes > 0) {
+            if (history.days.takeLast(7).any { it.total > 0 }) {
+                item {
+                    WeeklyTrendCard(history.days.takeLast(7), persian)
+                }
+            }
+
             item {
-                val used = dashboard.monthMobileBytes
-                val fraction = Formats.percentOf(used, settings.dataCapBytes)
-                val danger = fraction > 0.9f
-                MarbleCard {
-                    CardHeader(
-                        title = context.getString(R.string.data_cap),
-                        icon = MIcons.Shield,
-                        tint = if (danger) scheme.error else scheme.primary,
-                        trailing = Formats.bytes(settings.dataCapBytes, persian),
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatCard(
+                        title = context.getString(R.string.average_speed),
+                        value = Formats.speed(tick?.averageSpeed ?: 0.0, persian),
+                        icon = MIcons.Speed,
+                        modifier = Modifier.weight(1f),
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ArcGauge(
-                            fraction = fraction,
-                            startColor = if (danger) scheme.error else marble.heroStart,
-                            endColor = if (danger) scheme.error else marble.heroEnd,
-                            diameter = 128.dp,
-                            stroke = 14.dp,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    Formats.number(fraction * 100.0, persian, 0) + (if (persian) "٪" else "%"),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(
+                    StatCard(
+                        title = context.getString(R.string.average_ping),
+                        value = if (dashboard.averagePingMs > 0) {
+                            "${Formats.number(dashboard.averagePingMs, persian, 0)} ${context.getString(R.string.ms)}"
+                        } else "—",
+                        icon = MIcons.Timer,
+                        accent = scheme.tertiary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            if (settings.dataCapBytes > 0) {
+                item {
+                    val used = dashboard.monthMobileBytes
+                    val fraction = Formats.percentOf(used, settings.dataCapBytes)
+                    val danger = fraction > 0.9f
+                    MarbleCard {
+                        CardHeader(
+                            title = context.getString(R.string.data_cap),
+                            icon = MIcons.Shield,
+                            tint = if (danger) scheme.error else scheme.primary,
+                            trailing = Formats.bytes(settings.dataCapBytes, persian),
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ArcGauge(
+                                fraction = fraction,
+                                startColor = if (danger) scheme.error else marble.heroStart,
+                                endColor = if (danger) scheme.error else marble.heroEnd,
+                                diameter = 128.dp,
+                                stroke = 14.dp,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        Formats.number(fraction * 100.0, persian, 0) + (if (persian) "٪" else "%"),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        context.getString(R.string.used),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = scheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Metric(
                                     context.getString(R.string.used),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = scheme.onSurfaceVariant,
+                                    Formats.bytes(used, persian),
+                                    if (danger) scheme.error else scheme.primary,
                                 )
+                                Metric(
+                                    context.getString(R.string.remaining),
+                                    Formats.bytes((settings.dataCapBytes - used).coerceAtLeast(0), persian),
+                                    scheme.secondary,
+                                )
+                                if (danger) {
+                                    Text(
+                                        context.getString(R.string.cap_reached),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = scheme.error,
+                                    )
+                                }
                             }
                         }
-                        Spacer(Modifier.width(14.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Metric(
-                                context.getString(R.string.used),
-                                Formats.bytes(used, persian),
-                                if (danger) scheme.error else scheme.primary,
+                        // پیش‌بینی بسته: با روند ۷ روز اخیر تا کی دوام می‌آورد؟
+                        val forecast = remember(settings.dataCapBytes, used, dashboard.week, settings.billingCycleDay) {
+                            UsagePlanner.forecast(
+                                capBytes = settings.dataCapBytes,
+                                usedBytes = used,
+                                recentDailyBytes = dashboard.week.map { it.bytes },
+                                nowMillis = System.currentTimeMillis(),
+                                billingDay = settings.billingCycleDay,
                             )
-                            Metric(
-                                context.getString(R.string.remaining),
-                                Formats.bytes((settings.dataCapBytes - used).coerceAtLeast(0), persian),
-                                scheme.secondary,
-                            )
-                            if (danger) {
-                                Text(
-                                    context.getString(R.string.cap_reached),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = scheme.error,
+                        }
+                        if (forecast != null) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Metric(
+                                    if (persian) "دوام بسته" else "Lasts for",
+                                    when {
+                                        forecast.remainingBytes <= 0L -> if (persian) "تمام شده" else "Used up"
+                                        forecast.daysUntilEmpty < 0 -> "—"
+                                        else -> Formats.integer(forecast.daysUntilEmpty.toLong(), persian) +
+                                            (if (persian) " روز" else " days")
+                                    },
+                                    if (forecast.willRunOut) scheme.error else scheme.primary,
+                                    Modifier.weight(1f),
+                                )
+                                Metric(
+                                    if (persian) "میانگین روزانه" else "Daily average",
+                                    Formats.bytes(forecast.averageDailyBytes, persian),
+                                    scheme.tertiary,
+                                    Modifier.weight(1f),
+                                )
+                                Metric(
+                                    if (persian) "سهم هر روز" else "Daily budget",
+                                    Formats.bytes(forecast.dailyBudgetBytes, persian),
+                                    scheme.secondary,
+                                    Modifier.weight(1f),
                                 )
                             }
-                        }
-                    }
-                    // پیش‌بینی بسته: با روند ۷ روز اخیر تا کی دوام می‌آورد؟
-                    val forecast = remember(settings.dataCapBytes, used, dashboard.week, settings.billingCycleDay) {
-                        UsagePlanner.forecast(
-                            capBytes = settings.dataCapBytes,
-                            usedBytes = used,
-                            recentDailyBytes = dashboard.week.map { it.bytes },
-                            nowMillis = System.currentTimeMillis(),
-                            billingDay = settings.billingCycleDay,
-                        )
-                    }
-                    if (forecast != null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Metric(
-                                if (persian) "دوام بسته" else "Lasts for",
-                                when {
-                                    forecast.remainingBytes <= 0L -> if (persian) "تمام شده" else "Used up"
-                                    forecast.daysUntilEmpty < 0 -> "—"
-                                    else -> Formats.integer(forecast.daysUntilEmpty.toLong(), persian) +
-                                        (if (persian) " روز" else " days")
+                            Text(
+                                text = when {
+                                    forecast.remainingBytes <= 0L ->
+                                        if (persian) "بسته تمام شده است." else "Your plan is used up."
+                                    forecast.willRunOut -> if (persian) {
+                                        "با این روند، بسته " + Formats.integer(
+                                            (forecast.daysLeftInCycle - forecast.daysUntilEmpty).toLong(), true,
+                                        ) + " روز زودتر از پایان دوره تمام می‌شود."
+                                    } else {
+                                        "At this pace the plan runs out " +
+                                            (forecast.daysLeftInCycle - forecast.daysUntilEmpty) + " days before the cycle ends."
+                                    }
+                                    else -> if (persian) {
+                                        "با این روند، بسته تا پایان دوره (" +
+                                            Formats.integer(forecast.daysLeftInCycle.toLong(), true) + " روز دیگر) کافی است."
+                                    } else {
+                                        "At this pace the plan lasts until the cycle ends (" + forecast.daysLeftInCycle + " days)."
+                                    }
                                 },
-                                if (forecast.willRunOut) scheme.error else scheme.primary,
-                                Modifier.weight(1f),
-                            )
-                            Metric(
-                                if (persian) "میانگین روزانه" else "Daily average",
-                                Formats.bytes(forecast.averageDailyBytes, persian),
-                                scheme.tertiary,
-                                Modifier.weight(1f),
-                            )
-                            Metric(
-                                if (persian) "سهم هر روز" else "Daily budget",
-                                Formats.bytes(forecast.dailyBudgetBytes, persian),
-                                scheme.secondary,
-                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (forecast.willRunOut) scheme.error else scheme.onSurfaceVariant,
                             )
                         }
-                        Text(
-                            text = when {
-                                forecast.remainingBytes <= 0L ->
-                                    if (persian) "بسته تمام شده است." else "Your plan is used up."
-                                forecast.willRunOut -> if (persian) {
-                                    "با این روند، بسته " + Formats.integer(
-                                        (forecast.daysLeftInCycle - forecast.daysUntilEmpty).toLong(), true,
-                                    ) + " روز زودتر از پایان دوره تمام می‌شود."
-                                } else {
-                                    "At this pace the plan runs out " +
-                                        (forecast.daysLeftInCycle - forecast.daysUntilEmpty) + " days before the cycle ends."
-                                }
-                                else -> if (persian) {
-                                    "با این روند، بسته تا پایان دوره (" +
-                                        Formats.integer(forecast.daysLeftInCycle.toLong(), true) + " روز دیگر) کافی است."
-                                } else {
-                                    "At this pace the plan lasts until the cycle ends (" + forecast.daysLeftInCycle + " days)."
-                                }
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (forecast.willRunOut) scheme.error else scheme.onSurfaceVariant,
-                        )
                     }
                 }
             }
-        }
 
-        if (tick != null) {
-            item {
-                SessionCard(vm, persian)
+            if (tick != null) {
+                item {
+                    SessionCard(vm, persian)
+                }
             }
-        }
 
-        if (dashboard.hasUsageAccess) {
-            item {
-                SectionTitle(
-                    text = context.getString(R.string.per_app),
-                    action = {
-                        TextButton(onClick = { vm.refreshAll() }) {
-                            Text(context.getString(R.string.refresh_label))
+            if (dashboard.hasUsageAccess) {
+                item {
+                    SectionTitle(
+                        text = context.getString(R.string.per_app),
+                        action = {
+                            TextButton(onClick = { vm.refreshAll() }) {
+                                Text(context.getString(R.string.refresh_label))
+                            }
+                        },
+                    )
+                }
+                if (usage.mobile.isEmpty()) {
+                    item { EmptyState(context.getString(R.string.no_data_yet)) }
+                } else {
+                    val top = usage.mobile.take(5)
+                    val max = top.maxOfOrNull { it.bytes } ?: 1L
+                    items(top) { app ->
+                        val label = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(app.packageName.substringBefore(':'), label, size = 34.dp)
+                            Spacer(Modifier.width(10.dp))
+                            UsageBar(
+                                label = label,
+                                bytes = app.bytes,
+                                fraction = app.bytes.toFloat() / max,
+                                persian = persian,
+                                trailing = LiveMonitor.formatHourMinute(app.lastTimestamp, persian),
+                                color = marble.chart[top.indexOf(app).coerceAtLeast(0) % marble.chart.size],
+                            )
                         }
-                    },
-                )
-            }
-            if (usage.mobile.isEmpty()) {
-                item { EmptyState(context.getString(R.string.no_data_yet)) }
-            } else {
-                val top = usage.mobile.take(5)
-                val max = top.maxOfOrNull { it.bytes } ?: 1L
-                items(top) { app ->
-                    val label = OperatorCatalog.specialUidLabel(app.uid, persian) ?: app.label
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AppIcon(app.packageName.substringBefore(':'), label, size = 34.dp)
-                        Spacer(Modifier.width(10.dp))
-                        UsageBar(
-                            label = label,
-                            bytes = app.bytes,
-                            fraction = app.bytes.toFloat() / max,
-                            persian = persian,
-                            trailing = LiveMonitor.formatHourMinute(app.lastTimestamp, persian),
-                            color = marble.chart[top.indexOf(app).coerceAtLeast(0) % marble.chart.size],
-                        )
                     }
                 }
             }
-        }
 
-        item { Spacer(Modifier.height(8.dp)) }
-    }
-}
+            item { Spacer(Modifier.height(8.dp)) }
+        }
+    }        }
+
 
 /**
  * کارت «اینترنت فعلی»: نشان و نام اپراتوری که همین الان اینترنت از آن می‌آید.
@@ -718,6 +734,75 @@ private fun SessionCard(vm: MainViewModel, persian: Boolean) {
                         color = MaterialTheme.colorScheme.secondary,
                     )
                 }
+            }
+        }
+    }
+}
+
+/** کارت حالت «ساده»: چیده، آرام و فقط برای کاربران عادی و مبتدیان. */
+@Composable
+private fun MinimalDashboardCard(
+    dashboard: DashboardUi,
+    history: HistoryUi,
+    settings: AppSettings,
+    persian: Boolean,
+) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val marble = LocalMarbleColors.current
+    val week = history.days.takeLast(7)
+    val max = week.maxOfOrNull { it.total } ?: 1L
+
+    MarbleCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = context.getString(R.string.this_month),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = dashboard.operatorName.ifEmpty { context.getString(R.string.network_unknown) },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.primary,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard(
+                    title = context.getString(R.string.today_usage),
+                    value = Formats.bytes(dashboard.todayMobileBytes + dashboard.todayWifiBytes, persian),
+                    icon = MIcons.Chart,
+                    modifier = Modifier.weight(1f),
+                )
+                StatCard(
+                    title = context.getString(R.string.remaining),
+                    value = if (settings.dataCapBytes > 0L) {
+                        Formats.bytes((settings.dataCapBytes - dashboard.monthMobileBytes).coerceAtLeast(0), persian)
+                    } else "—",
+                    icon = MIcons.Shield,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (week.any { it.total > 0 }) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    week.forEach { day ->
+                        val fraction = (day.total.toFloat() / max)
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(32.dp)
+                                .background(marble.mobile.copy(alpha = 0.15f + 0.55f * fraction)),
+                        )
+                    }
+                }
+                Text(
+                    text = if (persian) "۷ روز اخیر" else "Last 7 days",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
             }
         }
     }
