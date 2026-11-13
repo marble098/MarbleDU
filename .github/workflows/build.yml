@@ -1,10 +1,13 @@
 name: Build APK (all ABIs)
 
-# بعد از هر merge روی main (و هر تگ نسخه) APK همه‌ی معماری‌ها ساخته می‌شود
+# بعد از هر merge روی main (و هر تگ نسخه) APK همه‌ی معماری‌ها ساخته می‌شود.
+# روی pull request ها هم بیلد و تست اجرا می‌شود تا خطاها قبل از merge دیده شوند.
 on:
   push:
     branches: [main]
     tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
