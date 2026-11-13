@@ -107,7 +107,7 @@ object NetworkStatsReader {
     @SuppressLint("MissingPermission")
     fun subscriptionIds(context: Context): IntArray {
         val sm = context.getSystemService(SubscriptionManager::class.java) ?: return intArrayOf()
-        return runCatching<IntArray> { sm.activeSubscriptionIdList.toIntArray() }.getOrDefault(intArrayOf())
+        return runCatching<IntArray> { sm.activeSubscriptionIdList }.getOrDefault(intArrayOf())
     }
 
     private fun localIpAddress(): String = runCatching<String> {
