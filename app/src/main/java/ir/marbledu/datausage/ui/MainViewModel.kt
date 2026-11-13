@@ -8,6 +8,7 @@ import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.AppUsage
 import ir.marbledu.datausage.data.ConnectionType
+import ir.marbledu.datausage.data.HourUsage
 import ir.marbledu.datausage.data.IranOptions
 import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.LiveTick
@@ -66,6 +67,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _ping = MutableStateFlow<List<PingResult>>(emptyList())
     val ping: StateFlow<List<PingResult>> = _ping.asStateFlow()
 
+    private val _peakHours = MutableStateFlow<List<HourUsage>>(emptyList())
+    val peakHours: StateFlow<List<HourUsage>> = _peakHours.asStateFlow()
+
     private var liveJob: Job? = null
     private var pingJob: Job? = null
 
@@ -83,6 +87,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshAll() {
         refreshDashboard()
         loadUsage(_usage.value.range)
+        loadPeakHours(_usage.value.range)
     }
 
     // ----------------------------------------------------------------- live
@@ -154,6 +159,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** تغییر بازه فقط یک بار لود می‌کند (قبل از این دو coroutine روی هم ساخته می‌شد). */
     fun setRange(range: TimeRange) = loadUsage(range)
+
+    /** ساعت‌های پرمصرف بر اساس مصرف واقعی هر ساعت (نه ساعت آخرین استفاده‌ی اپ). */
+    fun loadPeakHours(range: TimeRange = _usage.value.range) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val from = TimeMath.rangeStart(range, now, settings.value.billingCycleDay)
+            _peakHours.value = repository.hourlyTotals(from, now, ConnectionType.CELLULAR)
+        }
+    }
 
     fun loadUsage(range: TimeRange = _usage.value.range) {
         viewModelScope.launch {

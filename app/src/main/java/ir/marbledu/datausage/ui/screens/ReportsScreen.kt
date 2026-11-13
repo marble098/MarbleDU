@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -45,8 +46,14 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     val context = LocalContext.current
     val usage by vm.usage.collectAsState()
     val dashboard by vm.dashboard.collectAsState()
+    val hourly by vm.peakHours.collectAsState()
     val scope = rememberCoroutineScope()
     val iran = settings.iran
+
+    // ساعت‌های پرمصرف با تغییر بازه دوباره محاسبه می‌شوند (فقط اگر روشن باشد).
+    LaunchedEffect(usage.range) {
+        if (iran.showPeakHours) vm.loadPeakHours(usage.range)
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -163,8 +170,8 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
 
         if (iran.showPeakHours) {
             item { SectionTitle(text = context.getString(R.string.peak_hours)) }
-            val buckets = peakHours(usage.mobile)
-            if (buckets.all { it.second == 0L }) {
+            // داده‌ی ساعتی از ViewModel می‌آید (مصرف واقعی هر ساعت).
+            if (hourly.all { it.bytes == 0L }) {
                 item {
                     Text(
                         text = context.getString(R.string.no_data_yet),
@@ -173,12 +180,12 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                     )
                 }
             } else {
-                val max = buckets.maxOf { it.second }
-                items(buckets.filter { it.second > 0 }) { (hour, bytes) ->
+                val max = hourly.maxOf { it.bytes }
+                items(hourly.filter { it.bytes > 0 }) { bucket ->
                     ir.marbledu.datausage.ui.UsageBar(
-                        label = "${Formats.integer(hour.toLong(), persian)}:00",
-                        bytes = bytes,
-                        fraction = bytes.toFloat() / max,
+                        label = "${Formats.integer(bucket.hour.toLong(), persian)}:00",
+                        bytes = bucket.bytes,
+                        fraction = bucket.bytes.toFloat() / max,
                         persian = persian,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
@@ -205,14 +212,3 @@ fun ReportsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
     }
 }
 
-/** تجمیع مصرف بر حسب ساعت شبانه‌روز تا «ساعت‌های پرمصرف» مشخص شود. */
-private fun peakHours(apps: List<ir.marbledu.datausage.data.AppUsage>): List<Pair<Int, Long>> {
-    val buckets = LongArray(24)
-    apps.forEach { app ->
-        val hour = java.util.Calendar.getInstance().apply {
-            timeInMillis = app.lastTimestamp
-        }.get(java.util.Calendar.HOUR_OF_DAY)
-        buckets[hour] += app.bytes
-    }
-    return buckets.mapIndexed { index, value -> index to value }.sortedByDescending { it.second }
-}

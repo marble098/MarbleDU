@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import ir.marbledu.datausage.MainActivity
 import ir.marbledu.datausage.MarbleDuApp
 import ir.marbledu.datausage.R
+import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.Formats
 import ir.marbledu.datausage.data.NetworkStatsReader
 import kotlinx.coroutines.CoroutineScope
@@ -40,16 +41,22 @@ class MonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification(0.0, 0.0, "--"))
+        // اعلان اولیه با زبان سیستم؛ در اولین دور حلقه با زبان تنظیمات اپ
+        // به‌روزرسانی می‌شود. (خواندن DataStore روی ترد اصلی انجام نمی‌شود.)
+        startForeground(NOTIFICATION_ID, buildNotification(0.0, 0.0, "--", systemPersian()))
         loop?.cancel()
         loop = scope.launch {
-            // فاصله‌ی به‌روزرسانی از تنظیمات خوانده می‌شود (نه ثابت ۵ ثانیه).
-            val intervalSeconds = runCatching {
-                runBlocking {
-                    (application as MarbleDuApp).settingsRepository.settings.first()
-                        .monitorIntervalSeconds
-                }
-            }.getOrDefault(5).coerceIn(1, 60)
+            // تنظیمات یک بار خوانده می‌شود: هم فاصله‌ی به‌روزرسانی (نه ۵ ثانیه‌ی
+            // ثابت) و هم زبان اعلان؛ وگرنه اعلان همیشه به زبان سیستم می‌ماند.
+            val settings = runCatching {
+                runBlocking { (application as MarbleDuApp).settingsRepository.settings.first() }
+            }.getOrNull()
+            val intervalSeconds = (settings?.monitorIntervalSeconds ?: 5).coerceIn(1, 60)
+            val persian = when (settings?.language) {
+                AppLanguage.PERSIAN -> true
+                AppLanguage.ENGLISH -> false
+                else -> java.util.Locale.getDefault().language == "fa"
+            }
             var lastRx = 0L
             var lastTx = 0L
             var lastTime = 0L
@@ -68,7 +75,7 @@ class MonitorService : Service() {
                 val snapshot = NetworkStatsReader.currentNetwork(this@MonitorService)
                 notificationManager().notify(
                     NOTIFICATION_ID,
-                    buildNotification(down, up, snapshot.carrierName),
+                    buildNotification(down, up, snapshot.carrierName, persian),
                 )
                 delay(intervalSeconds * 1000L)
             }
@@ -76,14 +83,21 @@ class MonitorService : Service() {
         return START_STICKY
     }
 
-    private fun buildNotification(down: Double, up: Double, carrier: String): Notification {
+    private fun systemPersian(): Boolean =
+        resources.configuration.locales[0].language == "fa"
+
+    private fun buildNotification(
+        down: Double,
+        up: Double,
+        carrier: String,
+        persian: Boolean,
+    ): Notification {
         val open = PendingIntent.getActivity(
             this,
             0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val persian = resources.configuration.locales[0].language == "fa"
         val speedLine = "↓ ${Formats.speed(down, persian)}   ↑ ${Formats.speed(up, persian)}"
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
