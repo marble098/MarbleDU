@@ -112,14 +112,17 @@ object NetworkStatsReader {
         }.getOrDefault(intArrayOf())
     }
 
-    private fun localIpAddress(): String = runCatching<String> {
-        NetworkInterface.getNetworkInterfaces().asSequence()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.asSequence() }
-            .filterIsInstance<Inet4Address>()
-            .firstOrNull { !it.isLoopbackAddress }
-            ?.hostAddress
-    }.getOrNull() ?: ""
+    private fun localIpAddress(): String {
+        val address: String? = runCatching {
+            NetworkInterface.getNetworkInterfaces().asSequence()
+                .filter { it.isUp && !it.isLoopback }
+                .flatMap { it.inetAddresses.asSequence() }
+                .filterIsInstance<Inet4Address>()
+                .firstOrNull { !it.isLoopbackAddress }
+                ?.hostAddress
+        }.getOrNull()
+        return address ?: ""
+    }
 
     /** مصرف کل دستگاه از NetworkStatsManager (اگر دسترسی داده شود). */
     fun deviceUsageBytes(
