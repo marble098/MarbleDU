@@ -178,14 +178,7 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            MIcons.Palette,
-                            null,
-                            Modifier.size(17.dp),
-                            tint = ir.marbledu.datausage.ui.theme.bestOnColor(
-                                Color(ThemePalette.of(settings.palette).primary),
-                            ),
-                        )
+                        Icon(MIcons.Palette, null, Modifier.size(17.dp), tint = Color.White)
                     }
                     Column(Modifier.weight(1f)) {
                         Text(
