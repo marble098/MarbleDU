@@ -123,6 +123,18 @@
     <string name="widget_today">مصرف امروز</string>
     <string name="widget_mobile">موبایل</string>
 
+    <!-- دسترسی‌های رن‌تایم -->
+    <string name="permissions_title">اجازه‌های برنامه</string>
+<string name="permissions_desc">برای پایش دقیق و شناسایی اپراتور، به دسترسی‌های اعلان و وضعیت سیم‌کارت نیاز داریم.</string>
+    <string name="perm_notifications">نمایش اعلان پایش در نوار وضعیت</string>
+    <string name="perm_phone_state">شناسایی اپراتور سیم‌کارت موبایل</string>
+    <string name="perm_usage_stats">دسترسی به داده‌های مصرف به تفکیک اپ</string>
+    <string name="perm_usage_stats_desc">برای گزارشِ هر اپ، این اجازه را در تنظیمات سیستم فعال کنید.</string>
+    <string name="perm_status_granted">فعال</string>
+    <string name="perm_status_denied">فعال نیست</string>
+    <string name="perm_request">درخواست اجازه</string>
+    <string name="perm_open_system_settings">باز کردن تنظیمات سیستم</string>
+
     <string name="ui_mode">حالت نمایش</string>
     <string name="ui_mode_desc">رابطی ساده برای مبتدیان یا پیشرفته برای حرفه‌ای‌ها</string>
     <string name="ui_mode_minimal">ساده</string>

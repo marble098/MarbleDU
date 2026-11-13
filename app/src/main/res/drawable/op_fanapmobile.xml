@@ -3,10 +3,11 @@
     android:height="64dp"
     android:viewportWidth="64"
     android:viewportHeight="64">
+    <!-- نماییک-store فناپ موبایل: مربع丸‌نمای-brand با علامت F سفیدی -->
     <path
         android:fillColor="#FF6D4C41"
-        android:pathData="M32,2 C17.2,2 5,14.2 5,29 C5,43.8 17.2,56 32,56 C46.8,56 59,43.8 59,29 C59,14.2 46.8,2 32,2 Z M32,50 C24.2,50 18,43.8 18,36 C18,28.2 24.2,22 32,22 C39.8,22 46,28.2 46,36 C46,43.8 39.8,50 32,50 Z"/>
+        android:pathData="M12,4 h40 a4,4 0 0 1 4,4 v48 a4,4 0 0 1 -4,4 h-40 a4,4 0 0 1 -4,-4 v-48 a4,4 0 0 1 4,-4"/>
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M26,34 H30 V38 H26 Z M34,34 H38 V38 H34 Z M29,30 H35 V32 H29 Z"/>
+        android:pathData="M24,14 h10 v8 h-4 v14 h4 v8 h-18 v-30 z"/>
 </vector>

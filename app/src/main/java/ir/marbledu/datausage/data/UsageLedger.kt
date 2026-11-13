@@ -168,28 +168,38 @@ object UsageLedger {
         lastFlush = now
     }
 
-    /** یادداشت‌های یک روز (جمع روزانه، ساعت=-1). */
+    /**
+     * یادداشت‌های یک روز (جمع روزانه، ساعت=-۱).
+     *
+     * کلید روزانه ۳ قسمتی است (`روز\ttype\toperator`) و کلید ساعتی ۴ قسمتی
+     * (`روز\ttype\toperator\thour`). قبلاً شرط `getOrNull(3) == "-1"` برای کلیدهای
+     * ۳قسمتی `null == "-1"` باز می‌گرفت (false)، یعنی همه‌ی ردیف‌های روزانه حذف
+     * می‌شدند و گزارش اپراتورهای روز خالی می‌ماند. اکنون بر اساس تعداد Sections
+     * فیلتر می‌شود.
+     */
     fun forDay(context: Context, dayStartMillis: Long): List<OperatorTraffic> = synchronized(lock) {
         ensureLoaded(context)
         val prefix = "${dayKey(dayStartMillis)}\t"
-        entries.filterKeys {
-            it.startsWith(prefix) && it.split('\t').getOrNull(3) == "-1"
+        entries.entries.asSequence().filter { (k, _) ->
+            // کلید روزانه ۳ قسمتی (۲ تاب)، ساعتی ۴ قسمتی (۳ تاب). collapse کردن split تکراری در فیلتر.
+            k.startsWith(prefix) && k.count { it == '\t' } == 2
         }.map { (k, v) ->
             val parts = k.split('\t')
             OperatorTraffic(parts[2], parts[1], Traffic(v[0], v[1]))
-        }
+        }.toList()
     }
 
     /** یادداشت‌های ساعتی یک روز به تفکیک اپراتور و نوع اتصال. */
     fun hourlyForDay(context: Context, dayStartMillis: Long): List<HourOperatorTraffic> = synchronized(lock) {
         ensureLoaded(context)
         val prefix = "${dayKey(dayStartMillis)}\t"
-        entries.filterKeys {
-            it.startsWith(prefix) && it.split('\t').getOrNull(3) != "-1"
+        entries.entries.asSequence().filter { (k, _) ->
+            // فقط ردیف‌های ساعتی (۴ قسمت = ۳ تاب و قسمت چهارم معادل "-۱" نباشد)
+            k.startsWith(prefix) && k.count { it == '\t' } == 3
         }.map { (k, v) ->
             val parts = k.split('\t')
             HourOperatorTraffic(parts[3].toIntOrNull() ?: -1, parts[2], parts[1], Traffic(v[0], v[1]))
-        }.sortedBy { it.hour }
+        }.sortedBy { it.hour }.toList()
     }
 
     /**

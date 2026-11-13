@@ -91,6 +91,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val monitor: LiveMonitor = (app as MarbleDuApp).liveMonitor
     private val settingsRepo = (app as MarbleDuApp).settingsRepository
 
+    /** مجوزهای رن‌تایم که کاربر اجازه داده است (برای نمایش وضعیت در تنظیمات و راهنمایی). */
+    val permissions: StateFlow<Set<String>> = (app as MarbleDuApp).permissionStateFlow
+
+    fun hasPermission(permission: String): Boolean =
+        (app as MarbleDuApp).permissionState.value.contains(permission)
+
     val settings: StateFlow<AppSettings> = settingsRepo.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 

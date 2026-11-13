@@ -1,5 +1,7 @@
 package ir.marbledu.datausage.ui.screens
 import android.content.Intent
+import android.Manifest
+import android.provider.Settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -235,6 +237,46 @@ fun SettingsScreen(vm: MainViewModel, settings: AppSettings, persian: Boolean) {
                             selected = settings.monitorIntervalSeconds == seconds,
                         ) {
                             vm.setMonitorInterval(seconds)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ------------------------------------------- دسترسی‌های رن‌تایم
+        item {
+            SettingsCard(
+                title = context.getString(R.string.permissions_title),
+                description = context.getString(R.string.permissions_desc),
+                icon = MIcons.Shield,
+            ) {
+                val perms by vm.permissions.collectAsState()
+                val notifGranted = perms.contains(android.Manifest.permission.POST_NOTIFICATIONS)
+                val phoneGranted = perms.contains(android.Manifest.permission.READ_PHONE_STATE)
+                PermissionStatusRow(
+                    label = context.getString(R.string.perm_notifications),
+                    granted = notifGranted,
+                )
+                PermissionStatusRow(
+                    label = context.getString(R.string.perm_phone_state),
+                    granted = phoneGranted,
+                )
+                if (!notifGranted || !phoneGranted) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                val intent = Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                ).setData(
+                                    android.net.Uri.parse("package:${context.packageName}"),
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            },
+                        ) {
+                            Text(context.getString(R.string.perm_open_system_settings))
                         }
                     }
                 }
@@ -653,6 +695,36 @@ private fun SwitchRow(
             }
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/** وضعیتِ یک مجوز: لیبل و علامت (فعال / غیرفعال). */
+@Composable
+private fun PermissionStatusRow(label: String, granted: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = if (granted) MIcons.Check else MIcons.Clock,
+                contentDescription = if (granted) "granted" else "denied",
+                modifier = Modifier.size(18.dp),
+                tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = if (granted) context.getString(R.string.perm_status_granted)
+                else context.getString(R.string.perm_status_denied),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
