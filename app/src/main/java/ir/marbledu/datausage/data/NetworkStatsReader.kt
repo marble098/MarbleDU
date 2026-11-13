@@ -119,7 +119,7 @@ object NetworkStatsReader {
             .filterIsInstance<Inet4Address>()
             .firstOrNull { !it.isLoopbackAddress }
             ?.hostAddress
-    }.getOrNull().orEmpty()
+    }.getOrNull() ?: ""
 
     /** مصرف کل دستگاه از NetworkStatsManager (اگر دسترسی داده شود). */
     fun deviceUsageBytes(
