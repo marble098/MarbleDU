@@ -20,7 +20,7 @@ jobs:
   build:
     name: Build signed APKs
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -34,8 +34,13 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
-        with:
-          packages: 'platforms;android-37.0 build-tools;36.0.0'
+
+      - name: Install SDK platforms
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" || \
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          sdkmanager --list_installed | tail -20
 
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v6
@@ -51,19 +56,17 @@ jobs:
           set -e
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           echo "Build tools: $BT"
-          FAILED=0
           FINGERPRINTS=""
           for apk in $(find app/build/outputs/apk -name '*.apk' | sort); do
             echo "── $apk"
-            OUT=$("$BT/apksigner" verify --print-certs "$apk" 2>&1) || { echo "apksigner failed: $OUT"; FAILED=1; continue; }
+            OUT=$("$BT/apksigner" verify --print-certs "$apk" 2>&1) || { echo "::error::apksigner failed for $apk"; echo "$OUT"; exit 1; }
             FP=$(echo "$OUT" | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}')
             echo "   SHA-256: $FP"
-            FINGERPRINTS="$FINGERPRINTS\n$apk -> $FP"
+            FINGERPRINTS="$FINGERPRINTS$apk -> $FP\n"
           done
           echo -e "$FINGERPRINTS"
-          UNIQUE=$(echo -e "$FINGERPRINTS" | grep -v '^$' | awk -F'-> ' '{print $2}' | sort -u | wc -l)
+          UNIQUE=$(printf "%b" "$FINGERPRINTS" | grep -v '^$' | awk -F'-> ' '{print $2}' | sort -u | wc -l)
           echo "Unique certificates: $UNIQUE"
-          if [ "$FAILED" != "0" ]; then echo "::error::One or more APKs failed verification"; exit 1; fi
           if [ "$UNIQUE" != "1" ]; then echo "::error::APKs are not signed with the same certificate"; exit 1; fi
 
       - name: Collect artifacts
@@ -86,7 +89,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attach APKs to release (on tag / main push)
+      - name: Attach APKs to release (tag / main)
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v3
         with:
