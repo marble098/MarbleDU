@@ -17,6 +17,7 @@ junit = "4.13.2"
 androidxTestJunit = "1.2.1"
 espresso = "3.6.1"
 compileSdk = "37"
+compileSdkMinor = "2"
 targetSdk = "37"
 minSdk = "26"
 

@@ -17,6 +17,8 @@ val appVersionCode: Int = versionProps.getProperty("versionCode", "1").trim().to
 android {
     namespace = "ir.marbledu.datausage"
     compileSdk = libs.versions.compileSdk.get().toInt()
+    // برخی کتابخانه‌های جدید Compose به پلتفرم 37.x نیاز دارند
+    compileSdkMinor = libs.versions.compileSdkMinor.get().toInt()
 
     defaultConfig {
         applicationId = "ir.marbledu.datausage"
