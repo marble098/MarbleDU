@@ -1,9 +1,9 @@
-name: Build APK (all ABIs)
+name: Build APK
 
-# هر merge روی main → بیلد خودکار APK برای همه‌ی معماری‌ها
+# بیلد خودکار APK برای همه‌ی معماری‌ها بعد از هر merge (push به main) یا تگ
 on:
   push:
-    branches: [main]
+    branches: ['**']
     tags: ['v*']
   workflow_dispatch:
 
@@ -36,20 +36,39 @@ jobs:
       - name: Install SDK platforms
         run: |
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" || \
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
-          sdkmanager --list_installed | tail -20
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" > /dev/null
 
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v6
 
       - name: Unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest --stacktrace
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon testDebugUnitTest --stacktrace > gradle-test.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            grep -nE "^e: |error:|Execution failed|FAILED" gradle-test.log | head -40 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          fi
+          exit $code
 
       - name: Build debug + release (per-ABI + universal)
-        run: ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon assembleDebug assembleRelease --stacktrace > gradle-build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            grep -nE "^e: |error:|Execution failed|FAILED" gradle-build.log | head -40 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          fi
+          exit $code
 
       - name: Verify signing (all APKs, identical certificate)
+        shell: bash
         run: |
           set -e
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
@@ -68,16 +87,19 @@ jobs:
           if [ "$UNIQUE" != "1" ]; then echo "::error::APKs are not signed with the same certificate"; exit 1; fi
 
       - name: Collect artifacts
+        shell: bash
         run: |
           mkdir -p dist
           find app/build/outputs/apk -name '*.apk' -exec cp {} dist/ \;
           ls -la dist
-          echo "### APK ها" >> "$GITHUB_STEP_SUMMARY"
-          echo "| فایل | حجم |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          for f in dist/*.apk; do
-            printf "| %s | %s |\n" "$(basename "$f")" "$(du -h "$f" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
-          done
+          {
+            echo "### APK ها"
+            echo "| فایل | حجم |"
+            echo "|---|---|"
+            for f in dist/*.apk; do
+              printf "| %s | %s |\n" "$(basename "$f")" "$(du -h "$f" | cut -f1)"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload per-architecture APKs
         uses: actions/upload-artifact@v7
