@@ -130,7 +130,7 @@ object UsageForecast {
         val avg = useable.sumOf { it.bytes }.toDouble() / useable.size
         // برای هر روز باقی‌مانده، ضریب روز هفته‌ی همان روز را از تاریخچه می‌گیریم.
         val factors = (1..daysLeft).map { offset ->
-            val dayMillis = todayMillis + offset * DAY_MILLIS
+            val dayMillis = todayMillis + offset * DAY_MILLIS.toLong()
             val weekday = weekdayOf(dayMillis)
             val sameDay = useable.filter { weekdayOf(it.dayStart) == weekday }
             val dayAvg = if (sameDay.isNotEmpty()) {
