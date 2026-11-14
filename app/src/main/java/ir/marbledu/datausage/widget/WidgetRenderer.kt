@@ -38,7 +38,7 @@ internal object WidgetRenderer {
         val ids = runCatching {
             manager.getAppWidgetIds(ComponentName(context, UsageWidgetProvider::class.java))
         }.getOrNull()
-        if (ids.isNullOrEmpty()) return
+        if (ids == null || ids.isEmpty()) return
         ids.forEach { id ->
             runCatching { manager.updateAppWidget(id, build(context, snapshot, manager, id)) }
         }
