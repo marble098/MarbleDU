@@ -92,7 +92,15 @@ class WidgetRemoteViewsLayoutTest {
         }
     }
 
-    private fun readLayout(name: String): String = File(layoutDir(), name).readText()
+    /**
+     * متن چیدمان بدون توضیحات XML.
+     *
+     * توضیحات خودشان اسم چیزهای ممنوعه را می‌آورند (مثلاً «این فایل `<View>` ندارد»)،
+     * پس اگر حذف نشوند تست به‌اشتباه قرمز می‌شود.
+     */
+    private fun readLayout(name: String): String =
+        File(layoutDir(), name).readText()
+            .replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
 
     /** پوشه‌ی `res/layout` را از مسیر اجرای تست پیدا می‌کند (Gradle از پوشه‌ی ماژول اجرا می‌کند). */
     private fun layoutDir(): File {
