@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    چیدمان «حداقلی» ویجت؛ فقط از ویوهای مجاز در RemoteViews استفاده می‌کند:
+    LinearLayout / TextView / ImageView / ProgressBar / FrameLayout و هر کدام هم
+    با ویژگی‌های ساده.
+
+    چرا این فایل لازم است؟ اگر ساخت یا اعمال چیدمان کامل (widget_usage) به هر
+    دلیلی شکست بخورد، اندروید جعبه‌ی قرمز «Can't load widget» را نشان می‌دهد.
+    با این چیدمان، حداقل یک کارت سالم و قابل‌ضربه روی صفحه می‌ماند که کاربر را
+    به برنامه می‌برد. این فایل عمداً هیچ فونت سفارشی، هیچ رنگ ?attr/ و هیچ
+    <View> خامی ندارد.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_fallback_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_surface_dark"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/widget_fallback_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="@string/widget_usage_label"
+        android:textColor="#E8ECF8"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_fallback_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:text="@string/widget_fallback_text"
+        android:textColor="#A6B2CF"
+        android:textSize="11sp" />
+
+</LinearLayout>

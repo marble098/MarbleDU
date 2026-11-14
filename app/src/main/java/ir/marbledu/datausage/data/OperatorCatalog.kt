@@ -34,7 +34,11 @@ object OperatorCatalog {
     const val ID_WIFI = "wifi"
     const val ID_MOBILE = "mobile"
     const val ID_UNKNOWN = "unknown"
+    /** پیشوند شناسه‌ی ISPهای ناشناخته‌ی غیرایرانی. */
     private const val CUSTOM_PREFIX = "x:"
+
+    /** پیشوند ISPهای ناشناخته‌ای که با اطمینان ایرانی هستند (اینترنت ثابت داخلی). */
+    private const val IRANIAN_FIXED_PREFIX = "f:"
 
     /** اپراتورهای موبایل و MVNOها. ترتیب مهم است: نام‌های خاص‌تر جلوتر. */
     val iranian: List<Operator> = listOf(
@@ -114,7 +118,7 @@ object OperatorCatalog {
         Operator(
             "arintel", "ارین تل", "Arin Tel", "ART", 0xFF455A64, 0xFF78909C,
             keywords = listOf(
-                "arin", "ارین", "arintel", "ارینتل", "arin tel", "ارین تل",
+                "arin", "arintel", "ارینتل", "arin tel", "ارین تل",
                 "art", "arintelco",
             ),
             isMobile = true,
@@ -216,6 +220,51 @@ object OperatorCatalog {
             asns = listOf(48159, 12880),
             keywords = listOf("telecommunicationinfrastructure", "informationtechnologycompany", "زیرساخت"),
         ),
+        // ---- اینترنت ثابت خانگی، فیبر (FTTH/FTTx)، بی‌سیم و ارائه‌دهنده‌های داده
+        Operator(
+            "irantelekom", "ایران تلکام", "Iran Telekom", "ITK", 0xFF0D47A1, 0xFF1E88E5,
+            keywords = listOf("irantelekom", "iran telekom", "ایرانتلکام", "ایران تلکام"),
+        ),
+        Operator(
+            "aryanet", "آرین نت", "Aryan Net", "ARN", 0xFF006064, 0xFF26C6DA,
+            keywords = listOf("aryanet", "aryan net", "ariyanet", "آریننت", "آرین نت", "آریانت"),
+        ),
+        Operator(
+            "asianet", "آسیانت", "Asia Net", "ASN", 0xFF283593, 0xFF5C6BC0,
+            keywords = listOf("asianet", "asia net", "آسیانت"),
+        ),
+        Operator(
+            "aftabnet", "آفتاب نت", "Aftab Net", "AFT", 0xFFEF6C00, 0xFFFFB74D,
+            keywords = listOf("aftabnet", "aftab net", "افتابنت", "آفتابنت", "آفتاب نت"),
+        ),
+        Operator(
+            "datisnet", "داتیس نت", "Datis Net", "DTS", 0xFF6A1B9A, 0xFFBA68C8,
+            keywords = listOf("datisnet", "datis net", "داتیسنت", "داتیس نت"),
+        ),
+        Operator(
+            "iranserver", "ایران سرور", "Iran Server", "IRS", 0xFF2E7D32, 0xFF81C784,
+            keywords = listOf("iranserver", "iran server", "ایرانسرور", "ایران سرور"),
+        ),
+        Operator(
+            "arvancloud", "ابر آروان", "Arvan Cloud", "ARV", 0xFF00838F, 0xFF4DD0E1,
+            keywords = listOf("arvan", "arvancloud", "arvan cloud", "آروان", "ابرآروان", "ابر آروان"),
+        ),
+        Operator(
+            "parspack", "پارس پک", "ParsPack", "PPK", 0xFF37474F, 0xFF78909C,
+            keywords = listOf("parspack", "pars pack", "پارسپک", "پارس پک"),
+        ),
+        Operator(
+            "hostiran", "هاست ایران", "HostIran", "HIR", 0xFFAD1457, 0xFFF06292,
+            keywords = listOf("hostiran", "host iran", "هاستایران", "هاست ایران"),
+        ),
+        Operator(
+            "mihanwebhost", "میهن وب‌هاست", "Mihan Web Host", "MWH", 0xFF01579B, 0xFF4FC3F7,
+            keywords = listOf("mihanwebhost", "mihanweb", "mihan web host", "میهنوبهاست", "میهن وب‌هاست"),
+        ),
+        Operator(
+            "mizbanfa", "میزبان فا", "MizbanFa", "MZF", 0xFF33691E, 0xFF8BC34A,
+            keywords = listOf("mizbanfa", "mizban fa", "میزبانفا", "میزبان فا"),
+        ),
     )
 
     val all: List<Operator> = iranian + fixed
@@ -263,6 +312,14 @@ object OperatorCatalog {
         val tokens = words(raw)
         if (collapsed.isEmpty()) return null
         for (op in all) {
+            // نام کامل فارسی/انگلیسی خودِ اپراتور هم نشانه‌ی تشخیص است؛ به همین
+            // دلیل «Iran Telekom» یا «ابر آروان» حتی بدون کلیدواژه هم شناخته
+            // می‌شوند. نام‌های کوتاه‌تر از ۴ حرف (TCI/MCI/MTN) نادیده گرفته
+            // می‌شوند تا با متن‌های تصادفی اشتباه نشوند.
+            for (name in listOf(op.fa, op.en)) {
+                val nname = collapse(name)
+                if (nname.length >= 4 && collapsed.contains(nname)) return op
+            }
             for (kw in op.keywords) {
                 val nkw = collapse(kw)
                 val hit = if (nkw.length <= 3) tokens.contains(nkw) || collapsed == nkw
@@ -298,14 +355,38 @@ object OperatorCatalog {
         return fromName(org)
     }
 
-    /** اپراتور ناشناس با نام دلخواه (مثلاً ISP خارجی). */
-    fun custom(name: String): Operator {
+    /**
+     * اپراتور ناشناس با نام دلخواه.
+     *
+     * [iranianFixed] را وقتی `true` می‌دهیم که مطمئنیم این ISP داخل ایران است
+     * (کد کشور IR یا نشانه‌های نام). در این حالت نشان «اینترنت ثابت داخلی»
+     * می‌گیرد و رنگ ثابت و شناسه‌ی ذخیره‌شدنی‌اش با `f:` شروع می‌شود تا بعد از
+     * راه‌اندازی مجدد هم همین‌طور شناسایی شود.
+     */
+    fun custom(name: String, iranianFixed: Boolean = false): Operator {
         val clean = name.trim()
         if (clean.isBlank()) return unknown
         val letters = clean.filter { it.isLetterOrDigit() }
         val mark = letters.take(3).uppercase().ifBlank { "?" }
         val color = genericColors[(clean.hashCode() and 0x7fffffff) % genericColors.size]
-        return Operator(CUSTOM_PREFIX + clean, clean, clean, mark, color, isIranian = false)
+        val prefix = if (iranianFixed) IRANIAN_FIXED_PREFIX else CUSTOM_PREFIX
+        return Operator(prefix + clean, clean, clean, mark, color, isIranian = iranianFixed)
+    }
+
+    /**
+     * آیا این نام به یک ارائه‌دهنده‌ی ایرانی اشاره می‌کند؟ برای وقتی است که
+     * ISP در فهرست نیست و می‌خواهیم بدانیم نشان «داخلی» به آن بدهیم یا نه.
+     */
+    fun looksIranian(raw: String?): Boolean {
+        if (raw.isNullOrBlank()) return false
+        val normalized = normalizePersian(raw)
+        if (normalized.contains(".ir")) return true
+        if (normalized.contains("ایران") || normalized.contains("تهران") || normalized.contains("کیش")) return true
+        val collapsed = collapse(raw)
+        return collapsed.contains("iran") ||
+            collapsed.contains("tehran") ||
+            collapsed.contains("persian") ||
+            collapsed.contains("kish")
     }
 
     /** برعکس [Operator.id]: از شناسه‌ی ذخیره‌شده دوباره اپراتور می‌سازد. */
@@ -313,8 +394,9 @@ object OperatorCatalog {
         id.isNullOrBlank() || id == ID_UNKNOWN -> unknown
         id == ID_WIFI -> wifi
         id == ID_MOBILE -> mobile
+        id.startsWith(IRANIAN_FIXED_PREFIX) -> custom(id.removePrefix(IRANIAN_FIXED_PREFIX), iranianFixed = true)
         id.startsWith(CUSTOM_PREFIX) -> custom(id.removePrefix(CUSTOM_PREFIX))
-        else -> all.firstOrNull { it.id == id } ?: custom(id)
+        else -> all.firstOrNull { it.id == id } ?: custom(id, iranianFixed = looksIranian(id))
     }
 
     /** از روی نام خام: اگر شناخته‌شده بود همان، وگرنه یک اپراتور سفارشی. */

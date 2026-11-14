@@ -389,8 +389,22 @@ object IspResolver {
         status: LookupStatus,
         method: DetectionMethod,
     ): Result {
+        val cleaned = cleanIspName(lookup.isp)
+        // ۱) شماره‌ی AS یا نام سازمان → اپراتور شناخته‌شده
+        // ۲) نام تمیزشده → تطبیق دوباره (اسم‌های تجاری مثل «Aria Shatel PJSC»)
+        // ۳) هیچ‌کدام: اگر مطمئنیم ایرانی است، همان ISP را با نشان «ثابت داخلی»
+        //    نگه می‌داریم تا به‌جای «نامشخص» نام واقعی‌اش دیده شود.
         val op = OperatorCatalog.fromAsn(lookup.asn, lookup.isp)
-            ?: OperatorCatalog.custom(cleanIspName(lookup.isp))
+            ?: OperatorCatalog.fromName(cleaned)
+            ?: if (cleaned.isBlank()) {
+                OperatorCatalog.byId(OperatorCatalog.ID_UNKNOWN)
+            } else {
+                OperatorCatalog.custom(
+                    cleaned,
+                    iranianFixed = lookup.countryCode.equals("IR", ignoreCase = true) ||
+                        OperatorCatalog.looksIranian(lookup.isp),
+                )
+            }
         return Result(
             operator = op,
             rawIsp = lookup.isp,
@@ -794,12 +808,24 @@ object IspResolver {
         return match.groupValues[1].toIntOrNull() ?: 0
     }
 
-    /** «AS31549 Aria Shatel PJSC» → «Aria Shatel» */
+    /**
+     * «AS31549 Aria Shatel PJSC» → «Aria Shatel»
+     *
+     * نام‌های سازمانی ISPها پر از پسوند حقوقی‌اند (PJSC/LLC/شرکت/سهامی خاص …)؛
+     * این تابع آن‌ها را می‌ریزد تا فقط نام تجاری بماند. اگر بعد از تمیزکاری هیچ
+     * نام معناداری نماند (مثل «Internet Service Provider»)، رشته‌ی خالی برمی‌گردد
+     * تا به‌جای یک اسم بی‌معنی، «نامشخص» نشان داده شود.
+     */
     fun cleanIspName(raw: String): String {
         var name = raw.trim().replace(Regex("^[Aa][Ss]\\d+\\s+"), "")
+        val withoutParens = name.replace(Regex("\\s*\\([^)]*\\)\\s*"), " ").trim()
+        if (withoutParens.isNotBlank()) name = withoutParens
         val suffixes = listOf(
             "PJSC", "PJS", "PLC", "LLC", "Ltd.", "Ltd", "Inc.", "Inc", "Co.", "Company", "Corporation",
+            "Corp.", "Corp", "GmbH", "AG", "S.A.", "SAS", "B.V.", "BV", "Limited", "Group",
             "(Private Joint Stock Company)", "Private Joint Stock Company",
+            "Telecommunications", "Telecommunication", "Communications", "Communication",
+            "شرکت", "سهامی", "عام", "خاص", "سهامی عام", "سهامی خاص", "گروه", "تعاونی", "مسئولیت", "محدود",
         )
         var changed = true
         while (changed) {
@@ -811,6 +837,25 @@ object IspResolver {
                 }
             }
         }
+        // پسوندهای حقوقی که *اول* نام می‌آیند («شرکت مخابرات» → «مخابرات»)
+        val prefixes = listOf("شرکت", "گروه", "Company", "The")
+        var trimmed = true
+        while (trimmed) {
+            trimmed = false
+            for (prefix in prefixes) {
+                if (name.length > prefix.length + 2 && name.startsWith("$prefix ", ignoreCase = true)) {
+                    name = name.drop(prefix.length + 1).trim()
+                    trimmed = true
+                }
+            }
+        }
+        // نام‌های عمومی که هیچ اطلاعاتی ندارند
+        val generic = listOf(
+            "internet service provider", "isp", "unknown", "unknown isp", "not available",
+            "private customer", "customer", "dynamic", "broadband", "residential",
+            "iran", "ایران", "iranian",
+        )
+        if (generic.any { name.equals(it, ignoreCase = true) }) return ""
         return name.take(28).trim()
     }
 }

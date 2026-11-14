@@ -159,6 +159,7 @@
     <string name="widget_paused_hint">Monitoring is off; numbers stay as they are</string>
     <string name="widget_updated_at">Updated %1$s</string>
     <string name="widget_refresh_desc">Refresh widget</string>
+    <string name="widget_fallback_text">Tap to refresh</string>
 
     <string name="about_view_repo">View on GitHub</string>
 

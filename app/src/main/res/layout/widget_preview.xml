@@ -47,7 +47,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:fontFamily="@font/vazirmatn_bold"
+                    android:textStyle="bold"
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:text="@string/widget_today"
@@ -57,7 +57,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:fontFamily="@font/vazirmatn_regular"
+                    android:textStyle="normal"
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:text="@string/app_name"
@@ -70,7 +70,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/widget_chip"
                 android:backgroundTint="#1FFFFFFF"
-                android:fontFamily="@font/vazirmatn_medium"
+                android:textStyle="bold"
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:paddingStart="8dp"
@@ -101,7 +101,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="@font/vazirmatn_bold"
+                android:textStyle="bold"
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:text="۱۲.۴"
@@ -113,14 +113,14 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="5dp"
                 android:layout_marginBottom="3dp"
-                android:fontFamily="@font/vazirmatn_medium"
+                android:textStyle="bold"
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:text="گیگابایت"
                 android:textColor="#A6B2CF"
                 android:textSize="12sp" />
 
-            <View
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1" />
@@ -131,7 +131,7 @@
                 android:layout_marginBottom="4dp"
                 android:background="@drawable/widget_chip"
                 android:backgroundTint="#1FFFFFFF"
-                android:fontFamily="@font/vazirmatn_bold"
+                android:textStyle="bold"
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:paddingStart="8dp"
@@ -168,18 +168,19 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <View
+                    <ImageView
                         android:layout_width="6dp"
                         android:layout_height="6dp"
                         android:background="@drawable/widget_dot"
-                        android:backgroundTint="#5CE9CF" />
+                        android:backgroundTint="#5CE9CF"
+                        android:contentDescription="@null" />
 
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="5dp"
                         android:layout_weight="1"
-                        android:fontFamily="@font/vazirmatn_regular"
+                        android:textStyle="normal"
                         android:includeFontPadding="false"
                         android:maxLines="1"
                         android:text="@string/widget_mobile"
@@ -191,7 +192,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:fontFamily="@font/vazirmatn_bold"
+                    android:textStyle="bold"
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:text="۷.۱ گیگابایت"
@@ -218,18 +219,19 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <View
+                    <ImageView
                         android:layout_width="6dp"
                         android:layout_height="6dp"
                         android:background="@drawable/widget_dot"
-                        android:backgroundTint="#7FB8FF" />
+                        android:backgroundTint="#7FB8FF"
+                        android:contentDescription="@null" />
 
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="5dp"
                         android:layout_weight="1"
-                        android:fontFamily="@font/vazirmatn_regular"
+                        android:textStyle="normal"
                         android:includeFontPadding="false"
                         android:maxLines="1"
                         android:text="@string/wifi"
@@ -241,7 +243,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:fontFamily="@font/vazirmatn_bold"
+                    android:textStyle="bold"
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:text="۵.۳ گیگابایت"
@@ -266,7 +268,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:fontFamily="@font/vazirmatn_regular"
+                    android:textStyle="normal"
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:text="@string/widget_remaining"
@@ -276,7 +278,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:fontFamily="@font/vazirmatn_bold"
+                    android:textStyle="bold"
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:text="۱۳.۶ گیگابایت"
@@ -325,7 +327,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
-                    android:fontFamily="@font/vazirmatn_medium"
+                    android:textStyle="bold"
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:text="@string/widget_pause"
@@ -356,7 +358,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
-                    android:fontFamily="@font/vazirmatn_medium"
+                    android:textStyle="bold"
                     android:includeFontPadding="false"
                     android:maxLines="1"
                     android:text="@string/widget_reports"
