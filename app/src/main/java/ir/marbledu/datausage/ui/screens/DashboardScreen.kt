@@ -1,6 +1,9 @@
 package ir.marbledu.datausage.ui.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -30,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,7 +48,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -86,6 +95,7 @@ import ir.marbledu.datausage.ui.MarbleCard
 import ir.marbledu.datausage.ui.Metric
 import ir.marbledu.datausage.ui.OffPeakUi
 import ir.marbledu.datausage.ui.OperatorBadge
+import ir.marbledu.datausage.ui.theme.deepBrandColor
 import ir.marbledu.datausage.ui.SectionTitle
 import ir.marbledu.datausage.ui.SplitBar
 import ir.marbledu.datausage.ui.StackedBarChart
@@ -109,6 +119,8 @@ fun DashboardScreen(
     val sessionTick by vm.tick.collectAsState()
     val appSurges by vm.appSurges.collectAsState()
     val offPeak by vm.offPeak.collectAsState()
+    val appBudget by vm.appBudget.collectAsState()
+    val surgeWatch by vm.surgeWatch.collectAsState()
     val marble = LocalMarbleColors.current
     val scheme = MaterialTheme.colorScheme
 
@@ -116,6 +128,8 @@ fun DashboardScreen(
     var showOffPeakDialog by remember { mutableStateOf(false) }
     LaunchedEffect(selectedTab, settings.offPeakEnabled) {
         if (selectedTab == 1 && settings.offPeakEnabled) vm.loadOffPeak()
+        if (selectedTab == 1) vm.loadAppBudget()
+        if (selectedTab == 1) vm.loadSurgeWatch()
     }
     val homeTabs = if (persian) listOf("امروز", "بسته و اپراتورها") else listOf("Today", "Plan & operators")
     val listState = rememberLazyListState()
@@ -141,6 +155,18 @@ fun DashboardScreen(
 
         if (!dashboard.hasUsageAccess) {
             item { UsageAccessBanner(persian = persian) }
+        }
+
+        // «هشدار زودهنگام جهش مصرف»: فقط وقتی واقعاً خبری هست، بالای صفحه می‌آید
+        // تا صفحه‌ی خانه شلوغ نشود؛ نسخه‌ی همیشه‌رو در تب «بسته و اپراتورها» است.
+        if (surgeWatch.result?.isAlert == true) {
+            item {
+                SurgeWatchCard(
+                    watch = surgeWatch,
+                    persian = persian,
+                    onRefresh = { vm.loadSurgeWatch(force = true) },
+                )
+            }
         }
 
         if (settings.sessionsCardEnabled) {
@@ -472,6 +498,18 @@ fun DashboardScreen(
                     onConfigure = { showOffPeakDialog = true },
                 )
             }
+
+            // قابلیت تازه‌ی ۱.۶.۴: سهم هر اپ از باقی‌مانده‌ی بسته + پایش جهش مصرف.
+            item {
+                AppBudgetCard(budget = appBudget, persian = persian)
+            }
+            item {
+                SurgeWatchCard(
+                    watch = surgeWatch,
+                    persian = persian,
+                    onRefresh = { vm.loadSurgeWatch(force = true) },
+                )
+            }
         }
     }
 
@@ -493,9 +531,23 @@ fun DashboardScreen(
 
 
 /**
- * کارت «اینترنت فعلی»: نشان و نام اپراتوری که همین الان اینترنت از آن می‌آید.
- * روی وای‌فای/هات‌اسپات هم اپراتور مودم یا گوشی میزبان و هم نوع منبع (هات‌اسپات/مودم)
- * نمایش داده می‌شود و در صورت مسدود شدن توسط VPN یا خطا، دلیل صریح نشان داده می‌شود.
+ * کارت «اپراتور و اینترنت فعلی» — کارت شاخص صفحه‌ی خانه.
+ *
+ * زبان طراحی این کارت عمداً «کارت اعتباری/شناسنامه» است، نه فهرست ساده:
+ *
+ *  ┌────────────────────────────────────────────────────────┐
+ *  │  ◉ لوگو    اینترنت فعلی · زنده        [ در حال پایش ]  │
+ *  │            Irancell · LTE                              │
+ *  │  5G · سیم‌کارت ۱ · MTN                      (نشان آبی)  │
+ *  │  ───────────────────────────────────────────────────   │
+ *  │  ↓ ۲۴٫۱ ک.ب/ث      ↑ ۳٫۴ ک.ب/ث      پینگ ۴۲ ms       │
+ *  └────────────────────────────────────────────────────────┘
+ *
+ *  - پس‌زمینه‌ی گرادیانی از رنگ خودِ اپراتور (امضای رنگی هر اپراتور)؛
+ *  - لوگو در کاشی سفید با حلقه‌ی نازک، اندازه‌ی بزرگ‌تر و وسط‌چین؛
+ *  - نام اپراتور درشت و نام لاتین/فنی آن ریز و کم‌رنگ زیرش (سلسله‌مراتب روشن)؛
+ *  - چیپ‌های فناوری شبکه، شماره‌ی سیم‌کارت و منبع وای‌فای/هات‌اسپات؛
+ *  - سرعت زنده و پینگ در یک ردیف پایانی با خط جداکننده.
  */
 @Composable
 private fun ConnectionCard(
@@ -507,10 +559,10 @@ private fun ConnectionCard(
     val tick by vm.tick.collectAsState()
     val network = tick?.network
     val scheme = MaterialTheme.colorScheme
+    val marble = LocalMarbleColors.current
     val type = network?.type ?: ConnectionType.OFFLINE
     val onWifi = type == ConnectionType.WIFI || type == ConnectionType.ETHERNET
     val override = settings.operatorOverride
-    val sim = if (override.isNotBlank()) OperatorCatalog.resolveName(override) else network?.simOperator
     val operator = when {
         network == null -> OperatorCatalog.byId(OperatorCatalog.ID_UNKNOWN)
         type == ConnectionType.CELLULAR && override.isNotBlank() -> OperatorCatalog.resolveName(override)
@@ -520,7 +572,11 @@ private fun ConnectionCard(
     val status = network?.wifiLookupStatus ?: IspResolver.LookupStatus.IDLE
     val sourceKind = network?.wifiSourceKind ?: IspResolver.WifiSourceKind.UNKNOWN
     val sourceLabel = NotificationFormatter.wifiSourceLabel(sourceKind, persian)
-    val simLabel = network?.simIdentity?.let { identity ->
+    val brand = Color(operator.brandColor)
+    val accent = Color(operator.accentColor)
+    val online = network?.isValidated == true && type != ConnectionType.OFFLINE
+
+    val slotLabel = network?.simIdentity?.let { identity ->
         val slot = identity.slotIndex?.let { index ->
             if (persian) "سیم‌کارت ${Formats.integer((index + 1).toLong(), true)}" else "SIM ${index + 1}"
         }
@@ -532,147 +588,327 @@ private fun ConnectionCard(
         }
     }
 
-    // کارت «اینترنت فعلی» با پنل شیشه‌ای: هاله‌ی رنگ اپراتور پشت شیشه می‌درخشد.
-    GlassPanel(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(26.dp),
-        tint = Color(operator.brandColor),
+    // نام نمایشی و زیرنویس فنی: نام فارسی درشت، نام لاتین/فنی ریز زیرش.
+    val displayName: String
+    val technicalName: String
+    when {
+        type == ConnectionType.OFFLINE -> {
+            displayName = if (persian) "بدون اتصال" else "Offline"
+            technicalName = if (persian) "اینترنت قطع است" else "No internet right now"
+        }
+        onWifi && !resolved -> {
+            displayName = when (sourceKind) {
+                IspResolver.WifiSourceKind.HOTSPOT_IPHONE,
+                IspResolver.WifiSourceKind.HOTSPOT_ANDROID,
+                IspResolver.WifiSourceKind.HOTSPOT_WINDOWS,
+                IspResolver.WifiSourceKind.HOTSPOT_METERED,
+                -> if (persian) "هات‌اسپات" else "Hotspot"
+                IspResolver.WifiSourceKind.ETHERNET -> if (persian) "اترنت" else "Ethernet"
+                else -> if (persian) "وای‌فای" else "Wi-Fi"
+            }
+            technicalName = when (status) {
+                IspResolver.LookupStatus.SEARCHING, IspResolver.LookupStatus.IDLE ->
+                    if (persian) "در حال شناسایی اپراتور…" else "Identifying operator…"
+                IspResolver.LookupStatus.CAPTIVE_PORTAL ->
+                    if (persian) "نیاز به ورود به صفحه‌ی وای‌فای" else "Sign-in required"
+                IspResolver.LookupStatus.VPN_BLOCKED ->
+                    if (persian) "VPN مانع بررسی شد" else "Blocked by VPN"
+                IspResolver.LookupStatus.FAILED ->
+                    if (persian) "اپراتور پیدا نشد" else "Operator not detected"
+                else -> if (persian) "شبکه‌ی محلی" else "Local network"
+            }
+        }
+        else -> {
+            displayName = operator.name(persian)
+            technicalName = buildList {
+                if (!persian) operator.fa.takeIf { it.isNotBlank() }?.let { add(it) }
+                val asn = network?.ispAsn ?: 0
+                if (onWifi && sourceLabel.isNotBlank()) add(sourceLabel)
+                if (onWifi && asn > 0) add(if (persian) "شبکه ${Formats.toPersianDigits(asn.toString())}" else "AS$asn")
+                if (type == ConnectionType.CELLULAR && !network?.mobileTech.isNullOrBlank()) {
+                    add(network?.mobileTech.orEmpty())
+                }
+            }.distinct().joinToString("  ·  ")
+        }
+    }
+    val fallbackTechnical = when {
+        type == ConnectionType.CELLULAR -> operator.en
+        onWifi -> if (persian) "اینترنت ثابت" else "Fixed internet"
+        else -> ""
+    }
+
+    // پالت کارت: رنگ برند اپراتور با کنتراست تضمین‌شده برای متن روی گرادیان.
+    val dark = marble.dark
+    // گرادیان کارت از رنگ خودِ اپراتور ساخته می‌شود، ولی تا حدی که متن سفید
+    // رویش خوانا بماند؛ هر اپراتور «امضای رنگی» خودش را می‌گیرد.
+    val offline = type == ConnectionType.OFFLINE
+    val heroStart = if (offline) scheme.surfaceContainerHigh else deepBrandColor(brand, 5.6f)
+    // هر دو سرِ گرادیان باید با متن سفید کنتراست کافی داشته باشند؛ اگر فقط سرِ
+    // اول تیره شود، رنگ مکمل برخی اپراتورها (زرد/نارنجی) انتهای کارت را روشن
+    // می‌کند و متن آن‌جا کم‌خوان می‌شود.
+    val heroEnd = if (offline) {
+        scheme.surfaceContainer
+    } else {
+        deepBrandColor(verticalPartner(heroStart, accent), 5.6f)
+    }
+    val ink = if (offline) scheme.onSurface else Color.White
+    val inkSoft = ink.copy(alpha = 0.88f)
+    val shape = RoundedCornerShape(28.dp)
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(heroStart, heroEnd))),
     ) {
-        Column(
-            Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OperatorBadge(
-                operator,
-                size = 42.dp,
-                transportIcon = when (type) {
-                    ConnectionType.WIFI, ConnectionType.ETHERNET -> MIcons.Wifi
-                    ConnectionType.CELLULAR -> MIcons.Signal
-                    else -> null
-                },
+        // درخشش نرم و حلقه‌های تزئینی: حس «هولوگرام» بدون شلوغی.
+        Canvas(Modifier.matchParentSize().clip(shape)) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    // روی کارت رنگی، درخشش کم است تا متن سفید کم‌خوان نشود.
+                    listOf(Color.White.copy(alpha = if (!offline) 0.05f else if (dark) 0.16f else 0.30f), Color.Transparent),
+                    center = Offset(size.width * 0.92f, size.height * 0.02f),
+                    radius = size.width * 0.55f,
+                ),
+                radius = size.width * 0.55f,
+                center = Offset(size.width * 0.92f, size.height * 0.02f),
             )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text(
-                    text = if (persian) "اینترنت فعلی" else "Current internet",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = scheme.onSurfaceVariant,
-                )
-                Text(
-                    text = when {
-                        type == ConnectionType.OFFLINE -> if (persian) "بدون اتصال" else "Offline"
-                        onWifi && !resolved -> when (sourceKind) {
-                            IspResolver.WifiSourceKind.HOTSPOT_IPHONE,
-                            IspResolver.WifiSourceKind.HOTSPOT_ANDROID,
-                            IspResolver.WifiSourceKind.HOTSPOT_WINDOWS,
-                            IspResolver.WifiSourceKind.HOTSPOT_METERED,
-                            -> if (persian) "وای‌فای ($sourceLabel)" else "Wi-Fi ($sourceLabel)"
-                            IspResolver.WifiSourceKind.ETHERNET -> if (persian) "اترنت" else "Ethernet"
-                            else -> if (persian) "وای‌فای" else "Wi-Fi"
-                        }
-                        else -> operator.name(persian)
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = when {
-                        onWifi && resolved -> buildString {
-                            append(
-                                if (sourceLabel.isNotBlank()) {
-                                    if (persian) "از طریق $sourceLabel (وای‌فای)" else "over $sourceLabel (Wi-Fi)"
-                                } else {
-                                    if (persian) "از طریق وای‌فای" else "over Wi-Fi"
-                                },
+            drawCircle(
+                color = ink.copy(alpha = 0.06f),
+                radius = size.width * 0.34f,
+                center = Offset(size.width * 0.04f, size.height * 1.06f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f),
+            )
+            drawRect(
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(
+                            alpha = if (!offline) 0.04f else if (dark) 0.08f else 0.18f,
+                        ),
+                        Color.Transparent,
+                    ),
+                    endY = size.height * 0.40f,
+                ),
+                size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.40f),
+            )
+        }
+        Box(
+            Modifier.matchParentSize().border(
+                1.dp,
+                ink.copy(alpha = if (dark) 0.14f else 0.22f),
+                shape,
+            ),
+        )
+
+        CompositionLocalProvider(LocalContentColor provides ink) {
+            Column(
+                Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // ── سربرگ: لوگوی اپراتور + نام + وضعیت
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OperatorBadge(
+                        operator,
+                        size = 54.dp,
+                        transportIcon = when (type) {
+                            ConnectionType.WIFI, ConnectionType.ETHERNET -> MIcons.Wifi
+                            ConnectionType.CELLULAR -> MIcons.Signal
+                            else -> null
+                        },
+                    )
+                    Spacer(Modifier.width(13.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(if (online) Color(0xFF4ADE80) else ink.copy(alpha = 0.6f)),
                             )
-                            val asn = network?.ispAsn ?: 0
-                            if (asn > 0) {
-                                append("  •  ")
-                                append(if (persian) "شبکه ${Formats.toPersianDigits(asn.toString())}" else "AS$asn")
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = when {
+                                    type == ConnectionType.OFFLINE ->
+                                        if (persian) "آفلاین" else "Offline"
+                                    type == ConnectionType.CELLULAR ->
+                                        if (persian) "داده موبایل" else "Mobile data"
+                                    type == ConnectionType.ETHERNET -> if (persian) "اترنت" else "Ethernet"
+                                    else -> if (persian) "وای‌فای" else "Wi-Fi"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = inkSoft,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            if (network?.vpnActive == true) {
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "VPN",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ink.copy(alpha = 0.55f),
+                                )
                             }
                         }
-                        onWifi -> when (status) {
-                            IspResolver.LookupStatus.SEARCHING, IspResolver.LookupStatus.IDLE ->
-                                if (persian) "در حال شناسایی اپراتور وای‌فای…" else "Identifying Wi-Fi operator…"
-                            IspResolver.LookupStatus.CAPTIVE_PORTAL ->
-                                if (persian) "نیاز به ورود به صفحه‌ی وای‌فای" else "Wi-Fi sign-in required"
-                            IspResolver.LookupStatus.VPN_BLOCKED ->
-                                if (persian) "VPN مانع بررسی مستقیم شد (دوباره امتحان کن)" else "VPN blocked direct check (tap re-check)"
-                            IspResolver.LookupStatus.FAILED ->
-                                if (persian) "اپراتور وای‌فای پیدا نشد — دوباره بزن" else "Couldn't detect Wi-Fi operator — tap re-check"
-                            else -> if (persian) "وای‌فای" else "Wi-Fi"
+                        Text(
+                            text = displayName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val sub = technicalName.ifBlank { fallbackTechnical }
+                        if (sub.isNotBlank()) {
+                            Text(
+                                text = sub,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = inkSoft,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                        type == ConnectionType.CELLULAR && !network?.mobileTech.isNullOrBlank() ->
-                            (if (persian) "داده موبایل" else "Mobile data") + " (${network?.mobileTech})"
-                        else -> networkLabel(type.name, persian)
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (onWifi && !resolved && (status == IspResolver.LookupStatus.FAILED || status == IspResolver.LookupStatus.VPN_BLOCKED)) {
-                        scheme.error
-                    } else scheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    }
+                    if (onWifi) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(ink.copy(alpha = 0.14f))
+                                .clickable(onClick = onRetry)
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(MIcons.Refresh, null, Modifier.size(13.dp), tint = ink)
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    if (persian) "بررسی" else "Re-check",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ink,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── چیپ‌های هویت: فناوری شبکه، سیم‌کارت، اپراتور، منبع
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (type == ConnectionType.CELLULAR && !network?.mobileTech.isNullOrBlank()) {
+                        HeroChip(network?.mobileTech.orEmpty(), ink, emphasize = true)
+                    }
+                    if (slotLabel != null) HeroChip(slotLabel, ink)
+                    HeroChip(operator.en, ink)
+                    if (onWifi && sourceLabel.isNotBlank()) HeroChip(sourceLabel, ink)
+                    if (network?.isValidated == true) {
+                        HeroChip(if (persian) "اینترنت سالم" else "Online", ink)
+                    }
+                }
+
+                // ── ردیف پایانی: سرعت زنده + پینگ، با خط جداکننده‌ی مویی
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(ink.copy(alpha = 0.16f)),
                 )
-            }
-            if (onWifi) {
-                TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-                    Icon(MIcons.Refresh, null, Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (persian) "بررسی" else "Re-check", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
-        if (settings.uiMode == UiMode.ADVANCED && onWifi && resolved) {
-            val detailParts = buildList {
-                val ispName = network?.ispName.orEmpty()
-                if (ispName.isNotBlank()) {
-                    add(if (persian) "سرویس‌دهنده: $ispName" else "ISP: $ispName")
-                }
-                val methodLabel = detectionMethodLabel(network?.wifiDetectionMethod, persian)
-                if (methodLabel.isNotBlank()) add(methodLabel)
-            }
-            if (detailParts.isNotEmpty()) {
-                Text(
-                    text = detailParts.joinToString("  •  "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (settings.uiMode == UiMode.ADVANCED || type == ConnectionType.CELLULAR) {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (settings.uiMode == UiMode.ADVANCED && network?.isValidated == true) {
-                    InfoChip(text = if (persian) "آنلاین" else "Online", color = scheme.secondary)
-                }
-                if (settings.uiMode == UiMode.ADVANCED && network?.vpnActive == true) {
-                    InfoChip(text = if (persian) "VPN روشن" else "VPN on", color = scheme.tertiary)
-                }
-                if (settings.uiMode == UiMode.ADVANCED && onWifi && sourceLabel.isNotBlank()) {
-                    InfoChip(text = sourceLabel, color = scheme.primary)
-                }
-                if (settings.uiMode == UiMode.ADVANCED && onWifi && !network?.wifiSsid.isNullOrBlank()) {
-                    InfoChip(text = network?.wifiSsid.orEmpty(), color = scheme.secondary)
-                }
-                if (type == ConnectionType.CELLULAR && simLabel != null) {
-                    InfoChip(text = simLabel, color = scheme.primary)
-                } else if (settings.uiMode == UiMode.ADVANCED && onWifi && sim != null) {
-                    InfoChip(
-                        text = (if (persian) "سیم‌کارت داده: " else "Data SIM: ") + sim.name(persian),
-                        color = Color(sim.brandColor).let { c -> if (LocalMarbleColors.current.dark) scheme.primary else c },
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    HeroStat(
+                        icon = MIcons.Download,
+                        label = context.getString(R.string.download),
+                        value = Formats.compactSpeed(tick?.downBytesPerSecond ?: 0.0, persian),
+                        ink = ink,
+                        modifier = Modifier.weight(1f),
+                    )
+                    HeroStat(
+                        icon = MIcons.Upload,
+                        label = context.getString(R.string.upload),
+                        value = Formats.compactSpeed(tick?.upBytesPerSecond ?: 0.0, persian),
+                        ink = ink,
+                        modifier = Modifier.weight(1f),
+                    )
+                    HeroStat(
+                        icon = MIcons.Timer,
+                        label = if (persian) "پینگ" else "Ping",
+                        value = if ((vm.dashboard.value.averagePingMs) > 0) {
+                            Formats.integer(vm.dashboard.value.averagePingMs.toLong(), persian) +
+                                (if (persian) " م.ث" else " ms")
+                        } else "—",
+                        ink = ink,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
+    }
+}
+
+/** چیپ شیشه‌ای روی کارت اپراتور؛ با یک نسخه‌ی تأکیدی برای فناوری شبکه. */
+@Composable
+private fun HeroChip(text: String, ink: Color, emphasize: Boolean = false) {
+    // چیپ باید «سطح» را از پس‌زمینه جدا کند، نه روشن‌ترش کند: روی گرادیان تیره‌ی
+    // برند یک لایه‌ی مشکی محو می‌نشیند تا متن سفید کنتراست کافی داشته باشد
+    // (لایه‌ی سفید، متن سفید را روی پس‌زمینه‌ی روشن‌تر می‌شست).
+    val shade = if (ink.luminance() > 0.5f) Color.Black else ink
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(shade.copy(alpha = if (emphasize) 0.26f else 0.16f))
+            .border(
+                width = 1.dp,
+                color = ink.copy(alpha = if (emphasize) 0.42f else 0.22f),
+                shape = RoundedCornerShape(50),
+            )
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (emphasize) FontWeight.Bold else FontWeight.Medium,
+            color = ink,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * رنگ دوم گرادیان: رنگ تأکیدی اپراتور، هم‌روشنایی‌شده با رنگ اول تا گرادیان
+ * یکدست دیده شود و رنگ‌های ناهمگون (مثل زرد + بنفش) کنار هم «کثیف» نشوند.
+ */
+private fun verticalPartner(start: Color, accent: Color): Color {
+    val blended = lerp(accent, start, 0.42f)
+    return lerp(blended, Color.Black, 0.16f)
+}
+
+/** یک عدد کلیدی (دانلود/آپلود/پینگ) روی کارت اپراتور. */
+@Composable
+private fun HeroStat(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    ink: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(12.dp), tint = ink.copy(alpha = 0.75f))
+            Spacer(Modifier.width(4.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = ink.copy(alpha = 0.75f),
+                maxLines = 1,
+            )
         }
+        Text(
+            value,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

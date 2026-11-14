@@ -102,6 +102,26 @@ private val ExtraChartColors = listOf(
 
 private fun mix(a: Color, b: Color, t: Float): Color = lerp(a, b, t.coerceIn(0f, 1f))
 
+/**
+ * رنگ برند را تا حدی تیره می‌کند که متن سفید روی آن خوانا بماند
+ * (نسبت کنتراست دست‌کم [minRatio]).
+ *
+ * چرا لازم است؟ رنگ برند بعضی اپراتورها روشن است (زرد ایرانسل، نارنجی های‌وب)
+ * و متن سفید روی آن خوانا نیست. کارت اپراتور صفحه‌ی خانه از همین تابع برای
+ * ساختن پس‌زمینه‌ی گرادیانی استفاده می‌کند تا «امضای رنگی» هر اپراتور حفظ شود
+ * ولی متن همیشه خوانا باشد.
+ */
+fun deepBrandColor(color: Color, minRatio: Float = 5.0f): Color {
+    if (contrastRatio(color, Color.White) >= minRatio) return color
+    var low = 0f
+    var high = 1f
+    repeat(24) {
+        val mid = (low + high) / 2f
+        if (contrastRatio(mix(color, Color.Black, mid), Color.White) >= minRatio) high = mid else low = mid
+    }
+    return mix(color, Color.Black, high)
+}
+
 /** WCAG contrast for opaque foreground/background colors. */
 internal fun contrastRatio(a: Color, b: Color): Float =
     (maxOf(a.luminance(), b.luminance()) + 0.05f) /

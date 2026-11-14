@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import ir.marbledu.datausage.MarbleDuApp
+import ir.marbledu.datausage.data.AppBudget
 import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.AppSurgeDetector
@@ -28,6 +29,8 @@ import ir.marbledu.datausage.data.HourOperatorTraffic
 import ir.marbledu.datausage.data.SimIdentity
 import ir.marbledu.datausage.data.UiMode
 import ir.marbledu.datausage.data.AppTextSize
+import ir.marbledu.datausage.data.SurgePrediction
+import ir.marbledu.datausage.data.UsageForecast
 import ir.marbledu.datausage.data.OperatorDayStat
 import ir.marbledu.datausage.data.OperatorRangeRow
 import ir.marbledu.datausage.data.UsageInsights
@@ -200,9 +203,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _offPeak = MutableStateFlow(OffPeakUi())
     val offPeak: StateFlow<OffPeakUi> = _offPeak.asStateFlow()
 
+    /** «سهم اپ‌ها از بسته» — قابلیت تازه. */
+    private val _appBudget = MutableStateFlow(AppBudgetUi())
+    val appBudget: StateFlow<AppBudgetUi> = _appBudget.asStateFlow()
+
+    /** «هشدار زودهنگام جهش مصرف» — قابلیت تازه. */
+    private val _surgeWatch = MutableStateFlow(SurgeWatchUi())
+    val surgeWatch: StateFlow<SurgeWatchUi> = _surgeWatch.asStateFlow()
+
     private var insightsJob: Job? = null
     private var surgesJob: Job? = null
     private var offPeakJob: Job? = null
+    private var appBudgetJob: Job? = null
+    private var surgeWatchJob: Job? = null
 
     private val _operatorRange = MutableStateFlow(OperatorRangeUi())
     val operatorRange: StateFlow<OperatorRangeUi> = _operatorRange.asStateFlow()
@@ -285,6 +298,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadInsights()
         loadUsage(_usage.value.range)
         loadAppSurges()
+        loadAppBudget()
+        loadSurgeWatch()
         if (settings.value.offPeakEnabled) loadOffPeak()
         // تاریخچه‌ی ۳۰روزه فقط بعد از باز شدن تب گزارش خوانده می‌شود؛ بار اول
         // ورود به خانه نباید ده‌ها query تاریخی را هم‌زمان اجرا کند.
@@ -603,6 +618,173 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 todayWifiOffPeak = todayWifi.total,
                 monthMobileOffPeak = monthMob.total,
                 monthWifiOffPeak = monthWifi.total,
+            )
+        }
+    }
+
+    // ------------------------------------------------- سهم اپ‌ها از بسته (۱.۶.۴)
+    /**
+     * «سهم هر اپ از بسته»: مصرف دوره‌ی جاری را به تفکیک اپ می‌خواند و با
+     * باقی‌مانده‌ی بسته و روزهای مانده ترکیب می‌کند تا برای هر اپ یک سهم مجاز
+     * حساب شود. برای این‌که صفحه سریع باز شود، نتیجه ۲ دقیقه کش می‌شود.
+     */
+    fun loadAppBudget(force: Boolean = false) {
+        if (!repository.hasUsageAccess()) {
+            _appBudget.value = AppBudgetUi(hasUsageAccess = false)
+            return
+        }
+        if (appBudgetJob?.isActive == true) return
+        val loaded = _appBudget.value.loadedAt
+        if (!force && loaded > 0L && System.currentTimeMillis() - loaded < 2 * 60 * 1000L) return
+        appBudgetJob = viewModelScope.launch(Dispatchers.IO) {
+            _appBudget.value = _appBudget.value.copy(loading = true)
+            val currentSettings = settings.value
+            val now = System.currentTimeMillis()
+            val dayStart = TimeMath.dayStart(now)
+            val cycleStart = TimeMath.cycleStart(now, currentSettings.billingCycleDay)
+            val epoch = currentSettings.statsEpochMillis
+            val from = if (epoch > 0L) maxOf(cycleStart, epoch) else cycleStart
+
+            // مصرف هر اپ در همین دوره (فقط موبایل؛ وای‌فای از بسته کم نمی‌کند).
+            val mobileApps = runCatching {
+                repository.usageByApp(from, now, ConnectionType.CELLULAR)
+            }.getOrDefault(emptyList())
+            val spends = mobileApps.map {
+                AppBudget.AppSpend(it.packageName, it.label, it.bytes)
+            }
+            val usedMobile = if (currentSettings.dataCapBytes > 0L) {
+                repository.aggregateTraffic(from, now, ConnectionType.CELLULAR, epoch).total
+            } else {
+                spends.sumOf { it.bytes }
+            }
+            val daysLeft = UsagePlanner.daysLeftInCycle(now, currentSettings.billingCycleDay)
+            val elapsedDays = (((now - from) / 86_400_000L).toInt() + 1).coerceAtLeast(1)
+            val plan = AppBudget.plan(
+                spends = spends,
+                capBytes = currentSettings.dataCapBytes,
+                usedBytes = usedMobile,
+                daysLeftInCycle = daysLeft,
+                elapsedDays = elapsedDays,
+            )
+
+            // تاریخچه‌ی روزانه برای پیش‌بینی مصرف امروز و پایان دوره.
+            val history = repository.dailyTotals(21, ConnectionType.CELLULAR, epoch).map {
+                UsageForecast.Day(it.startMillis, it.bytes)
+            }
+            val todayMobile = repository.aggregateTraffic(dayStart, now, ConnectionType.CELLULAR, epoch).total
+            val todayEstimate = UsageForecast.estimateToday(
+                history = history.filter { it.dayStart < dayStart },
+                todayStart = dayStart,
+                nowMillis = now,
+                todayBytes = todayMobile,
+            )
+            val forecast = if (currentSettings.dataCapBytes > 0L) {
+                UsageForecast.estimateCycle(
+                    history = history.filter { it.dayStart < dayStart },
+                    capBytes = currentSettings.dataCapBytes,
+                    usedBytes = usedMobile,
+                    daysLeftInCycle = daysLeft,
+                    todayMillis = now,
+                )
+            } else null
+
+            _appBudget.value = AppBudgetUi(
+                loading = false,
+                loadedAt = now,
+                plan = plan,
+                forecast = forecast,
+                todayEstimate = todayEstimate,
+                hasUsageAccess = true,
+            )
+        }
+    }
+
+    // ------------------------------------- هشدار زودهنگام جهش مصرف (۱.۶.۴)
+    /**
+     * مصرف همین ساعت را با میانگین همان ساعت در ۷ روز گذشته مقایسه می‌کند.
+     * اگر شیب مصرف تند شده باشد، کارت «هشدار زودهنگام» نمایش داده می‌شود؛
+     * یعنی قبل از تمام‌شدن بسته خبر می‌دهیم، نه بعد از آن.
+     */
+    fun loadSurgeWatch(force: Boolean = false) {
+        if (!repository.hasUsageAccess()) {
+            _surgeWatch.value = SurgeWatchUi()
+            return
+        }
+        if (surgeWatchJob?.isActive == true) return
+        val checked = _surgeWatch.value.checkedAt
+        if (!force && checked > 0L && System.currentTimeMillis() - checked < 60 * 1000L) return
+        surgeWatchJob = viewModelScope.launch(Dispatchers.IO) {
+            _surgeWatch.value = _surgeWatch.value.copy(loading = true)
+            val app = getApplication<Application>()
+            val currentSettings = settings.value
+            val persian = LocaleHelper.isPersian(currentSettings.language)
+            val now = System.currentTimeMillis()
+            val cal = java.util.Calendar.getInstance().apply {
+                timeInMillis = now
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            val hourStart = cal.timeInMillis
+            val minutesIntoHour = (((now - hourStart) / 60_000L).toInt() + 1).coerceIn(1, 60)
+            val currentHour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+
+            // مصرف همین ساعت (از شمارنده‌ی موبایل).
+            val hourBytes = runCatching {
+                repository.aggregateTraffic(hourStart, now, ConnectionType.CELLULAR, 0L).total
+            }.getOrDefault(0L)
+
+            // میانگین همین ساعت در ۷ روز گذشته، از دفتر ثبت اپراتور.
+            var baselineSum = 0L
+            var samples = 0
+            for (daysAgo in 1..7) {
+                val day = TimeMath.dayStart(now) - daysAgo * 86_400_000L
+                val rows = runCatching { UsageLedger.hourlyForDay(app, day) }
+                    .getOrDefault(emptyList())
+                    .filter { it.hour == currentHour && it.transport == UsageLedger.MOBILE }
+                if (rows.isNotEmpty()) {
+                    baselineSum += rows.sumOf { it.total }
+                    samples++
+                }
+            }
+            val baseline = if (samples > 0) baselineSum / samples else 0L
+
+            // باقی‌مانده‌ی بسته (اگر سقف تعیین شده باشد) — از ابتدای دوره‌ی
+            // صورتحساب، دقیقاً همان عددی که در کارت بسته دیده می‌شود.
+            val usedMobile = if (currentSettings.dataCapBytes > 0L) {
+                val cycleStart = TimeMath.cycleStart(now, currentSettings.billingCycleDay)
+                val epoch = currentSettings.statsEpochMillis
+                val from = if (epoch > 0L) maxOf(cycleStart, epoch) else cycleStart
+                runCatching {
+                    repository.aggregateTraffic(from, now, ConnectionType.CELLULAR, epoch).total
+                }.getOrDefault(0L)
+            } else 0L
+            val remaining = (currentSettings.dataCapBytes - usedMobile).coerceAtLeast(0L)
+
+            val result = SurgePrediction.evaluate(
+                currentHourBytes = hourBytes,
+                baselineHourBytes = baseline,
+                minutesIntoHour = minutesIntoHour,
+                remainingCapBytes = remaining,
+            )
+
+            // اپ پرمصرف همین ساعت، تا کاربر بداند «کجا را محدود کند».
+            val appsThisHour = runCatching {
+                repository.usageByApp(hourStart, now, ConnectionType.CELLULAR)
+            }.getOrDefault(emptyList())
+            val top = appsThisHour.maxByOrNull { it.bytes }
+            val label = top?.let {
+                ir.marbledu.datausage.data.OperatorCatalog.specialUidLabel(it.uid, persian)
+                    ?: it.label
+            }.orEmpty()
+
+            _surgeWatch.value = SurgeWatchUi(
+                loading = false,
+                checkedAt = now,
+                result = result,
+                topAppLabel = label,
+                topAppBytes = top?.bytes ?: 0L,
+                remainingCapBytes = remaining,
             )
         }
     }

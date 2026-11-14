@@ -10,9 +10,18 @@ and want a logo removed or replaced, please open an issue.
 
 | Logos | Source |
 |---|---|
-| MCI, Irancell, Shatel (also used for Shatel Mobile), Asiatech, HiWEB, Pars Online, MobinNet, SabaNet, Pishgaman, Zi-Tel, TCI | [`persianlabs/icons`](https://github.com/persianlabs/icons) (repository licensed MIT; logos remain trademarks of their owners) – rasterised from SVG, some cropped to the emblem |
-| Rightel | Official RighTel emblem published on public logo directories, cropped to the ring only and re-padded on a 192×192 transparent canvas so the mark is never clipped (v۱.۶.۳) |
-| Taliya, ApTel, SamanTel, LotusTel, TeleKish, MTCE, Datak, Fanava, Afranet, Mabna Telecom, MahanNet, Laser, TIC, Respina | Publicly published logo images found via web image search (operator sites, Wikipedia, logo directories), trimmed and resized |
+| MCI (Hamrah-e Aval), Irancell, RighTel, Taliya, ApTel, SamanTel, LotusTel, TeleKish, MTCE (Spadan) | [`MohammadTaghipour/pars_validator`](https://github.com/MohammadTaghipour/pars_validator) – `assets/icons/operators`, rasterised from the SVG sources (logos remain trademarks of their owners) |
+| Shatel (also used for Shatel Mobile), Asiatech, HiWEB, Pars Online, MobinNet, SabaNet, Pishgaman, Zi-Tel | [`persianlabs/icons`](https://github.com/persianlabs/icons) – rasterised from the SVG sources |
+| TCI, Fanava, Laser, Mabna Telecom, Datak, Afranet, MahanNet, Respina, TIC | Publicly published logo images found via web image search (operator sites, Wikipedia, logo directories) |
+
+**Preparation (v۱.۶.۴):** all logos went through one pipeline so they look like a set —
+transparent background, empty margins trimmed, the mark fitted into a square 256×256
+canvas with equal padding on all four sides. Nothing is cropped, stretched or
+recoloured; the app only picks a display scale per logo (`OperatorLogos.fitScale`) so
+wide wordmarks do not look smaller than square emblems.
+
+A rendered contact sheet of all bundled logos (white tile on the app's dark surface)
+lives at `branding/operator-logos-preview.png`.
 
 Anarestan and Petiak have no bundled logo yet (no trustworthy source was found); the
 app falls back to the coloured letter badge for them and for any unknown ISP.
