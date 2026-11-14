@@ -22,6 +22,7 @@ import ir.marbledu.datausage.data.NetworkSnapshot
 import ir.marbledu.datausage.data.NetworkStatsReader
 import ir.marbledu.datausage.data.NotificationLockVisibility
 import ir.marbledu.datausage.data.OperatorCatalog
+import ir.marbledu.datausage.data.OperatorBrand
 import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.TimeMath
@@ -467,7 +468,12 @@ class MonitorService : Service() {
         }
 
         val palette = ThemePalette.of(settings.palette)
-        val accent = MonitoringNotification.accentColor(palette)
+        val brand = OperatorBrand.gradient(snapshot.operator)
+        val accent = if (snapshot.type == ConnectionType.OFFLINE) {
+            MonitoringNotification.accentColor(palette)
+        } else {
+            brand.middle
+        }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -487,7 +493,7 @@ class MonitorService : Service() {
         // آیکون بزرگِ رنگی + رنگ لهجه؛ اعلان ظاهر تازه و هم‌رنگ اپ می‌گیرد.
         runCatching {
             builder.setLargeIcon(
-                Icon.createWithBitmap(MonitoringNotification.largeIcon(this, accent)),
+                Icon.createWithBitmap(MonitoringNotification.largeIcon(this, accent, brand.end)),
             )
         }
 

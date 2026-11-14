@@ -37,7 +37,7 @@ import ir.marbledu.datausage.ui.theme.ThemePalette
 object MonitoringNotification {
 
     /** آیکون بزرگِ اعلان: حلقه‌ی رنگی با فلش‌های دانلود/آپلود. */
-    fun largeIcon(context: Context, accent: Int): android.graphics.Bitmap {
+    fun largeIcon(context: Context, accent: Int, gradientEnd: Int = blend(accent, 0xFF10131C.toInt(), 0.55f)): android.graphics.Bitmap {
         val size = context.resources.getDimensionPixelSize(android.R.dimen.app_icon_size)
             .coerceIn(48, 128)
         val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
@@ -49,7 +49,7 @@ object MonitoringNotification {
         val rect = android.graphics.RectF(0f, 0f, size.toFloat(), size.toFloat())
         paint.shader = android.graphics.LinearGradient(
             0f, 0f, size.toFloat(), size.toFloat(),
-            intArrayOf(accent, blend(accent, 0xFF10131C.toInt(), 0.55f)),
+            intArrayOf(accent, gradientEnd),
             null,
             android.graphics.Shader.TileMode.CLAMP,
         )
