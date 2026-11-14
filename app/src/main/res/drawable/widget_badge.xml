@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- نشان گرد کنار عنوان؛ رنگش در زمان اجرا از پالت تم تزریق می‌شود. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <solid android:color="#FFFFFFFF" />
+</shape>

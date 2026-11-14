@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- کپسول نشان وضعیت و درصد؛ رنگش در زمان اجرا تزریق می‌شود. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="20dp" />
+    <solid android:color="#FFFFFFFF" />
+</shape>

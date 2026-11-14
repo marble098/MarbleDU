@@ -143,11 +143,22 @@
     <string name="ui_mode_advanced_desc">جزئیات کامل، گزارش‌های پیشرفته و امکانات حرفه‌ای</string>
 
     <string name="widget_settings">تنظیمات ویجت</string>
-    <string name="widget_settings_desc">محتوا و ظاهر ویجت صفحه‌ی اصلی را انتخاب کنید</string>
+    <string name="widget_settings_desc">محتوا و ظاهر ویجت صفحه‌ی اصلی را انتخاب کنید؛ ویجت را بکشید و بزرگ کنید تا جزئیات بیشتری نشان دهد</string>
     <string name="widget_show_operator">نمایش نام و لوگو اپراتور</string>
     <string name="widget_show_cap">نمایش سقف بسته و پیشرفت</string>
     <string name="widget_detailed">حالت کامل (جزئیات بیشتر)</string>
     <string name="widget_big_text">اندازه متن بزرگ</string>
+    <string name="widget_remaining">باقی‌مانده</string>
+    <string name="widget_cap_of">%1$s از %2$s</string>
+    <string name="widget_pause">توقف پایش</string>
+    <string name="widget_resume">شروع پایش</string>
+    <string name="widget_reports">گزارش‌ها</string>
+    <string name="widget_status_on">در حال پایش</string>
+    <string name="widget_status_off">پایش خاموش</string>
+    <string name="widget_need_access">برای دیدن آمار، دسترسی مصرف را فعال کن</string>
+    <string name="widget_paused_hint">پایش خاموش است؛ آمار ثابت می‌ماند</string>
+    <string name="widget_updated_at">به‌روزرسانی %1$s</string>
+    <string name="widget_refresh_desc">به‌روزرسانی ویجت</string>
 
     <string name="about_view_repo">مشاهده در گیت‌هاب</string>
 

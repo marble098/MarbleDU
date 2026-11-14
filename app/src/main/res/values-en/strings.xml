@@ -143,11 +143,22 @@
     <string name="ui_mode_advanced_desc">Full details, advanced reports and professional features</string>
 
     <string name="widget_settings">Widget settings</string>
-    <string name="widget_settings_desc">Choose widget content and appearance</string>
+    <string name="widget_settings_desc">Pick what the home-screen widget shows; drag and resize it to reveal more detail</string>
     <string name="widget_show_operator">Show operator name and logo</string>
     <string name="widget_show_cap">Show data cap and progress</string>
     <string name="widget_detailed">Detailed mode</string>
     <string name="widget_big_text">Big text</string>
+    <string name="widget_remaining">Left</string>
+    <string name="widget_cap_of">%1$s of %2$s</string>
+    <string name="widget_pause">Pause</string>
+    <string name="widget_resume">Resume</string>
+    <string name="widget_reports">Reports</string>
+    <string name="widget_status_on">Monitoring</string>
+    <string name="widget_status_off">Paused</string>
+    <string name="widget_need_access">Enable usage access to see your data</string>
+    <string name="widget_paused_hint">Monitoring is off; numbers stay as they are</string>
+    <string name="widget_updated_at">Updated %1$s</string>
+    <string name="widget_refresh_desc">Refresh widget</string>
 
     <string name="about_view_repo">View on GitHub</string>
 
