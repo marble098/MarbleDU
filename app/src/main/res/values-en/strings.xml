@@ -184,8 +184,8 @@
     <string name="overlay_notification_title">Usage lens is running</string>
     <string name="overlay_notification_text">Live speed and today’s usage are shown on screen</string>
     <string name="overlay_stop">Close bubble</string>
-    <string name="widget_follow_theme">Follow the app theme</string>
-    <string name="widget_follow_theme_desc">Widget numbers and buttons take the colors of your theme</string>
+    <string name="widget_follow_theme">Match the operator and app theme</string>
+    <string name="widget_follow_theme_desc">While connected, the widget card uses the current operator\'s gradient (same as the home card and notification); offline it uses your theme colors</string>
     <string name="widget_quick_actions">Widget shortcuts</string>
     <string name="widget_quick_actions_desc">Pause/resume monitoring and 30-day reports buttons</string>
     <string name="insights_title">Usage insight</string>

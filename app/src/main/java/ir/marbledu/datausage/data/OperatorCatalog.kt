@@ -43,7 +43,7 @@ object OperatorCatalog {
     /** اپراتورهای موبایل و MVNOها. ترتیب مهم است: نام‌های خاص‌تر جلوتر. */
     val iranian: List<Operator> = listOf(
         Operator(
-            "mci", "همراه اول", "MCI", "MCI", 0xFF00A6C8, 0xFF0B4F8A,
+            "mci", "همراه اول", "MCI", "MCI", 0xFF0095DA, 0xFF295CAB,
             mncs = listOf("11"), asns = listOf(197207),
             keywords = listOf(
                 "mci", "hamrah", "همراه", "mobilecommunicationcompanyofiran",
@@ -52,72 +52,70 @@ object OperatorCatalog {
             isMobile = true,
         ),
         Operator(
-            "irancell", "ایرانسل", "Irancell", "MTN", 0xFFFFC61A, 0xFFF39200,
+            "irancell", "ایرانسل", "Irancell", "MTN", 0xFFFFCC00, 0xFFF39200,
             mncs = listOf("35"), asns = listOf(44244),
             keywords = listOf("irancell", "ایرانسل", "mtn", "mtnirancell", "irancelltd"),
             isMobile = true,
         ),
         Operator(
-            "rightel", "رایتل", "Rightel", "RTL", 0xFF9B2FD6, 0xFFE0218A,
+            "rightel", "رایتل", "Rightel", "RTL", 0xFF9B2776, 0xFFE35BB8,
             mncs = listOf("20"), asns = listOf(57218),
             keywords = listOf("rightel", "رایتل", "tamintelecom"),
             isMobile = true,
         ),
         Operator(
-            "shatel_mobile", "شاتل موبایل", "Shatel Mobile", "SHM", 0xFFE4002B, 0xFFFF6B4A,
+            "shatel_mobile", "شاتل موبایل", "Shatel Mobile", "SHM", 0xFF0B3B85, 0xFFF16321,
             mncs = listOf("08", "50"),
             keywords = listOf("shatelmobile", "شاتلموبایل"),
             isMobile = true,
         ),
         Operator(
-            "taliya", "تالیا", "Taliya", "TAL", 0xFF8D6E63, 0xFFBF8F6B,
+            "taliya", "تالیا", "Taliya", "TAL", 0xFFE40613, 0xFFFF5A4E,
             mncs = listOf("32"),
             keywords = listOf("taliya", "تالیا"),
             isMobile = true,
         ),
         Operator(
-            "aptel", "آپتل", "ApTel", "APT", 0xFF00838F, 0xFF26C6DA,
+            "aptel", "آپتل", "ApTel", "APT", 0xFFE03016, 0xFFA21A16,
             keywords = listOf("aptel", "آپتل"),
             isMobile = true,
         ),
         Operator(
-            "samantel", "سامانتل", "SamanTel", "SMT", 0xFF2E7D32, 0xFF66BB6A,
+            "samantel", "سامانتل", "SamanTel", "SMT", 0xFFF05F22, 0xFF898989,
             keywords = listOf("samantel", "سامانتل"),
             isMobile = true,
         ),
         Operator(
-            "lotustel", "لوتوس تل", "Lotus Tel", "LTS", 0xFF5E35B1, 0xFF9575CD,
+            "lotustel", "لوتوس تل", "Lotus Tel", "LTS", 0xFFF9B12E, 0xFF372A2B,
             keywords = listOf("lotustel", "lotus tel", "lotus-tel", "لوتوستل", "لوتوس تل", "لوتوس‌تل"),
             isMobile = true,
         ),
         Operator(
-            "anarestan", "انارستان", "Anarestan", "ANR", 0xFFD81B60, 0xFFF06292,
-            keywords = listOf("anarestan", "انارستان"),
-            isMobile = true,
-        ),
-        Operator(
-            "telekish", "تله‌کیش", "TeleKish", "TKC", 0xFF00897B, 0xFF4DB6AC,
+            "telekish", "تله‌کیش", "TeleKish", "TKC", 0xFF17B7A6, 0xFFFF9800,
             mncs = listOf("14"),
             keywords = listOf("telekish", "tkc", "kifzo", "تلهکیش"),
             isMobile = true,
         ),
         Operator(
-            "mtce", "اسپادان", "MTCE (Espadan)", "MTC", 0xFF5D4037, 0xFFA1887F,
+            "mtce", "اسپادان", "MTCE (Espadan)", "MTC", 0xFFEC1C24, 0xFF221E1F,
             mncs = listOf("19"),
             keywords = listOf("mtce", "espadan", "اسپادان"),
             isMobile = true,
         ),
         Operator(
-            "fanapmobile", "فناپ موبایل", "Fanap Mobile", "FNP", 0xFF6D4C41, 0xFF9E9E9E,
+            "fanapmobile", "فناپ موبایل", "Fanap Mobile", "FNP", 0xFF1671B7, 0xFFF39229,
             keywords = listOf(
                 "fanap", "فناپ", "fanapmobile", "فناپموبایل", "fanap mobile", "فناپ موبایل",
                 "fnp", "fnpmobile", "فناپ موبایل-ir",
             ),
             isMobile = true,
         ),
+        // نام رسمی «ارتباطات آرین تل» (Ariantel)؛ شناسه‌ی «arintel» برای سازگاری با
+        // داده‌های ذخیره‌شده‌ی نسخه‌های قبل عوض نشده و املای قدیمی هم هنوز شناخته می‌شود.
         Operator(
-            "arintel", "ارین تل", "Arin Tel", "ART", 0xFF455A64, 0xFF78909C,
+            "arintel", "آرین‌تل", "Ariantel", "ART", 0xFF50E827, 0xFF8C8C8C,
             keywords = listOf(
+                "ariantel", "arian tel", "آرینتل", "آرین تل", "ariantelecom",
                 "arin", "arintel", "ارینتل", "arin tel", "ارین تل",
                 "art", "arintelco",
             ),
@@ -129,7 +127,7 @@ object OperatorCatalog {
     /** اپراتورهای اینترنت ثابت، فیبر و بی‌سیم / ISPها (برای وای‌فای و مودم). */
     val fixed: List<Operator> = listOf(
         Operator(
-            "tci", "مخابرات", "TCI", "TCI", 0xFF1565C0, 0xFF42A5F5,
+            "tci", "مخابرات", "TCI", "TCI", 0xFFE8001A, 0xFF1A1A1A,
             mncs = listOf("70", "99"), asns = listOf(58224),
             keywords = listOf(
                 "tci", "mokhaberat", "مخابرات",
@@ -138,27 +136,27 @@ object OperatorCatalog {
             ),
         ),
         Operator(
-            "shatel", "شاتل", "Shatel", "SHT", 0xFFD81B36, 0xFF1E4FA3,
+            "shatel", "شاتل", "Shatel", "SHT", 0xFF0B3B85, 0xFFF16321,
             asns = listOf(31549),
             keywords = listOf("shatel", "ariashatel", "شاتل"),
         ),
         Operator(
-            "asiatech", "آسیاتک", "Asiatech", "AST", 0xFF1E88E5, 0xFF00B8D4,
+            "asiatech", "آسیاتک", "Asiatech", "AST", 0xFF0188D1, 0xFFFAB301,
             asns = listOf(43754),
             keywords = listOf("asiatech", "آسیاتک"),
         ),
         Operator(
-            "hiweb", "های‌وب", "HiWEB", "HiW", 0xFFF57C00, 0xFFFFB300,
+            "hiweb", "های‌وب", "HiWEB", "HiW", 0xFFE60012, 0xFFFF5A3C,
             asns = listOf(56402),
             keywords = listOf("hiweb", "dadehgostar", "avacell", "هایوب", "asrnovin"),
         ),
         Operator(
-            "parsonline", "پارس‌آنلاین", "Pars Online", "POL", 0xFF00796B, 0xFF26A69A,
+            "parsonline", "پارس‌آنلاین", "Pars Online", "POL", 0xFFDA261B, 0xFF3E6193,
             asns = listOf(16322),
             keywords = listOf("parsonline", "پارسآنلاین", "پارسانلاین"),
         ),
         Operator(
-            "mobinnet", "مبین نت", "Mobin Net", "MBN", 0xFF6A1B9A, 0xFFAB47BC,
+            "mobinnet", "مبین نت", "Mobin Net", "MBN", 0xFFACCF4F, 0xFF3A3A3A,
             asns = listOf(50810),
             keywords = listOf(
                 "mobinnet", "mobin net", "mobin-net", "مبیننت", "مبین نت", "مبین نتم", "مبین‌نت",
@@ -166,27 +164,27 @@ object OperatorCatalog {
             isMobile = true,
         ),
         Operator(
-            "sabanet", "صبانت", "SabaNet", "SBN", 0xFF2E7D32, 0xFF9CCC65,
+            "sabanet", "صبانت", "SabaNet", "SBN", 0xFFDA1E25, 0xFFFF6A5E,
             asns = listOf(39501),
             keywords = listOf("sabanet", "nedagostarsaba", "صبانت"),
         ),
         Operator(
-            "respina", "رسپینا", "Respina", "RSP", 0xFFC62828, 0xFFEF5350,
+            "respina", "رسپینا", "Respina", "RSP", 0xFF018299, 0xFF2BC4D8,
             asns = listOf(42337),
             keywords = listOf("respina", "رسپینا"),
         ),
         Operator(
-            "datak", "داتک", "Datak", "DTK", 0xFF283593, 0xFF5C6BC0,
+            "datak", "داتک", "Datak", "DTK", 0xFFF08D04, 0xFFFFB547,
             asns = listOf(25124),
             keywords = listOf("datak", "داتک"),
         ),
         Operator(
-            "pishgaman", "پیشگامان", "Pishgaman", "PSH", 0xFF00838F, 0xFF4DD0E1,
+            "pishgaman", "پیشگامان", "Pishgaman", "PSH", 0xFFEB323A, 0xFFFF7A6E,
             asns = listOf(49100),
             keywords = listOf("pishgaman", "پیشگامان"),
         ),
         Operator(
-            "fanava", "فن‌آوا", "Fanava", "FNV", 0xFF4527A0, 0xFF7E57C2,
+            "fanava", "فن‌آوا", "Fanava", "FNV", 0xFF00A3B0, 0xFF202A79,
             asns = listOf(24631, 41881),
             keywords = listOf("fanava", "فنآوا"),
         ),
@@ -195,12 +193,12 @@ object OperatorCatalog {
             keywords = listOf("zitel", "soroushrasaneh", "زیتل"),
         ),
         Operator(
-            "afranet", "افرانت", "Afranet", "AFR", 0xFF0277BD, 0xFF29B6F6,
+            "afranet", "افرانت", "Afranet", "AFR", 0xFF003C99, 0xFFE8412C,
             asns = listOf(25184),
             keywords = listOf("afranet", "افرانت"),
         ),
         Operator(
-            "mabna", "مبنا تلکام", "Mabna Telecom", "MBT", 0xFF37474F, 0xFF78909C,
+            "mabna", "مبنا تلکام", "Mabna Telecom", "MBT", 0xFFF08800, 0xFFFFB13D,
             keywords = listOf("mabnatelecom", "mabna", "مبنا"),
         ),
         Operator(
@@ -208,15 +206,15 @@ object OperatorCatalog {
             keywords = listOf("petiak", "پتیاک"),
         ),
         Operator(
-            "mahannet", "ماهان‌نت", "MahanNet", "MHN", 0xFF1A237E, 0xFF5C6BC0,
+            "mahannet", "ماهان‌نت", "MahanNet", "MHN", 0xFFF37121, 0xFF1D8ACC,
             keywords = listOf("mahannet", "ماهاننت"),
         ),
         Operator(
-            "laser", "لیزر", "Laser", "LSR", 0xFFBF360C, 0xFFFF7043,
+            "laser", "لیزر", "Laser", "LSR", 0xFF003461, 0xFF1E6BB8,
             keywords = listOf("laser", "لیزر"),
         ),
         Operator(
-            "tic", "زیرساخت", "TIC", "TIC", 0xFF455A64, 0xFF90A4AE,
+            "tic", "زیرساخت", "TIC", "TIC", 0xFF23418D, 0xFF5C7BD0,
             asns = listOf(48159, 12880),
             keywords = listOf("telecommunicationinfrastructure", "informationtechnologycompany", "زیرساخت"),
         ),

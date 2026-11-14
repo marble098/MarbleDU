@@ -1,5 +1,7 @@
 package ir.marbledu.datausage.widget
 
+import ir.marbledu.datausage.data.OperatorBrand
+import ir.marbledu.datausage.data.OperatorCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -88,5 +90,40 @@ class WidgetThemeTest {
     fun `readable keeps already contrasty colors untouched`() {
         val white = 0xFFFFFFFF.toInt()
         assertEquals(white, WidgetTheme.readable(white, darkSurface))
+    }
+
+    @Test
+    fun `operator gradient keeps every widget color readable on every stop`() {
+        val operators = OperatorCatalog.all + listOf(
+            OperatorCatalog.byId(OperatorCatalog.ID_WIFI),
+            OperatorCatalog.byId(OperatorCatalog.ID_MOBILE),
+            OperatorCatalog.byId(OperatorCatalog.ID_UNKNOWN),
+        )
+        val palettes = operators.map { it.id to OperatorBrand.gradient(it) } + ("offline" to OperatorBrand.offline)
+        palettes.forEach { (id, brand) ->
+            val colors = WidgetTheme.brandColors(brand)
+            val warning = WidgetTheme.capColor(CapState.WARNING, colors)
+            val critical = WidgetTheme.capColor(CapState.CRITICAL, colors)
+            brand.stops.forEach { stop ->
+                assertTrue("$id: عدد اصلی", WidgetTheme.contrast(colors.hero, stop) >= 4.5)
+                assertTrue("$id: متن", WidgetTheme.contrast(colors.body, stop) >= 4.5)
+                assertTrue("$id: متن کم‌رنگ", WidgetTheme.contrast(colors.muted, stop) >= 3.0)
+                assertTrue("$id: تأکید", WidgetTheme.contrast(colors.accent, stop) >= 3.0)
+                assertTrue("$id: موبایل", WidgetTheme.contrast(colors.mobile, stop) >= 3.0)
+                assertTrue("$id: وای‌فای", WidgetTheme.contrast(colors.wifi, stop) >= 3.0)
+                assertTrue("$id: هشدار بسته", WidgetTheme.contrast(warning, stop) >= 3.0)
+                assertTrue("$id: پایان بسته", WidgetTheme.contrast(critical, stop) >= 3.0)
+            }
+        }
+    }
+
+    @Test
+    fun `light brands get dark ink on the widget`() {
+        val irancell = WidgetTheme.brandColors(OperatorBrand.gradient(OperatorCatalog.byId("irancell")))
+        assertFalse("روی زرد ایرانسل متن باید تیره باشد", irancell.dark)
+        assertTrue(WidgetTheme.luminance(irancell.hero) < 0.1)
+        val mci = WidgetTheme.brandColors(OperatorBrand.gradient(OperatorCatalog.byId("mci")))
+        assertTrue(mci.dark)
+        assertEquals(0xFFFFFFFF.toInt(), mci.hero)
     }
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- کاشی سفید لوگوی اپراتور روی کارت گرادیانی اعلان؛ همان کاشی کارت صفحه‌ی خانه. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="9dp" />
+    <solid android:color="#FFFFFFFF" />
+</shape>

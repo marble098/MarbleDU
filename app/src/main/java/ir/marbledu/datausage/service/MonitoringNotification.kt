@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.view.View
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import ir.marbledu.datausage.R
 import ir.marbledu.datausage.data.ConnectionType
@@ -16,7 +18,10 @@ import ir.marbledu.datausage.data.NotificationLockVisibility
 import ir.marbledu.datausage.data.NotificationProgressMode
 import ir.marbledu.datausage.data.NotificationStyle
 import ir.marbledu.datausage.data.NotificationTitleMode
+import ir.marbledu.datausage.data.OperatorBrand
+import ir.marbledu.datausage.data.OperatorBrandGradient
 import ir.marbledu.datausage.ui.theme.ThemePalette
+import ir.marbledu.datausage.widget.BrandLayers
 
 /**
  * سازنده‌ی اعلان پایش با ظاهر تازه و ساختارمند (نسخه‌ی ۱.۵).
@@ -31,78 +36,103 @@ import ir.marbledu.datausage.ui.theme.ThemePalette
  * │ بسته   ۵.۶ گ.ب مانده (۳۸٪)                │   ← نوار پیشرفت + باقی‌مانده
  * └────────────────────────────────────────────┘
  *
- * آیکون بزرگ (LargeIcon) با رنگ پالت فعلی اپ نقاشی می‌شود تا اعلان هم‌رنگ
- * برنامه باشد؛ رنگ نوار پیشرفت هم از همان پالت گرفته می‌شود.
+ * از نسخه‌ی ۱.۶.۶ محتوای اعلان یک کارت گرادیانی با لوگوی اپراتور است ([brandedViews])؛
+ * همان پالتی که کارت اپراتور صفحه‌ی خانه و ویجت استفاده می‌کنند.
  */
 object MonitoringNotification {
 
-    /** آیکون بزرگِ اعلان: حلقه‌ی رنگی با فلش‌های دانلود/آپلود. */
-    fun largeIcon(context: Context, accent: Int, gradientEnd: Int = blend(accent, 0xFF10131C.toInt(), 0.55f)): android.graphics.Bitmap {
-        val size = context.resources.getDimensionPixelSize(android.R.dimen.app_icon_size)
-            .coerceIn(48, 128)
-        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(bitmap)
-        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-        val radius = size / 2f
+    /** لایه‌های گرادیان اپراتور در چیدمان‌های اعلان ([R.layout.notif_monitor_small] و big). */
+    private val BRAND_LAYERS = BrandLayers.Ids(
+        base = R.id.notif_brand_base,
+        start = R.id.notif_brand_start,
+        end = R.id.notif_brand_end,
+        glow = R.id.notif_brand_glow,
+        rim = R.id.notif_brand_rim,
+        fadeTopLeft = R.drawable.notif_brand_fade_tl,
+        fadeTopRight = R.drawable.notif_brand_fade_tr,
+        fadeBottomLeft = R.drawable.notif_brand_fade_bl,
+        fadeBottomRight = R.drawable.notif_brand_fade_br,
+        glowTopLeft = R.drawable.notif_brand_glow_tl,
+        glowTopRight = R.drawable.notif_brand_glow_tr,
+    )
 
-        // پس‌زمینه‌ی دایره‌ای با گرادیان از رنگ پالت به نسخه‌ی تیره‌تر
-        val rect = android.graphics.RectF(0f, 0f, size.toFloat(), size.toFloat())
-        paint.shader = android.graphics.LinearGradient(
-            0f, 0f, size.toFloat(), size.toFloat(),
-            intArrayOf(accent, gradientEnd),
-            null,
-            android.graphics.Shader.TileMode.CLAMP,
-        )
-        canvas.drawCircle(radius, radius, radius, paint)
-        paint.shader = null
+    /** نمای جمع‌شده و بازِ اعلان پایش. */
+    class BrandedViews(val collapsed: RemoteViews, val expanded: RemoteViews)
 
-        // حلقه‌ی نور
-        paint.style = android.graphics.Paint.Style.STROKE
-        paint.strokeWidth = size * 0.055f
-        paint.color = 0x33FFFFFF
-        canvas.drawCircle(radius, radius, radius * 0.74f, paint)
+    /**
+     * کارت گرادیانی اعلان پایش؛ همان پالت کارت اپراتور در صفحه‌ی خانه و ویجت.
+     *
+     * اعلان رنگی سیستم (`setColorized`) فقط یک رنگ یکدست می‌گیرد؛ برای گرادیان واقعی محتوای
+     * اعلان با RemoteViews سفارشی ساخته می‌شود و سیستم سربرگ، آیکون و دکمه‌ها را دورش
+     * می‌چیند (DecoratedCustomViewStyle). هیچ بیت‌مپی ساخته نمی‌شود؛ رنگ‌ها با فیلتر رنگ
+     * روی شکل‌های ثابت تزریق می‌شوند، پس به‌روزرسانی هر ثانیه‌ی اعلان سبک می‌ماند.
+     *
+     * @param logoRes لوگوی اپراتور؛ نال یعنی اپراتور لوگو ندارد و نماد برنامه نشان داده می‌شود.
+     * @param body خطوط تفصیلی (سبک «کامل»)؛ نال یا خالی یعنی فقط عنوان و خلاصه.
+     */
+    fun brandedViews(
+        context: Context,
+        palette: OperatorBrandGradient,
+        logoRes: Int?,
+        title: CharSequence,
+        summary: CharSequence,
+        body: CharSequence?,
+        progressPercent: Int?,
+        persian: Boolean,
+    ): BrandedViews {
+        val ink = palette.ink
+        val soft = withAlpha(ink, 0.86f)
+        val collapsed = RemoteViews(context.packageName, R.layout.notif_monitor_small)
+        val expanded = RemoteViews(context.packageName, R.layout.notif_monitor_big)
+        listOf(collapsed, expanded).forEach { views ->
+            views.setInt(
+                R.id.notif_root,
+                "setLayoutDirection",
+                if (persian) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR,
+            )
+            BrandLayers.show(views, BRAND_LAYERS, palette, rtl = persian)
+            if (logoRes != null) {
+                views.setImageViewResource(R.id.notif_logo, logoRes)
+                // فیلتر شفاف یعنی بدون تغییر رنگ؛ لوگوها رنگ اصلی خودشان را نگه می‌دارند.
+                views.setInt(R.id.notif_logo, "setColorFilter", 0)
+            } else {
+                views.setImageViewResource(R.id.notif_logo, R.drawable.ic_notification)
+                views.setInt(R.id.notif_logo, "setColorFilter", logoGlyphColor(palette))
+            }
+            views.setTextViewText(R.id.notif_title, title)
+            views.setTextColor(R.id.notif_title, ink)
+            views.setTextViewText(R.id.notif_text, summary)
+            views.setTextColor(R.id.notif_text, soft)
+        }
 
-        // فلش دانلود (پایین) و آپلود (بالا)
-        paint.style = android.graphics.Paint.Style.FILL
-        paint.color = 0xFFFFFFFF.toInt()
-        val w = size * 0.10f
-        val arrow = android.graphics.Path()
-        // دانلود: از بالا به پایین
-        arrow.moveTo(radius - w, size * 0.30f)
-        arrow.lineTo(radius + w, size * 0.30f)
-        arrow.lineTo(radius + w, size * 0.52f)
-        arrow.lineTo(radius + w * 2.1f, size * 0.52f)
-        arrow.lineTo(radius, size * 0.70f)
-        arrow.lineTo(radius - w * 2.1f, size * 0.52f)
-        arrow.lineTo(radius - w, size * 0.52f)
-        arrow.close()
-        canvas.drawPath(arrow, paint)
-
-        val arrowUp = android.graphics.Path()
-        arrowUp.moveTo(radius - w, size * 0.70f)
-        arrowUp.lineTo(radius + w, size * 0.70f)
-        arrowUp.lineTo(radius + w, size * 0.62f)
-        arrowUp.lineTo(radius + w * 1.8f, size * 0.62f)
-        arrowUp.lineTo(radius, size * 0.50f)
-        arrowUp.lineTo(radius - w * 1.8f, size * 0.62f)
-        arrowUp.lineTo(radius - w, size * 0.62f)
-        arrowUp.close()
-        paint.color = 0x22000000
-        canvas.drawPath(arrowUp, paint)
-        return bitmap
+        val bodyLines = NotificationFormatter.bodyLinesWithoutTitle(body, title)
+        val hasBody = bodyLines.isNotEmpty()
+        expanded.setViewVisibility(R.id.notif_body, if (hasBody) View.VISIBLE else View.GONE)
+        // در سبک «کامل» خطوط تفصیلی جای خلاصه را می‌گیرند (مثل قبل در BigTextStyle).
+        expanded.setViewVisibility(R.id.notif_text, if (hasBody) View.GONE else View.VISIBLE)
+        if (hasBody) {
+            expanded.setTextViewText(R.id.notif_body, bodyLines.joinToString("\n"))
+            expanded.setTextColor(R.id.notif_body, withAlpha(ink, 0.94f))
+        }
+        val onLight = palette.darkInk
+        val shownBar = if (onLight) R.id.notif_progress_on_light else R.id.notif_progress_on_dark
+        val hiddenBar = if (onLight) R.id.notif_progress_on_dark else R.id.notif_progress_on_light
+        expanded.setViewVisibility(hiddenBar, View.GONE)
+        if (progressPercent != null) {
+            expanded.setViewVisibility(shownBar, View.VISIBLE)
+            expanded.setProgressBar(shownBar, 100, progressPercent.coerceIn(0, 100), false)
+        } else {
+            expanded.setViewVisibility(shownBar, View.GONE)
+        }
+        return BrandedViews(collapsed, expanded)
     }
 
-    private fun blend(from: Int, to: Int, t: Float): Int {
-        val a = (from shr 24) and 0xFF
-        val r = (from shr 16) and 0xFF
-        val g = (from shr 8) and 0xFF
-        val b = from and 0xFF
-        val r2 = (to shr 16) and 0xFF
-        val g2 = (to shr 8) and 0xFF
-        val b2 = to and 0xFF
-        fun c(x: Int, y: Int) = (x + (y - x) * t).toInt().coerceIn(0, 255)
-        return (a shl 24) or (c(r, r2) shl 16) or (c(g, g2) shl 8) or c(b, b2)
-    }
+    /** رنگ نماد برنامه داخل کاشی سفید وقتی اپراتور لوگو ندارد: تیره‌ترین رنگ خوانای پالت. */
+    private fun logoGlyphColor(palette: OperatorBrandGradient): Int =
+        palette.stops.minBy { OperatorBrand.luminance(it) }
+
+    private fun withAlpha(color: Int, alpha: Float): Int =
+        ((alpha.coerceIn(0f, 1f) * 255).toInt() shl 24) or (color and 0x00FFFFFF)
 
     /**
      * متن ساختاریافته‌ی اعلان برای حالت‌های بازشونده؛ هر خط یک بخش مستقل است

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    درخشش نرم گوشه‌ی بالا-راست ویجت (گوشه‌ی بالای سمت «پایان» در چیدمان چپ‌به‌راست). رنگ و شدتش در زمان اجرا
+    از پالت اپراتور می‌آید (setColorFilter + setImageAlpha).
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="26dp" />
+    <gradient
+        android:centerColor="#6BFFFFFF"
+        android:centerX="0.92"
+        android:centerY="0.0"
+        android:endColor="#00FFFFFF"
+        android:gradientRadius="110%"
+        android:startColor="#FFFFFFFF"
+        android:type="radial" />
+</shape>

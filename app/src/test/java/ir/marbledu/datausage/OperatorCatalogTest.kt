@@ -73,6 +73,25 @@ class OperatorCatalogTest {
     }
 
     @Test
+    fun anarestan_is_not_listed_as_an_operator() {
+        assertNull(OperatorCatalog.all.firstOrNull { it.id == "anarestan" })
+        assertNull(OperatorCatalog.fromName("انارستان"))
+        assertNull(OperatorCatalog.fromName("Anarestan"))
+    }
+
+    @Test
+    fun ariantel_uses_its_official_name_and_keeps_the_old_spelling() {
+        val op = OperatorCatalog.byId("arintel")
+        assertEquals("آرین‌تل", op.fa)
+        assertEquals("Ariantel", op.en)
+        assertEquals("arintel", OperatorCatalog.fromName("Ariantel")?.id)
+        assertEquals("arintel", OperatorCatalog.fromName("آرین تل")?.id)
+        assertEquals("arintel", OperatorCatalog.fromName("ارین تل")?.id)
+        // «آرین نت» یک ISP جداست و نباید با آرین‌تل اشتباه شود.
+        assertEquals("aryanet", OperatorCatalog.fromName("آرین نت")?.id)
+    }
+
+    @Test
     fun localized_special_uids() {
         assertEquals("سیستم اندروید", OperatorCatalog.specialUidLabel(1000, true))
         assertEquals("Android system", OperatorCatalog.specialUidLabel(1000, false))

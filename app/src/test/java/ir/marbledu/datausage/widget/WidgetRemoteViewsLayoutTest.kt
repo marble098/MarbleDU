@@ -41,7 +41,14 @@ class WidgetRemoteViewsLayoutTest {
         "ViewStub",
     )
 
-    private val layouts = listOf("widget_usage.xml", "widget_preview.xml", "widget_fallback.xml")
+    /** چیدمان‌های ویجت و اعلان پایش؛ هر دو با inflater سیستم (لانچر / نوار اعلان) ساخته می‌شوند. */
+    private val layouts = listOf(
+        "widget_usage.xml",
+        "widget_preview.xml",
+        "widget_fallback.xml",
+        "notif_monitor_small.xml",
+        "notif_monitor_big.xml",
+    )
 
     @Test
     fun `widget layouts only use RemoteViews-safe views`() {

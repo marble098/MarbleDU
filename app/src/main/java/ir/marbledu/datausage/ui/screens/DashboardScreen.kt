@@ -51,7 +51,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +68,7 @@ import ir.marbledu.datausage.data.JalaliDate
 import ir.marbledu.datausage.data.LiveMonitor
 import ir.marbledu.datausage.data.NetworkSnapshot
 import ir.marbledu.datausage.data.OffPeakWindow
+import ir.marbledu.datausage.data.OperatorBrand
 import ir.marbledu.datausage.data.OperatorCatalog
 import ir.marbledu.datausage.data.SimIdentity
 import ir.marbledu.datausage.data.UiMode
@@ -95,7 +95,7 @@ import ir.marbledu.datausage.ui.MarbleCard
 import ir.marbledu.datausage.ui.Metric
 import ir.marbledu.datausage.ui.OffPeakUi
 import ir.marbledu.datausage.ui.OperatorBadge
-import ir.marbledu.datausage.ui.theme.deepBrandColor
+import ir.marbledu.datausage.ui.operatorGradient
 import ir.marbledu.datausage.ui.SectionTitle
 import ir.marbledu.datausage.ui.SplitBar
 import ir.marbledu.datausage.ui.StackedBarChart
@@ -573,8 +573,10 @@ private fun ConnectionCard(
     val status = network?.wifiLookupStatus ?: IspResolver.LookupStatus.IDLE
     val sourceKind = network?.wifiSourceKind ?: IspResolver.WifiSourceKind.UNKNOWN
     val sourceLabel = NotificationFormatter.wifiSourceLabel(sourceKind, persian)
-    val brand = Color(operator.brandColor)
-    val accent = Color(operator.accentColor)
+    // پالت مشترک کارت، اعلان و ویجت؛ رنگ متن هم از همان پالت می‌آید.
+    val palette = remember(operator.id, operator.brandColor, operator.accentColor) {
+        OperatorBrand.gradient(operator)
+    }
     val online = network?.isValidated == true && type != ConnectionType.OFFLINE
 
     val slotLabel = network?.simIdentity?.let { identity ->
@@ -638,21 +640,13 @@ private fun ConnectionCard(
         else -> ""
     }
 
-    // پالت کارت: رنگ برند اپراتور با کنتراست تضمین‌شده برای متن روی گرادیان.
+    // پس‌زمینه‌ی کارت: گرادیان سه‌رنگ اپراتور با درخشش نرم در گوشه‌ی بالا (همان پالت
+    // اعلان و ویجت). رنگ متن از خودِ پالت می‌آید: سفید روی برندهای تیره و تقریباً مشکی
+    // روی برندهای روشن مثل زرد ایرانسل، تا رنگ برند برای خوانایی قهوه‌ای و کدر نشود.
     val dark = marble.dark
-    // گرادیان کارت از رنگ خودِ اپراتور ساخته می‌شود، ولی تا حدی که متن سفید
-    // رویش خوانا بماند؛ هر اپراتور «امضای رنگی» خودش را می‌گیرد.
     val offline = type == ConnectionType.OFFLINE
-    val heroStart = if (offline) scheme.surfaceContainerHigh else deepBrandColor(brand, 5.6f)
-    // هر دو سرِ گرادیان باید با متن سفید کنتراست کافی داشته باشند؛ اگر فقط سرِ
-    // اول تیره شود، رنگ مکمل برخی اپراتورها (زرد/نارنجی) انتهای کارت را روشن
-    // می‌کند و متن آن‌جا کم‌خوان می‌شود.
-    val heroEnd = if (offline) {
-        scheme.surfaceContainer
-    } else {
-        deepBrandColor(verticalPartner(heroStart, accent), 5.6f)
-    }
-    val ink = if (offline) scheme.onSurface else Color.White
+    val ink = if (offline) scheme.onSurface else Color(palette.ink)
+    val darkInk = !offline && palette.darkInk
     val inkSoft = ink.copy(alpha = 0.88f)
     val shape = RoundedCornerShape(28.dp)
 
@@ -660,43 +654,41 @@ private fun ConnectionCard(
         Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Brush.linearGradient(listOf(heroStart, heroEnd))),
+            .then(
+                if (offline) {
+                    Modifier.background(
+                        Brush.linearGradient(listOf(scheme.surfaceContainerHigh, scheme.surfaceContainer)),
+                    )
+                } else {
+                    Modifier.operatorGradient(palette)
+                },
+            ),
     ) {
-        // درخشش نرم و حلقه‌های تزئینی: حس «هولوگرام» بدون شلوغی.
         Canvas(Modifier.matchParentSize().clip(shape)) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    // روی کارت رنگی، درخشش کم است تا متن سفید کم‌خوان نشود.
-                    listOf(Color.White.copy(alpha = if (!offline) 0.05f else if (dark) 0.16f else 0.30f), Color.Transparent),
-                    center = Offset(size.width * 0.92f, size.height * 0.02f),
+            if (offline) {
+                // بدون اتصال: همان سطح خنثی با درخشش ملایم.
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color.White.copy(alpha = if (dark) 0.16f else 0.30f), Color.Transparent),
+                        center = Offset(size.width * 0.92f, size.height * 0.02f),
+                        radius = size.width * 0.55f,
+                    ),
                     radius = size.width * 0.55f,
-                ),
-                radius = size.width * 0.55f,
-                center = Offset(size.width * 0.92f, size.height * 0.02f),
-            )
+                    center = Offset(size.width * 0.92f, size.height * 0.02f),
+                )
+            }
+            // حلقه‌ی تزئینی بسیار محو در گوشه‌ی پایین؛ حس عمق بدون شلوغی.
             drawCircle(
                 color = ink.copy(alpha = 0.06f),
                 radius = size.width * 0.34f,
                 center = Offset(size.width * 0.04f, size.height * 1.06f),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f),
             )
-            drawRect(
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(
-                            alpha = if (!offline) 0.04f else if (dark) 0.08f else 0.18f,
-                        ),
-                        Color.Transparent,
-                    ),
-                    endY = size.height * 0.40f,
-                ),
-                size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.40f),
-            )
         }
         Box(
             Modifier.matchParentSize().border(
                 1.dp,
-                ink.copy(alpha = if (dark) 0.14f else 0.22f),
+                ink.copy(alpha = if (darkInk) 0.18f else if (dark) 0.14f else 0.22f),
                 shape,
             ),
         )
@@ -724,7 +716,13 @@ private fun ConnectionCard(
                                 Modifier
                                     .size(7.dp)
                                     .clip(CircleShape)
-                                    .background(if (online) Color(0xFF4ADE80) else ink.copy(alpha = 0.6f)),
+                                    .background(
+                                        when {
+                                            !online -> ink.copy(alpha = 0.6f)
+                                            darkInk -> Color(0xFF15803D)
+                                            else -> Color(0xFF4ADE80)
+                                        },
+                                    ),
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
@@ -802,8 +800,10 @@ private fun ConnectionCard(
                     if (slotLabel != null) HeroChip(slotLabel, ink)
                     HeroChip(operator.en, ink)
                     if (onWifi && sourceLabel.isNotBlank()) HeroChip(sourceLabel, ink)
+                    // اندروید تأیید کرده که از این اتصال واقعاً می‌شود به اینترنت رسید
+                    // (نه فقط وصل‌بودن به وای‌فای/سیم‌کارت یا صفحه‌ی ورود وای‌فای).
                     if (network?.isValidated == true) {
-                        HeroChip(if (persian) "اینترنت سالم" else "Online", ink)
+                        HeroChip(if (persian) "اینترنت وصل است" else "Internet OK", ink)
                     }
                 }
 
@@ -851,11 +851,22 @@ private fun HeroChip(text: String, ink: Color, emphasize: Boolean = false) {
     // چیپ باید «سطح» را از پس‌زمینه جدا کند، نه روشن‌ترش کند: روی گرادیان تیره‌ی
     // برند یک لایه‌ی مشکی محو می‌نشیند تا متن سفید کنتراست کافی داشته باشد
     // (لایه‌ی سفید، متن سفید را روی پس‌زمینه‌ی روشن‌تر می‌شست).
-    val shade = if (ink.luminance() > 0.5f) Color.Black else ink
+    // روی گرادیان‌های روشن (متن تیره، مثل زرد ایرانسل) سایه‌ی کم‌رنگ‌تری کافی است.
+    val darkInk = ink.luminance() <= 0.5f
+    val shade = if (darkInk) ink else Color.Black
     Box(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(shade.copy(alpha = if (emphasize) 0.26f else 0.16f))
+            .background(
+                shade.copy(
+                    alpha = when {
+                        darkInk && emphasize -> 0.16f
+                        darkInk -> 0.10f
+                        emphasize -> 0.26f
+                        else -> 0.16f
+                    },
+                ),
+            )
             .border(
                 width = 1.dp,
                 color = ink.copy(alpha = if (emphasize) 0.42f else 0.22f),
@@ -871,15 +882,6 @@ private fun HeroChip(text: String, ink: Color, emphasize: Boolean = false) {
             maxLines = 1,
         )
     }
-}
-
-/**
- * رنگ دوم گرادیان: رنگ تأکیدی اپراتور، هم‌روشنایی‌شده با رنگ اول تا گرادیان
- * یکدست دیده شود و رنگ‌های ناهمگون (مثل زرد + بنفش) کنار هم «کثیف» نشوند.
- */
-private fun verticalPartner(start: Color, accent: Color): Color {
-    val blended = lerp(accent, start, 0.42f)
-    return lerp(blended, Color.Black, 0.16f)
 }
 
 /** یک عدد کلیدی (دانلود/آپلود/پینگ) روی کارت اپراتور. */
