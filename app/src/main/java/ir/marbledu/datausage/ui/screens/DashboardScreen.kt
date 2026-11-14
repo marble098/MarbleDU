@@ -558,6 +558,7 @@ private fun ConnectionCard(
 ) {
     val tick by vm.tick.collectAsState()
     val network = tick?.network
+    val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val marble = LocalMarbleColors.current
     val type = network?.type ?: ConnectionType.OFFLINE
