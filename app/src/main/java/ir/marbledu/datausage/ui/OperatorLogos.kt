@@ -9,83 +9,66 @@ import ir.marbledu.datausage.R
  * نشان‌ها متعلق به صاحبان‌شان هستند و فقط برای شناسایی اپراتور نمایش داده می‌شوند.
  * منبع هر نشان در NOTICE-OPERATOR-LOGOS.md آمده است.
  *
- * همه‌ی فایل‌ها با یک قاعده‌ی یکسان آماده شده‌اند تا در کنار هم «یک‌دست» دیده شوند:
- *  - پس‌زمینه شفاف،
- *  - بریدن حاشیه‌ی خالی (trim)،
- *  - جای‌دادن نشان در یک قاب مربعی ۲۵۶×۲۵۶ با حاشیه‌ی برابر از چهار طرف،
- *  - وکتور بودن منبع (SVG) و رندر در اندازه‌ی بزرگ، تا در هیچ اندازه‌ای پیکسلی نشود.
+ * از نسخه‌ی ۱.۶.۶ همه‌ی فایل‌ها از نو و با یک قاعده‌ی یکسان ساخته شده‌اند:
+ *  - منبع رسمی و به‌روز (SVG رسمی هر جا که بود؛ مثل لوگوی ۲۰۲۵ همراه اول، بیضی جدید
+ *    ایرانسل، نشان رسمی فناپ موبایل و آرین‌تل و هویت بصری تازه‌ی فناوا)؛
+ *  - پس‌زمینه‌ی شفاف و بریدن حاشیه‌ی خالی؛
+ *  - «اندازه‌گذاری بصری»: هر نشان بر اساس مساحت واقعی جوهرش داخل قاب ۲۵۶×۲۵۶ جا گرفته،
+ *    نه بر اساس کادرش، تا نشان‌های پهن، مربعی و پرمتن کنار هم هم‌وزن دیده شوند؛
+ *  - حاشیه‌ی امن برای گوشه‌های گرد کاشی.
  *
- * برای همین دیگر لازم نیست لوگوهای روشن روی «کاشی رنگ برند» بنشینند؛ کاشی سفید
- * برای همه یکسان است و رنگ برند فقط در حلقه و هاله‌ی دور کاشی دیده می‌شود.
+ * چون اندازه‌گذاری داخل خود فایل‌هاست، همه با یک مقیاس ثابت ([FIT_SCALE]) روی کاشی
+ * سفید رسم می‌شوند؛ در برنامه، اعلان و ویجت یکسان.
  */
 object OperatorLogos {
 
-    /**
-     * مقیاس نمایش لوگو داخل کاشی.
-     *
-     * [Tight] برای نشان‌های پهن/کم‌ارتفاع (نام تجاری افقی) کمی بزرگ‌تر رسم می‌شود و
-     * [Roomy] برای نشان‌های مربعی و پرمتن کمی کوچک‌تر، تا «وزن بصری» همه یکسان شود.
-     */
-    enum class Fit { Tight, Balanced, Roomy }
+    /** نسبت اندازه‌ی لوگو به کاشی سفید؛ برای همه یکسان است. */
+    const val FIT_SCALE = 0.92f
 
-    private data class Entry(@DrawableRes val res: Int, val fit: Fit = Fit.Balanced)
-
-    private val logos: Map<String, Entry> = mapOf(
+    private val logos: Map<String, Int> = mapOf(
         // --- اپراتورهای موبایل و MVNO
-        "mci" to Entry(R.drawable.op_mci, Fit.Balanced),
-        "irancell" to Entry(R.drawable.op_irancell, Fit.Tight),
-        "rightel" to Entry(R.drawable.op_rightel, Fit.Tight),
-        "shatel_mobile" to Entry(R.drawable.op_shatel, Fit.Roomy),
-        "taliya" to Entry(R.drawable.op_taliya, Fit.Tight),
-        "aptel" to Entry(R.drawable.op_aptel, Fit.Roomy),
-        "samantel" to Entry(R.drawable.op_samantel, Fit.Tight),
-        "lotustel" to Entry(R.drawable.op_lotustel, Fit.Balanced),
-        "telekish" to Entry(R.drawable.op_telekish, Fit.Balanced),
-        "mtce" to Entry(R.drawable.op_mtce, Fit.Tight),
-        "fanapmobile" to Entry(R.drawable.op_fanapmobile, Fit.Balanced),
-        "arintel" to Entry(R.drawable.op_arintel, Fit.Balanced),
+        "mci" to R.drawable.op_mci,
+        "irancell" to R.drawable.op_irancell,
+        "rightel" to R.drawable.op_rightel,
+        "shatel_mobile" to R.drawable.op_shatel,
+        "taliya" to R.drawable.op_taliya,
+        "aptel" to R.drawable.op_aptel,
+        "samantel" to R.drawable.op_samantel,
+        "lotustel" to R.drawable.op_lotustel,
+        "telekish" to R.drawable.op_telekish,
+        "mtce" to R.drawable.op_mtce,
+        "fanapmobile" to R.drawable.op_fanapmobile,
+        "arintel" to R.drawable.op_arintel,
         // --- اینترنت ثابت / فیبر / بی‌سیم
-        "tci" to Entry(R.drawable.op_tci, Fit.Balanced),
-        "shatel" to Entry(R.drawable.op_shatel, Fit.Roomy),
-        "asiatech" to Entry(R.drawable.op_asiatech, Fit.Tight),
-        "hiweb" to Entry(R.drawable.op_hiweb, Fit.Roomy),
-        "parsonline" to Entry(R.drawable.op_parsonline, Fit.Tight),
-        "mobinnet" to Entry(R.drawable.op_mobinnet, Fit.Balanced),
-        "sabanet" to Entry(R.drawable.op_sabanet, Fit.Tight),
-        "datak" to Entry(R.drawable.op_datak, Fit.Balanced),
-        "pishgaman" to Entry(R.drawable.op_pishgaman, Fit.Balanced),
-        "fanava" to Entry(R.drawable.op_fanava, Fit.Tight),
-        "zitel" to Entry(R.drawable.op_zitel, Fit.Tight),
-        "afranet" to Entry(R.drawable.op_afranet, Fit.Tight),
-        "mabna" to Entry(R.drawable.op_mabna, Fit.Balanced),
-        "mahannet" to Entry(R.drawable.op_mahannet, Fit.Tight),
-        "laser" to Entry(R.drawable.op_laser, Fit.Tight),
-        "respina" to Entry(R.drawable.op_respina, Fit.Balanced),
-        "tic" to Entry(R.drawable.op_tic, Fit.Balanced),
+        "tci" to R.drawable.op_tci,
+        "shatel" to R.drawable.op_shatel,
+        "asiatech" to R.drawable.op_asiatech,
+        "hiweb" to R.drawable.op_hiweb,
+        "parsonline" to R.drawable.op_parsonline,
+        "mobinnet" to R.drawable.op_mobinnet,
+        "sabanet" to R.drawable.op_sabanet,
+        "datak" to R.drawable.op_datak,
+        "pishgaman" to R.drawable.op_pishgaman,
+        "fanava" to R.drawable.op_fanava,
+        "zitel" to R.drawable.op_zitel,
+        "afranet" to R.drawable.op_afranet,
+        "mabna" to R.drawable.op_mabna,
+        "mahannet" to R.drawable.op_mahannet,
+        "laser" to R.drawable.op_laser,
+        "respina" to R.drawable.op_respina,
+        "tic" to R.drawable.op_tic,
     )
 
     /** شناسه‌ی همه‌ی اپراتورهایی که لوگوی رسمی دارند (برای تست یکپارچگی). */
     fun idsWithLogo(): Set<String> = logos.keys
 
     @DrawableRes
-    fun logoFor(operatorId: String): Int? = logos[operatorId]?.res
+    fun logoFor(operatorId: String): Int? = logos[operatorId]
 
     /**
-     * نسبت اندازه‌ی لوگو به کاشی.
-     * لوگوهای افقی پهن‌تر رسم می‌شوند تا کوچک به‌نظر نرسند؛ نشان‌های مربعی
-     * کمی کوچک‌تر تا کاشی «شلوغ» نشود.
+     * نسبت اندازه‌ی لوگو به کاشی. اندازه‌گذاری بصری داخل خود فایل‌ها انجام شده،
+     * پس برای همه‌ی اپراتورها یکسان است؛ پارامتر برای سازگاری با فراخوانی‌ها مانده.
      */
-    fun fitScale(operatorId: String): Float = when (logos[operatorId]?.fit) {
-        Fit.Tight -> 0.94f
-        Fit.Roomy -> 0.78f
-        else -> 0.86f
-    }
-
-    /**
-     * دیگر هیچ لوگویی روی کاشی رنگ برند نمی‌نشیند: همه‌ی نشان‌ها روی کاشی سفید
-     * (یا کاشی سطح در تم تیره) خوانا هستند و این کار ظاهر فهرست را یک‌دست می‌کند.
-     * تابع برای سازگاری با فراخوانی‌های قبلی نگه داشته شده است.
-     */
-    @Deprecated("همه‌ی لوگوها روی کاشی یکسان نمایش داده می‌شوند", ReplaceWith("false"))
-    fun needsBrandTile(operatorId: String): Boolean = false
+    @Suppress("UNUSED_PARAMETER")
+    fun fitScale(operatorId: String): Float = FIT_SCALE
 }

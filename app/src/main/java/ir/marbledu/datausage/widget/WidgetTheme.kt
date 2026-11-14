@@ -1,5 +1,6 @@
 package ir.marbledu.datausage.widget
 
+import ir.marbledu.datausage.data.OperatorBrandGradient
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -35,6 +36,11 @@ data class WidgetColors(
     val actionText: Int,
     /** پس‌زمینه‌ی نشان گرد بالای ویجت. */
     val badgeBg: Int,
+    /**
+     * سطحی که خوانایی رنگ‌های تأکیدی (مثل رنگ هشدار بسته) با آن سنجیده می‌شود؛ روی
+     * گرادیان اپراتور، «بدترین» ایستگاه گرادیان است.
+     */
+    val surface: Int = if (dark) 0xFF111A2E.toInt() else 0xFFF7F9FF.toInt(),
 )
 
 /**
@@ -123,13 +129,53 @@ object WidgetTheme {
         }
     }
 
+    /**
+     * رنگ‌های ویجت روی گرادیان اپراتور.
+     *
+     * متن‌ها همان رنگ متن پالت را می‌گیرند (سفید یا تقریباً مشکی) و همه‌ی رنگ‌های تأکیدی
+     * با «بدترین» ایستگاه گرادیان سنجیده می‌شوند: روشن‌ترین ایستگاه برای متن سفید و
+     * تیره‌ترین برای متن تیره. کپسول‌ها و کارت‌ها روی گرادیان تیره کمی تیره‌تر و روی
+     * گرادیان روشن کمی روشن‌تر می‌شوند تا کنتراست متن رویشان کم نشود.
+     */
+    fun brandColors(brand: OperatorBrandGradient): WidgetColors {
+        val ink = brand.ink
+        val darkInk = luminance(ink) < 0.5
+        val stops = listOf(brand.start, brand.middle, brand.end)
+        val worst = if (darkInk) stops.minBy { luminance(it) } else stops.maxBy { luminance(it) }
+        // اصلاح کنتراست همیشه به سمت رنگ متن پالت است (نه بر اساس روشنایی سطح)، چون
+        // ایستگاه‌های میانه‌روشن مثل سبز یا نارنجی ممکن است از وسط طیف هم رد شوند.
+        fun fit(color: Int, min: Double = MIN_CONTRAST) = readableToward(color, worst, ink, min)
+        val body = fit(blend(ink, brand.middle, 0.06f), 4.5)
+        val muted = fit(blend(ink, brand.middle, 0.28f))
+        val accent = fit(if (darkInk) brand.accent else blend(brand.glow, WHITE, 0.55f))
+        val mobile = fit(if (darkInk) ink else blend(brand.accent, WHITE, 0.30f))
+        val wifi = fit(if (darkInk) brand.accent else blend(brand.glow, WHITE, 0.30f))
+        return WidgetColors(
+            dark = !darkInk,
+            hero = ink,
+            body = body,
+            muted = muted,
+            accent = accent,
+            mobile = mobile,
+            wifi = wifi,
+            chipBg = if (darkInk) 0x47FFFFFF else 0x2E000000,
+            chipText = ink,
+            cardBg = if (darkInk) 0x38FFFFFF else 0x24000000,
+            track = if (darkInk) 0x2E000000 else 0x40FFFFFF,
+            actionBg = if (darkInk) 0x47FFFFFF else 0x2E000000,
+            actionText = ink,
+            badgeBg = if (darkInk) 0x47FFFFFF else 0x2E000000,
+            surface = worst,
+        )
+    }
+
     /** رنگ نوار پیشرفت بسته؛ با نزدیک شدن به پایان، به نارنجی/قرمز می‌رود. */
     fun capColor(state: CapState, colors: WidgetColors): Int {
-        val surface = if (colors.dark) 0xFF111A2E.toInt() else 0xFFF7F9FF.toInt()
+        val toward = if (colors.dark) WHITE else BLACK
         return when (state) {
             CapState.CALM -> colors.accent
-            CapState.WARNING -> readable(WARNING, surface)
-            CapState.CRITICAL -> readable(CRITICAL, surface)
+            CapState.WARNING -> readableToward(WARNING, colors.surface, toward)
+            CapState.CRITICAL -> readableToward(CRITICAL, colors.surface, toward)
         }
     }
 
@@ -152,10 +198,12 @@ object WidgetTheme {
      * اگر رنگ روی سطح انتخابی کم‌کنتراست بود، آن را به سمت سفید (روی سطح
      * تیره) یا سیاه (روی سطح روشن) هل می‌دهد تا حداقل کنتراست لازم برسد.
      */
-    fun readable(color: Int, surface: Int, minRatio: Double = MIN_CONTRAST): Int {
+    fun readable(color: Int, surface: Int, minRatio: Double = MIN_CONTRAST): Int =
+        readableToward(color, surface, if (luminance(surface) > 0.5) BLACK else WHITE, minRatio)
+
+    /** مثل [readable]، ولی رنگ به سمت هدف مشخصی (مثلاً رنگ متن پالت) هل داده می‌شود. */
+    fun readableToward(color: Int, surface: Int, target: Int, minRatio: Double = MIN_CONTRAST): Int {
         if (contrast(color, surface) >= minRatio) return color
-        val surfaceLum = luminance(surface)
-        val target = if (surfaceLum > 0.5) BLACK else WHITE
         var low = 0f
         var high = 1f
         repeat(16) {

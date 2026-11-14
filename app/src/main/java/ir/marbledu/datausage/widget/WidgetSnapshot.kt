@@ -1,5 +1,7 @@
 package ir.marbledu.datausage.widget
 
+import ir.marbledu.datausage.data.OperatorBrandGradient
+
 /**
  * تمام داده‌ای که ویجت «مصرف امروز» برای رسم لازم دارد.
  *
@@ -45,6 +47,11 @@ data class WidgetSnapshot(
     val darkSurface: Boolean = true,
     /** تم سیاه مطلق (AMOLED): پس‌زمینه‌ی کاملاً مشکی. */
     val amoled: Boolean = false,
+    /**
+     * پالت گرادیان اپراتور فعال؛ وقتی پر است، کارت ویجت همان گرادیان کارت صفحه‌ی خانه
+     * و اعلان را می‌گیرد. نال یعنی سطح معمولی تم (ویجت هم‌رنگ برنامه نیست یا اتصالی نیست).
+     */
+    val brand: OperatorBrandGradient? = null,
 ) {
     /** مجموع مصرف امروز. */
     val totalBytes: Long get() = mobileBytes + wifiBytes

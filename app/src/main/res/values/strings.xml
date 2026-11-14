@@ -184,8 +184,8 @@
     <string name="overlay_notification_title">عینک مصرف فعال است</string>
     <string name="overlay_notification_text">سرعت زنده و مصرف امروز روی صفحه نمایش داده می‌شود</string>
     <string name="overlay_stop">بستن حباب</string>
-    <string name="widget_follow_theme">هم‌رنگ تم برنامه</string>
-    <string name="widget_follow_theme_desc">رنگ اعداد و دکمه‌های ویجت از تم انتخاب‌شده گرفته شود</string>
+    <string name="widget_follow_theme">هم‌رنگ اپراتور و تم برنامه</string>
+    <string name="widget_follow_theme_desc">هنگام اتصال، کارت ویجت گرادیان اپراتور فعلی را می‌گیرد (همان رنگ کارت صفحه‌ی خانه و اعلان)؛ بدون اتصال، رنگ‌های تم انتخاب‌شده</string>
     <string name="widget_quick_actions">میان‌بر روی ویجت</string>
     <string name="widget_quick_actions_desc">دکمه‌های توقف/ادامه‌ی پایش و گزارش ۳۰ روز</string>
     <string name="insights_title">بینش مصرف</string>

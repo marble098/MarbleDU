@@ -9,7 +9,8 @@
     کامل:  ردیف دانلود/آپلود و دو میان‌بر (توقف/ادامه‌ی پایش و گزارش‌ها)
 
     کدام بخش‌ها دیده شوند را WidgetLayout بر اساس ارتفاع/عرض واقعی ویجت
-    تصمیم می‌گیرد؛ رنگ‌ها هم در WidgetTheme محاسبه می‌شوند.
+    تصمیم می‌گیرد؛ رنگ‌ها هم در WidgetTheme محاسبه می‌شوند. پس‌زمینه یا سطح تم
+    است یا گرادیان اپراتور (همان پالت کارت صفحه‌ی خانه و اعلان).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
@@ -17,6 +18,62 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="4dp">
+
+    <!--
+        قاب کارت: لایه‌های گرادیان اپراتور زیر محتوا می‌نشینند. وقتی ویجت «هم‌رنگ
+        اپراتور» است، WidgetRenderer این لایه‌ها را رنگ می‌کند و نشان می‌دهد؛ در غیر
+        این صورت پنهان می‌مانند و سطح تم (تاریک/روشن/AMOLED) پشت محتوا دیده می‌شود.
+        رنگ‌ها با setColorFilter/setImageAlpha تزریق می‌شوند که روی همه‌ی نسخه‌ها کار می‌کند.
+    -->
+    <FrameLayout
+        android:id="@+id/widget_frame"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/widget_brand_base"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_brand_fill"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/widget_brand_start"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_brand_fade_tl"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/widget_brand_end"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_brand_fade_br"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/widget_brand_glow"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_brand_glow_tr"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/widget_brand_rim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_brand_rim"
+        android:visibility="gone" />
 
     <LinearLayout
         android:id="@+id/widget_surface"
@@ -469,4 +526,5 @@
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
+    </FrameLayout>
 </LinearLayout>

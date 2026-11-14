@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.Icon
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import ir.marbledu.datausage.MainActivity
@@ -26,7 +25,7 @@ import ir.marbledu.datausage.data.OperatorBrand
 import ir.marbledu.datausage.data.Traffic
 import ir.marbledu.datausage.data.UsageLedger
 import ir.marbledu.datausage.data.TimeMath
-import ir.marbledu.datausage.ui.theme.ThemePalette
+import ir.marbledu.datausage.ui.OperatorLogos
 import ir.marbledu.datausage.widget.UsageWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -467,13 +466,16 @@ class MonitorService : Service() {
             NotificationLockVisibility.HIDDEN -> NotificationCompat.VISIBILITY_SECRET
         }
 
-        val palette = ThemePalette.of(settings.palette)
-        val brand = OperatorBrand.gradient(snapshot.operator)
-        val accent = if (snapshot.type == ConnectionType.OFFLINE) {
-            MonitoringNotification.accentColor(palette)
+        // پالت اعلان همان پالت کارت اپراتور صفحه‌ی خانه و ویجت است (با همان اپراتورِ
+        // انتخاب‌شده‌ی دستی برای سیم‌کارت)؛ بدون اتصال، پالت خنثی.
+        val offline = snapshot.type == ConnectionType.OFFLINE
+        val operator = if (snapshot.type == ConnectionType.CELLULAR && settings.operatorOverride.isNotBlank()) {
+            OperatorCatalog.resolveName(settings.operatorOverride)
         } else {
-            brand.middle
+            snapshot.operator
         }
+        val brand = if (offline) OperatorBrand.offline else OperatorBrand.gradient(operator)
+        val logo = if (offline) null else OperatorLogos.logoFor(operator.id)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -487,15 +489,8 @@ class MonitorService : Service() {
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setShowWhen(false)
-            .setColorized(true)
-            .setColor(accent)
-
-        // آیکون بزرگِ رنگی + رنگ لهجه؛ اعلان ظاهر تازه و هم‌رنگ اپ می‌گیرد.
-        runCatching {
-            builder.setLargeIcon(
-                Icon.createWithBitmap(MonitoringNotification.largeIcon(this, accent, brand.end)),
-            )
-        }
+            // رنگ نماد و نام برنامه در سربرگ اعلان؛ پس‌زمینه‌ی خود کارت گرادیان اپراتور است.
+            .setColor(brand.middle)
 
         if (!content.subText.isNullOrBlank()) {
             builder.setSubText(content.subText)
@@ -507,11 +502,32 @@ class MonitorService : Service() {
         } else {
             content.expandedText
         }
-        if (structured.isNotBlank()) {
-            builder.setStyle(NotificationCompat.BigTextStyle().bigText(structured))
-        }
-        if (content.progressPercent != null) {
-            builder.setProgress(100, content.progressPercent, false)
+
+        // کارت گرادیانی اپراتور (همان کارت صفحه‌ی خانه)؛ سیستم سربرگ و دکمه‌ها را دورش می‌چیند.
+        // اگر ساخت نمای سفارشی به هر دلیلی شکست بخورد، همان قالب متنی ساده‌ی قبلی می‌ماند.
+        val branded = runCatching {
+            MonitoringNotification.brandedViews(
+                context = this,
+                palette = brand,
+                logoRes = logo,
+                title = content.title,
+                summary = content.summaryText,
+                body = structured.takeIf { it.isNotBlank() },
+                progressPercent = content.progressPercent,
+                persian = persian,
+            )
+        }.getOrNull()
+        if (branded != null) {
+            builder.setStyle(NotificationCompat.DecoratedCustomViewStyle())
+                .setCustomContentView(branded.collapsed)
+                .setCustomBigContentView(branded.expanded)
+        } else {
+            if (structured.isNotBlank()) {
+                builder.setStyle(NotificationCompat.BigTextStyle().bigText(structured))
+            }
+            if (content.progressPercent != null) {
+                builder.setProgress(100, content.progressPercent, false)
+            }
         }
 
         if (config.actionRecheckIsp) {

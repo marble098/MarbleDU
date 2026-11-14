@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    لایه‌ی پایه‌ی گرادیان اپراتور در اعلان (رنگ میانی پالت).
+    سفید کشیده می‌شود و رنگ واقعی در زمان اجرا با setColorFilter روی ImageView
+    تزریق می‌شود؛ این روش روی همه‌ی نسخه‌های اندروید (۸ به بعد) کار می‌کند و
+    هیچ تصویر بیت‌مپی با هر به‌روزرسانی اعلان فرستاده نمی‌شود.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="16dp" />
+    <solid android:color="#FFFFFFFF" />
+</shape>

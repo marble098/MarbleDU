@@ -118,4 +118,15 @@ class NotificationFormatterTest {
         assertTrue(out.expandedLines.any { it.contains("Top app:") })
         assertNotNull(out.subText)
     }
+
+    @Test
+    fun `body drops the line that only repeats the title`() {
+        val rlm = "\u200F"
+        val title = "$rlm↓ ۲٫۴ م.ب/ث   ↑ ۳۱۰ ک.ب/ث"
+        val body = "$rlm↓ ۲٫۴ م.ب/ث   ↑ ۳۱۰ ک.ب/ث\n${rlm}امروز: ۱٫۲ گ.ب\n\n${rlm}بسته: ۱۸ گ.ب مانده (۴۰٪)"
+        val lines = NotificationFormatter.bodyLinesWithoutTitle(body, title)
+        assertEquals(listOf("${rlm}امروز: ۱٫۲ گ.ب", "${rlm}بسته: ۱۸ گ.ب مانده (۴۰٪)"), lines)
+        assertTrue(NotificationFormatter.bodyLinesWithoutTitle(null, title).isEmpty())
+        assertEquals(listOf("Today: 1.2 GB"), NotificationFormatter.bodyLinesWithoutTitle("Today: 1.2 GB", "Idle"))
+    }
 }

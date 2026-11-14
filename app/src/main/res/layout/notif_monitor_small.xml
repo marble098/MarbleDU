@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    اعلان پایش، حالت جمع‌شده: کارت گرادیانی اپراتور (همان پالت کارت صفحه‌ی خانه و ویجت).
+    لایه‌های گرادیان در MonitoringNotification رنگ می‌گیرند (BrandLayers)؛ متن‌ها رنگ
+    متن پالت را می‌گیرند. فقط ویوهای مجاز RemoteViews و بدون فونت سفارشی.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/notif_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <ImageView
+        android:id="@+id/notif_brand_base"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/notif_brand_fill" />
+
+    <ImageView
+        android:id="@+id/notif_brand_start"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/notif_brand_fade_tl" />
+
+    <ImageView
+        android:id="@+id/notif_brand_end"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/notif_brand_fade_br" />
+
+    <ImageView
+        android:id="@+id/notif_brand_glow"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/notif_brand_glow_tr" />
+
+    <ImageView
+        android:id="@+id/notif_brand_rim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/notif_brand_rim" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/notif_card_pad_h"
+        android:paddingTop="@dimen/notif_card_pad_v"
+        android:paddingEnd="@dimen/notif_card_pad_h"
+        android:paddingBottom="@dimen/notif_card_pad_v">
+
+        <FrameLayout
+            android:id="@+id/notif_logo_tile"
+            android:layout_width="@dimen/notif_logo_size"
+            android:layout_height="@dimen/notif_logo_size"
+            android:background="@drawable/notif_logo_tile"
+            android:padding="@dimen/notif_logo_pad">
+
+            <ImageView
+                android:id="@+id/notif_logo"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_notification" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/notif_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textAlignment="viewStart"
+                android:textColor="#FFFFFFFF"
+                android:textSize="@dimen/notif_title_size"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/notif_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textAlignment="viewStart"
+                android:textColor="#DDFFFFFF"
+                android:textSize="@dimen/notif_text_size" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

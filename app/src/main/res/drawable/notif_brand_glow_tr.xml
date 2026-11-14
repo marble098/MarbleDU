@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    درخشش نرم اعلان از گوشه‌ی بالا-راست. کارت اعلان خیلی پهن و کم‌ارتفاع است، پس به‌جای
+    درخشش دایره‌ای از یک نور مورب استفاده می‌شود که با هر نسبت طول/عرضی درست کشیده شود.
+    رنگ و شدتش در زمان اجرا از پالت اپراتور می‌آید.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="16dp" />
+    <gradient
+        android:angle="225"
+        android:centerColor="#00FFFFFF"
+        android:endColor="#00FFFFFF"
+        android:startColor="#FFFFFFFF" />
+</shape>

@@ -271,6 +271,21 @@ object NotificationFormatter {
         )
     }
 
+    /**
+     * خطوط تفصیلی اعلان بدون خطی که فقط عنوان را تکرار می‌کند.
+     *
+     * در حالت پیش‌فرض (عنوان = سرعت) اولین خط بدنه هم همان سرعت است؛ در کارت اعلان
+     * عنوان کنار لوگو دیده می‌شود و تکرارش زیر آن فقط جا می‌گیرد. نشانگر راست‌به‌چپ و
+     * فاصله‌های اضافه در مقایسه نادیده گرفته می‌شوند.
+     */
+    fun bodyLinesWithoutTitle(body: CharSequence?, title: CharSequence): List<String> {
+        fun clean(s: CharSequence) = s.toString().replace(RLM, "").trim()
+        val cleanTitle = clean(title)
+        return body?.toString().orEmpty()
+            .split("\n")
+            .filter { line -> clean(line).isNotEmpty() && clean(line) != cleanTitle }
+    }
+
     private fun resolveOperatorText(input: NotificationInput, persian: Boolean): String {
         if (input.connectionType == ConnectionType.OFFLINE) {
             return if (persian) "آفلاین" else "Offline"

@@ -320,7 +320,9 @@ class UsageWidgetProvider : AppWidgetProvider() {
             val operator = if (network.type == ConnectionType.CELLULAR && settings.operatorOverride.isNotBlank()) {
                 OperatorCatalog.resolveName(settings.operatorOverride)
             } else network.operator
-            val brand = OperatorBrand.gradient(operator)
+            // ویجت هم‌رنگ اپراتور: هنگام اتصال، کارت همان گرادیان کارت صفحه‌ی خانه را می‌گیرد؛
+            // بدون اتصال، سطح تم با رنگ‌های تأکیدی پالت برنامه.
+            val branded = follow && network.type != ConnectionType.OFFLINE
             return WidgetSnapshot(
                 persian = persian,
                 mobileBytes = mobileBytes,
@@ -339,10 +341,11 @@ class UsageWidgetProvider : AppWidgetProvider() {
                 bigText = settings.widgetBigText,
                 quickActions = settings.widgetQuickActions,
                 followTheme = follow,
-                accentPrimary = if (follow && network.type != ConnectionType.OFFLINE) brand.middle else if (follow) palette.primary.toInt() else null,
-                accentSecondary = if (follow && network.type != ConnectionType.OFFLINE) brand.end else if (follow) palette.tertiary.toInt() else null,
+                accentPrimary = if (follow && !branded) palette.primary.toInt() else null,
+                accentSecondary = if (follow && !branded) palette.tertiary.toInt() else null,
                 darkSurface = WidgetTheme.isDarkSurface(settings.themeMode.name, systemNight(context)),
                 amoled = WidgetTheme.isAmoled(settings.themeMode.name),
+                brand = if (branded) OperatorBrand.gradient(operator) else null,
             )
         }
 

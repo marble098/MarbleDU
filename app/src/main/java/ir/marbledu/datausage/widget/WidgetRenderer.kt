@@ -32,6 +32,21 @@ internal object WidgetRenderer {
     private const val DEFAULT_WIDTH_DP = 250
     private const val DEFAULT_HEIGHT_DP = 150
 
+    /** لایه‌های گرادیان اپراتور در [R.layout.widget_usage]. */
+    private val BRAND_LAYERS = BrandLayers.Ids(
+        base = R.id.widget_brand_base,
+        start = R.id.widget_brand_start,
+        end = R.id.widget_brand_end,
+        glow = R.id.widget_brand_glow,
+        rim = R.id.widget_brand_rim,
+        fadeTopLeft = R.drawable.widget_brand_fade_tl,
+        fadeTopRight = R.drawable.widget_brand_fade_tr,
+        fadeBottomLeft = R.drawable.widget_brand_fade_bl,
+        fadeBottomRight = R.drawable.widget_brand_fade_br,
+        glowTopLeft = R.drawable.widget_brand_glow_tl,
+        glowTopRight = R.drawable.widget_brand_glow_tr,
+    )
+
     /** رسم همه‌ی ویجت‌های روی صفحه‌ی اصلی با یک تصویر از داده. */
     fun renderAll(context: Context, snapshot: WidgetSnapshot) {
         val manager = runCatching { AppWidgetManager.getInstance(context) }.getOrNull() ?: return
@@ -96,12 +111,17 @@ internal object WidgetRenderer {
     ): RemoteViews {
         val (widthDp, heightDp) = measure(manager, appWidgetId)
         val visibility = WidgetLayout.visibility(snapshot, widthDp, heightDp)
-        val colors = WidgetTheme.colors(
-            dark = snapshot.darkSurface,
-            amoled = snapshot.amoled,
-            primary = snapshot.accentPrimary,
-            secondary = snapshot.accentSecondary,
-        )
+        val brand = snapshot.brand
+        val colors = if (brand != null) {
+            WidgetTheme.brandColors(brand)
+        } else {
+            WidgetTheme.colors(
+                dark = snapshot.darkSurface,
+                amoled = snapshot.amoled,
+                primary = snapshot.accentPrimary,
+                secondary = snapshot.accentSecondary,
+            )
+        }
         val strings = LocaleHelper.localizedContext(context, if (snapshot.persian) "fa" else "en")
         val persian = snapshot.persian
         val views = RemoteViews(context.packageName, R.layout.widget_usage)
@@ -112,7 +132,14 @@ internal object WidgetRenderer {
             "setLayoutDirection",
             if (persian) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR,
         )
-        views.setInt(R.id.widget_surface, "setBackgroundResource", surfaceResource(snapshot))
+        // ---- پس‌زمینه: گرادیان اپراتور (همان کارت صفحه‌ی خانه) یا سطح معمولی تم
+        if (brand != null) {
+            views.setInt(R.id.widget_surface, "setBackgroundResource", 0)
+            BrandLayers.show(views, BRAND_LAYERS, brand, rtl = persian)
+        } else {
+            BrandLayers.hide(views, BRAND_LAYERS)
+            views.setInt(R.id.widget_surface, "setBackgroundResource", surfaceResource(snapshot))
+        }
         val horizontal = if (visibility.compact) 12 else 14
         val vertical = if (visibility.compact) 10 else 12
         views.setViewPadding(

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- اندروید ۱۲ به بعد: محتوای اعلان جمع‌شده ۴۸dp جا دارد؛ کارت کمی جادارتر و خواناتر. -->
+<resources>
+    <dimen name="notif_card_pad_h">12dp</dimen>
+    <dimen name="notif_card_pad_v">6dp</dimen>
+    <dimen name="notif_logo_size">32dp</dimen>
+    <dimen name="notif_logo_pad">1.25dp</dimen>
+    <dimen name="notif_title_size">14sp</dimen>
+    <dimen name="notif_text_size">12sp</dimen>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    اندازه‌های کارت گرادیانی اعلان پایش.
+
+    سیستم برای محتوای سفارشیِ اعلانِ جمع‌شده جای محدودی می‌گذارد: در اندروید ۸ تا ۱۱
+    حدود ۴۰dp و از اندروید ۱۲ به بعد ۴۸dp (به‌جز سربرگ و حاشیه‌ها). این مقادیر برای نسخه‌های
+    قدیمی‌تر است تا کارت هیچ‌جا بریده نشود؛ نسخه‌ی جادارتر در values-v31 است.
+-->
+<resources>
+    <dimen name="notif_card_pad_h">10dp</dimen>
+    <dimen name="notif_card_pad_v">3dp</dimen>
+    <dimen name="notif_logo_size">26dp</dimen>
+    <dimen name="notif_logo_pad">1dp</dimen>
+    <dimen name="notif_title_size">13sp</dimen>
+    <dimen name="notif_text_size">11.5sp</dimen>
+</resources>

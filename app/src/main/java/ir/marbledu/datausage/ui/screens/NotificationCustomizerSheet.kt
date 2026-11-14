@@ -1,6 +1,16 @@
 package ir.marbledu.datausage.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import ir.marbledu.datausage.data.OperatorBrand
+import ir.marbledu.datausage.data.OperatorBrandGradient
+import ir.marbledu.datausage.service.MonitoringNotification
+import ir.marbledu.datausage.ui.OperatorLogos
+import ir.marbledu.datausage.ui.operatorGradient
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -375,10 +385,19 @@ fun NotificationPreviewCard(
     val scheme = MaterialTheme.colorScheme
     val config = settings.notification
     val net = tick?.network
-    val sampleOp = when {
-        net != null && net.type != ConnectionType.OFFLINE -> net.operator.name(persian)
-        else -> OperatorCatalog.byId("irancell").name(persian)
+    // همان اپراتوری که اعلان واقعی نشان می‌دهد (با اپراتور دستیِ سیم‌کارت)؛ بدون اتصال، نمونه‌ی ایرانسل.
+    val previewOperator = when {
+        net != null && net.type == ConnectionType.CELLULAR && settings.operatorOverride.isNotBlank() ->
+            OperatorCatalog.resolveName(settings.operatorOverride)
+        net != null && net.type != ConnectionType.OFFLINE -> net.operator
+        else -> OperatorCatalog.byId("irancell")
     }
+    val sampleOp = previewOperator.name(persian)
+    val offline = net?.type == ConnectionType.OFFLINE
+    val palette = remember(previewOperator.id, previewOperator.brandColor, previewOperator.accentColor, offline) {
+        if (offline) OperatorBrand.offline else OperatorBrand.gradient(previewOperator)
+    }
+    val ink = Color(palette.ink)
     val topApp = usage.mobile.firstOrNull() ?: usage.wifi.firstOrNull()
     val topAppName = topApp?.let { OperatorCatalog.specialUidLabel(it.uid, persian) ?: it.label }.orEmpty()
     val topAppBytes = topApp?.bytes ?: (280L * 1024L * 1024L)
@@ -414,28 +433,39 @@ fun NotificationPreviewCard(
         appMonitoringTitle = context.getString(R.string.notif_title),
     )
 
-    // پیش‌نمایش، دقیقاً همان زبان بصری اعلان واقعی را دارد: سربرگ با ساعت،
-    // آیکون رنگی، سرعت‌های درشت و خطوط ساختاریافته.
+    // خطوط تفصیلی دقیقاً همان‌هایی است که اعلان واقعی در سبک «کامل» نشان می‌دهد.
+    val bodyLines = if (config.style == NotificationStyle.EXPANDED && preview.expandedLines.isNotEmpty()) {
+        NotificationFormatter.bodyLinesWithoutTitle(
+            MonitoringNotification.expandedBody(input, config, preview, persian),
+            preview.title,
+        )
+    } else {
+        emptyList()
+    }
+
+    // پیش‌نمایش، همان زبان بصری اعلان واقعی را دارد: سربرگ سیستم (نماد، نام برنامه و ساعت)
+    // و زیرش کارت گرادیانی اپراتور با لوگو، عنوان، خطوط و نوار پیشرفت.
     Card(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerHigh),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // ---- سربرگ اعلان
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
                         .size(26.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(
-                            androidx.compose.ui.graphics.Brush.linearGradient(
-                                listOf(scheme.primary, scheme.tertiary),
-                            ),
-                        ),
+                        .clip(CircleShape)
+                        .background(Color(palette.middle)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(MIcons.Bell, null, Modifier.size(15.dp), tint = Color.White)
+                    Icon(
+                        painterResource(R.drawable.ic_notification),
+                        null,
+                        Modifier.size(15.dp),
+                        tint = ink,
+                    )
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
@@ -443,7 +473,7 @@ fun NotificationPreviewCard(
                         text = context.getString(R.string.app_name),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = scheme.primary,
+                        color = scheme.onSurface,
                     )
                     Text(
                         text = preview.subText?.takeIf { it.isNotBlank() }
@@ -464,87 +494,94 @@ fun NotificationPreviewCard(
                 )
             }
 
-            // ---- عنوان و خلاصه
-            Text(
-                text = preview.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = preview.summaryText,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = if (config.style == NotificationStyle.COMPACT) 1 else 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            // ---- خطوط ساختاریافته
-            if (preview.expandedLines.isNotEmpty()) {
-                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.4f))
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    preview.expandedLines.take(5).forEach { line ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier
-                                    .size(4.dp)
-                                    .clip(CircleShape)
-                                    .background(scheme.primary.copy(alpha = 0.7f)),
-                            )
-                            Spacer(Modifier.width(7.dp))
+            // ---- کارت گرادیانی اپراتور (محتوای اعلان)
+            val cardShape = RoundedCornerShape(16.dp)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(cardShape)
+                    .operatorGradient(palette)
+                    .border(1.dp, ink.copy(alpha = if (palette.darkInk) 0.12f else 0.18f), cardShape)
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    NotificationLogoTile(previewOperator, offline, palette, 36.dp)
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = preview.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = ink,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (bodyLines.isEmpty()) {
                             Text(
-                                text = line,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = scheme.onSurface,
-                                maxLines = 1,
+                                text = preview.summaryText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ink.copy(alpha = 0.86f),
+                                maxLines = if (config.style == NotificationStyle.COMPACT) 1 else 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
-                    val extra = preview.expandedLines.size - 5
-                    if (extra > 0) {
-                        Text(
-                            text = if (persian) "و ${Formats.integer(extra.toLong(), true)} خط دیگر"
-                            else "and ${Formats.integer(extra.toLong(), false)} more",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = scheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 11.dp),
-                        )
+                }
+
+                // ---- خطوط ساختاریافته
+                if (bodyLines.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        bodyLines.take(6).forEach { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = ink.copy(alpha = 0.94f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        val extra = bodyLines.size - 6
+                        if (extra > 0) {
+                            Text(
+                                text = if (persian) "و ${Formats.integer(extra.toLong(), true)} خط دیگر"
+                                else "and ${Formats.integer(extra.toLong(), false)} more",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ink.copy(alpha = 0.75f),
+                            )
+                        }
                     }
                 }
-            }
 
-            // ---- نوار پیشرفت با رنگ پالت
-            if (preview.progressPercent != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(7.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(scheme.primary.copy(alpha = 0.14f)),
-                    ) {
+                // ---- نوار پیشرفت روی گرادیان
+                if (preview.progressPercent != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier
-                                .fillMaxWidth((preview.progressPercent / 100f).coerceIn(0f, 1f))
-                                .height(7.dp)
-                                .clip(RoundedCornerShape(4.dp))
+                                .weight(1f)
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(3.dp))
                                 .background(
-                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                        listOf(scheme.primary, scheme.tertiary),
-                                    ),
+                                    if (palette.darkInk) Color.Black.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.25f),
                                 ),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth((preview.progressPercent / 100f).coerceIn(0f, 1f))
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(ink.copy(alpha = if (palette.darkInk) 0.9f else 1f)),
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = Formats.integer(preview.progressPercent.toLong(), persian) +
+                                (if (persian) "٪" else "%"),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = ink,
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = Formats.integer(preview.progressPercent.toLong(), persian) +
-                            (if (persian) "٪" else "%"),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = scheme.primary,
-                    )
                 }
             }
 
@@ -575,6 +612,43 @@ fun NotificationPreviewCard(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * کاشی لوگوی اپراتور، دقیقاً مثل اعلان واقعی: کاشی سفید با لوگو، یا نماد برنامه به رنگ
+ * تیره‌ترین ایستگاه پالت وقتی اپراتور لوگو ندارد (یا اتصالی نیست).
+ */
+@Composable
+private fun NotificationLogoTile(
+    operator: OperatorCatalog.Operator,
+    offline: Boolean,
+    palette: OperatorBrandGradient,
+    size: androidx.compose.ui.unit.Dp,
+) {
+    val logo = if (offline) null else OperatorLogos.logoFor(operator.id)
+    Box(
+        Modifier
+            .size(size)
+            .clip(RoundedCornerShape(percent = 26))
+            .background(Color.White),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (logo != null) {
+            Image(
+                painter = painterResource(logo),
+                contentDescription = operator.en,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(OperatorLogos.FIT_SCALE),
+            )
+        } else {
+            Icon(
+                painterResource(R.drawable.ic_notification),
+                null,
+                Modifier.fillMaxSize(0.62f),
+                tint = Color(palette.stops.minBy { OperatorBrand.luminance(it) }),
+            )
         }
     }
 }
