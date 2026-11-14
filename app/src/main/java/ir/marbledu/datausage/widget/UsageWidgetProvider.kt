@@ -15,6 +15,7 @@ import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.LocaleHelper
 import ir.marbledu.datausage.data.NetworkStatsReader
 import ir.marbledu.datausage.data.OperatorCatalog
+import ir.marbledu.datausage.data.OperatorBrand
 import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.service.MonitorService
 import ir.marbledu.datausage.ui.theme.ThemePalette
@@ -315,6 +316,11 @@ class UsageWidgetProvider : AppWidgetProvider() {
         ): WidgetSnapshot {
             val follow = settings.widgetFollowTheme
             val palette = ThemePalette.of(settings.palette)
+            val network = NetworkStatsReader.currentNetwork(context, persian)
+            val operator = if (network.type == ConnectionType.CELLULAR && settings.operatorOverride.isNotBlank()) {
+                OperatorCatalog.resolveName(settings.operatorOverride)
+            } else network.operator
+            val brand = OperatorBrand.gradient(operator)
             return WidgetSnapshot(
                 persian = persian,
                 mobileBytes = mobileBytes,
@@ -333,8 +339,8 @@ class UsageWidgetProvider : AppWidgetProvider() {
                 bigText = settings.widgetBigText,
                 quickActions = settings.widgetQuickActions,
                 followTheme = follow,
-                accentPrimary = if (follow) palette.primary.toInt() else null,
-                accentSecondary = if (follow) palette.tertiary.toInt() else null,
+                accentPrimary = if (follow && network.type != ConnectionType.OFFLINE) brand.middle else if (follow) palette.primary.toInt() else null,
+                accentSecondary = if (follow && network.type != ConnectionType.OFFLINE) brand.end else if (follow) palette.tertiary.toInt() else null,
                 darkSurface = WidgetTheme.isDarkSurface(settings.themeMode.name, systemNight(context)),
                 amoled = WidgetTheme.isAmoled(settings.themeMode.name),
             )
