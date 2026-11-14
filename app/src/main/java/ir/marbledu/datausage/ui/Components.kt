@@ -222,8 +222,15 @@ fun EmptyState(text: String, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------------------
 
 /**
- * نشان اپراتور: مربع گرد با گرادیانِ رنگ برند و حروف کوتاه اپراتور، به‌همراه
- * یک نشانک کوچک که می‌گوید اینترنت از سیم‌کارت می‌آید یا وای‌فای.
+ * نشان اپراتور — «کاشی لوگو».
+ *
+ *  - کاشی گرد سفید (در تم تیره: سطح روشنِ خنثی) تا نشان‌های رنگی و پرکنتراست
+ *    روی هر پوسته‌ای خوانا بمانند؛
+ *  - حلقه‌ی نازکِ رنگ برند دور کاشی، و یک هاله‌ی بسیار محو از همان رنگ، تا هر
+ *    اپراتور «امضای رنگی» خودش را داشته باشد بدون این‌که لوگو را بپوشاند؛
+ *  - لوگو با مقیاس اختصاصی خودش (پهن‌ها بزرگ‌تر، مربعی‌ها کوچک‌تر) وسط‌چین
+ *    می‌شود تا وزن بصری همه‌ی نشان‌ها یکسان دیده شود؛
+ *  - اگر لوگویی موجود نباشد، نشان حرف‌دار با گرادیان رنگ برند رسم می‌شود.
  */
 @Composable
 fun OperatorBadge(
@@ -235,66 +242,83 @@ fun OperatorBadge(
     val brand = Color(operator.brandColor)
     val accent = Color(operator.accentColor)
     // متن روی کاشی برند با کنتراست تضمینی انتخاب می‌شود (سیاه یا سفید، هرکدام خواناتر).
-    // آستانه‌ی قبلی (۰٫۵۵) برای بیشتر رنگ‌های برند سفید می‌داد درحالی‌که سیاه خواناتر بود.
     val onBrand = ir.marbledu.datausage.ui.theme.bestOnColor(brand)
     val readableAccent = ir.marbledu.datausage.ui.theme.accessibleColor(accent, onBrand)
     val logo = OperatorLogos.logoFor(operator.id)
+    val marble = LocalMarbleColors.current
+    val shape = RoundedCornerShape(percent = 30)
     Box(modifier.size(size)) {
-        if (logo != null) {
-            // لوگوی رسمی اپراتور روی کاشی سفید (یا رنگ برند برای لوگوهای سفید)
-            val tile = if (OperatorLogos.needsBrandTile(operator.id)) brand else Color.White
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(percent = 28))
-                    .background(tile)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(percent = 28),
+        // هاله‌ی رنگی برند، خیلی کم‌رنگ و بیرون از کاشی؛ عمق ملایمی به نشان می‌دهد.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(size * 0.02f)
+                .clip(shape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(brand.copy(alpha = if (marble.dark) 0.30f else 0.18f), Color.Transparent),
                     ),
-                contentAlignment = Alignment.Center,
-            ) {
+                ),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(size * 0.055f)
+                .clip(shape)
+                .background(if (marble.dark) Color(0xFFF4F6FA) else Color.White)
+                .border(
+                    width = if (size.value >= 34f) 1.dp else 0.7.dp,
+                    color = brand.copy(alpha = if (marble.dark) 0.55f else 0.30f),
+                    shape = shape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (logo != null) {
                 Image(
                     painter = painterResource(logo),
                     contentDescription = operator.en,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(size * 0.11f),
+                    modifier = Modifier.fillMaxSize(OperatorLogos.fitScale(operator.id)),
                 )
-            }
-        } else {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(percent = 32))
-                    .background(Brush.linearGradient(listOf(brand, readableAccent))),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = operator.mark,
-                    color = onBrand,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = (size.value * (if (operator.mark.length > 3) 0.26f else 0.32f)).sp,
-                    maxLines = 1,
-                    softWrap = false,
-                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clip(shape)
+                        .background(Brush.linearGradient(listOf(brand, readableAccent))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = operator.mark,
+                        color = onBrand,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = (size.value * (if (operator.mark.length > 3) 0.26f else 0.32f)).sp,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
             }
         }
         if (transportIcon != null) {
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .offset(x = 4.dp, y = 4.dp)
-                    .size(size * 0.44f)
+                    .offset(x = size * 0.06f, y = size * 0.06f)
+                    .size(size * 0.46f)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        shape = CircleShape,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     transportIcon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(size * 0.28f),
+                    modifier = Modifier.size(size * 0.27f),
                 )
             }
         }
