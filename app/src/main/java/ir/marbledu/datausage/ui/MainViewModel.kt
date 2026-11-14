@@ -608,9 +608,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // -------------------------------------------------------------- settings
-    fun setLanguage(language: AppLanguage) = viewModelScope.launch { settingsRepo.setLanguage(language) }
-    fun setTheme(mode: ThemeMode) = viewModelScope.launch { settingsRepo.setTheme(mode) }
-    fun setPalette(name: String, dynamic: Boolean) = viewModelScope.launch { settingsRepo.setPalette(name, dynamic) }
+    /** زبان، تم و پالت روی ویجت هم اثر دارند؛ پس ویجت بلافاصله بازرسم می‌شود. */
+    fun setLanguage(language: AppLanguage) = viewModelScope.launch {
+        settingsRepo.setLanguage(language)
+        refreshWidget()
+    }
+    fun setTheme(mode: ThemeMode) = viewModelScope.launch {
+        settingsRepo.setTheme(mode)
+        refreshWidget()
+    }
+    fun setPalette(name: String, dynamic: Boolean) = viewModelScope.launch {
+        settingsRepo.setPalette(name, dynamic)
+        refreshWidget()
+    }
     fun setDataCap(bytes: Long) = viewModelScope.launch {
         settingsRepo.setDataCap(bytes)
         refreshWidget()
@@ -621,7 +631,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setMonitorInterval(seconds: Int) = viewModelScope.launch {
         settingsRepo.setMonitorInterval(seconds.coerceIn(1, 60))
     }
-    fun setOperator(name: String) = viewModelScope.launch { settingsRepo.setOperator(name) }
+    fun setOperator(name: String) = viewModelScope.launch {
+        settingsRepo.setOperator(name)
+        refreshWidget()
+    }
 
     /** حالت نمایشی اپ (ساده / پیشرفته). */
     fun setUiMode(mode: UiMode) = viewModelScope.launch { settingsRepo.setUiMode(mode) }
@@ -682,7 +695,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshDashboard()
     }
 
-    fun setTextSize(size: AppTextSize) = viewModelScope.launch { settingsRepo.setTextSize(size) }
+    fun setTextSize(size: AppTextSize) = viewModelScope.launch {
+        settingsRepo.setTextSize(size)
+        refreshWidget()
+    }
     fun setTariffPerGbToman(value: Long) = viewModelScope.launch { settingsRepo.setTariffPerGb(value) }
     fun setSpikeAlert(enabled: Boolean) = viewModelScope.launch { settingsRepo.setSpikeAlert(enabled) }
     fun setWeeklyDigest(enabled: Boolean) = viewModelScope.launch { settingsRepo.setWeeklyDigest(enabled) }
@@ -816,6 +832,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         settingsRepo.setMonitorBackground(on)
         val context = getApplication<Application>()
         if (on) MonitorService.start(context) else MonitorService.stop(context)
+        refreshWidget()
     }
 
     fun updateNotification(transform: (NotificationConfig) -> NotificationConfig) =

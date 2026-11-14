@@ -18,6 +18,7 @@ import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.IspResolver
 import ir.marbledu.datausage.data.LocaleHelper
 import ir.marbledu.datausage.data.NotificationStyle
+import ir.marbledu.datausage.data.NetworkSnapshot
 import ir.marbledu.datausage.data.NetworkStatsReader
 import ir.marbledu.datausage.data.NotificationLockVisibility
 import ir.marbledu.datausage.data.OperatorCatalog
@@ -90,6 +91,10 @@ class MonitorService : Service() {
 
     @Volatile
     private var lastStatsFetchAt: Long = 0L
+
+    /** آیا اجازه‌ی «دسترسی به مصرف» داده شده است؟ ویجت از همین برای حالت خالی استفاده می‌کند. */
+    @Volatile
+    private var appHasUsageAccess: Boolean = true
 
     @Volatile
     private var cachedTopApp: Pair<String, Long>? = null
@@ -229,6 +234,8 @@ class MonitorService : Service() {
 
                 refreshStatsIfNeeded(settings, persian, forceStats = false)
                 postCurrentNotification(down = down, up = up)
+                // هشدارها و ویجت عمداً جدا هستند: خطای یک هشدار نباید
+                // به‌روزرسانی ویجت را متوقف کند.
                 if (lastStatsFetchAt > 0L) {
                     runCatching {
                         UsageAlertNotifier.check(
@@ -240,30 +247,22 @@ class MonitorService : Service() {
                         )
                         checkSpikeAlert(settings, persian)
                         checkWeeklyDigest(settings, persian)
-                        val palette = ThemePalette.of(settings.palette)
-                        val widgetPrimary = palette.primary.toInt()
-                        val widgetSecondary = palette.tertiary.toInt()
+                    }
+                    runCatching {
                         UsageWidgetProvider.push(
                             this@MonitorService,
-                            UsageWidgetProvider.Snapshot(
+                            UsageWidgetProvider.buildSnapshot(
+                                context = this@MonitorService,
+                                settings = settings,
                                 persian = persian,
                                 mobileBytes = cachedTodayMobile.total,
                                 wifiBytes = cachedTodayWifi.total,
-                                operatorName = UsageWidgetProvider.operatorName(
-                                    this@MonitorService, persian, settings.operatorOverride,
-                                ),
-                                capUsedBytes = cachedMonthMobileBytes,
-                                capTotalBytes = settings.dataCapBytes,
-                                showOperator = settings.widgetShowOperator,
-                                showCap = settings.widgetShowCap,
-                                bigText = settings.widgetBigText,
-                                detailed = settings.widgetDetailed,
                                 rxBytes = cachedTodayMobile.rx + cachedTodayWifi.rx,
                                 txBytes = cachedTodayMobile.tx + cachedTodayWifi.tx,
-                                themePrimary = if (settings.widgetFollowTheme) widgetPrimary else null,
-                                themeSecondary = if (settings.widgetFollowTheme) widgetSecondary else null,
-                                quickActions = settings.widgetQuickActions,
+                                operatorName = operatorLabel(snapshot, settings, persian),
+                                capUsedBytes = cachedMonthMobileBytes,
                                 monitoring = settings.monitorInBackground,
+                                hasUsageAccess = appHasUsageAccess,
                             ),
                         )
                     }
@@ -351,6 +350,7 @@ class MonitorService : Service() {
             UsageWidgetProvider.hasWidgets(this)
         if (needsUsageStats && (forceStats || now - lastStatsFetchAt >= STATS_REFRESH_MS)) {
             runCatching {
+                appHasUsageAccess = appRepo.hasUsageAccess()
                 val (m, w) = appRepo.todayDeviceTraffic()
                 cachedTodayMobile = m
                 cachedTodayWifi = w
@@ -391,6 +391,21 @@ class MonitorService : Service() {
         )
     }
 
+    /** نام اپراتور برای اعلان و ویجت؛ یک‌بار محاسبه و همه‌جا استفاده می‌شود. */
+    private fun operatorLabel(
+        snapshot: NetworkSnapshot,
+        settings: AppSettings,
+        persian: Boolean,
+    ): String {
+        val override = settings.operatorOverride
+        return when {
+            snapshot.type == ConnectionType.CELLULAR && override.isNotBlank() ->
+                OperatorCatalog.resolveName(override).name(persian)
+            snapshot.operator.id == OperatorCatalog.ID_UNKNOWN -> snapshot.carrierName
+            else -> snapshot.operator.name(persian)
+        }
+    }
+
     private fun buildNotification(
         context: Context,
         persian: Boolean,
@@ -399,13 +414,7 @@ class MonitorService : Service() {
         up: Double,
     ): Notification {
         val snapshot = NetworkStatsReader.currentNetwork(context, persian)
-        val override = settings.operatorOverride
-        val operatorName = when {
-            snapshot.type == ConnectionType.CELLULAR && override.isNotBlank() ->
-                OperatorCatalog.resolveName(override).name(persian)
-            snapshot.operator.id == OperatorCatalog.ID_UNKNOWN -> snapshot.carrierName
-            else -> snapshot.operator.name(persian)
-        }
+        val operatorName = operatorLabel(snapshot, settings, persian)
         val avgSpeed = synchronized(speedHistory) {
             if (speedHistory.isEmpty()) down + up else speedHistory.average()
         }
@@ -563,9 +572,13 @@ class MonitorService : Service() {
         private const val ACTION_RECHECK_ISP = "ir.marbledu.datausage.action.RECHECK_ISP"
         private const val ACTION_STOP_MONITOR = "ir.marbledu.datausage.action.STOP_MONITOR"
 
-        fun start(context: Context) {
+        /**
+         * روشن‌کردن سرویس پایش. خروجی `false` یعنی اندروید اجازه‌ی شروع
+         * سرویس پیش‌زمینه را در این لحظه نداد (مثلاً ضربه از ویجت در پس‌زمینه).
+         */
+        fun start(context: Context): Boolean {
             val intent = Intent(context, MonitorService::class.java)
-            runCatching { context.startForegroundService(intent) }
+            return runCatching { context.startForegroundService(intent) }.isSuccess
         }
 
         fun stop(context: Context) {

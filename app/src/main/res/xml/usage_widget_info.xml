@@ -1,15 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    مشخصات ویجت «مصرف امروز».
+    • پیش‌فرض ۴×۲ سلول است تا سربرگ، عدد بزرگ و کارت‌های موبایل/وای‌فای جا شوند.
+    • با بزرگ‌کردن ویجت، سقف بسته، دکمه‌ها و ریزجزئیات هم اضافه می‌شوند.
+    • updatePeriodMillis کمترین مقدار مجاز اندروید (۳۰ دقیقه) است؛ به‌روزرسانی
+      زنده از سرویس پایش می‌آید و این مقدار فقط «حداقل» است.
+-->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:description="@string/widget_usage_desc"
     android:initialLayout="@layout/widget_usage"
-    android:minWidth="200dp"
+    android:minWidth="250dp"
     android:minHeight="110dp"
-    android:minResizeWidth="130dp"
-    android:minResizeHeight="90dp"
-    android:previewLayout="@layout/widget_usage"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="110dp"
+    android:previewImage="@mipmap/ic_launcher"
+    android:previewLayout="@layout/widget_preview"
     android:resizeMode="horizontal|vertical"
-    android:targetCellWidth="3"
+    android:targetCellWidth="4"
     android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"

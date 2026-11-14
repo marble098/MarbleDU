@@ -1,19 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    نوار پیشرفت بسته: ریل و پیشرفت هر دو سفید رسم می‌شوند و رنگ واقعی
+    (به‌همراه وضعیت هشدار/پایان) در زمان اجرا تزریق می‌شود.
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@android:id/background">
         <shape android:shape="rectangle">
-            <corners android:radius="4dp" />
-            <solid android:color="#26FFFFFF" />
+            <corners android:radius="3dp" />
+            <solid android:color="#FFFFFFFF" />
         </shape>
     </item>
     <item android:id="@android:id/progress">
         <clip>
             <shape android:shape="rectangle">
-                <corners android:radius="4dp" />
-                <gradient
-                    android:angle="0"
-                    android:startColor="#FF4DE8D0"
-                    android:endColor="#FF5AA9FF" />
+                <corners android:radius="3dp" />
+                <solid android:color="#FFFFFFFF" />
             </shape>
         </clip>
     </item>
