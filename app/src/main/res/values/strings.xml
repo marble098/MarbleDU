@@ -159,6 +159,7 @@
     <string name="widget_paused_hint">پایش خاموش است؛ آمار ثابت می‌ماند</string>
     <string name="widget_updated_at">به‌روزرسانی %1$s</string>
     <string name="widget_refresh_desc">به‌روزرسانی ویجت</string>
+    <string name="widget_fallback_text">برای به‌روزرسانی، ضربه بزن</string>
 
     <string name="about_view_repo">مشاهده در گیت‌هاب</string>
 

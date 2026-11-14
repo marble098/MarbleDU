@@ -9,11 +9,13 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import ir.marbledu.datausage.MarbleDuApp
+import ir.marbledu.datausage.data.AppLanguage
 import ir.marbledu.datausage.data.AppSettings
 import ir.marbledu.datausage.data.ConnectionType
 import ir.marbledu.datausage.data.LocaleHelper
 import ir.marbledu.datausage.data.NetworkStatsReader
 import ir.marbledu.datausage.data.OperatorCatalog
+import ir.marbledu.datausage.data.ThemeMode
 import ir.marbledu.datausage.service.MonitorService
 import ir.marbledu.datausage.ui.theme.ThemePalette
 import kotlinx.coroutines.CoroutineScope
@@ -44,12 +46,42 @@ class UsageWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
+        renderImmediately(context)
         refreshAsync(context, goAsync(), forceWidgetCheck = true)
     }
 
     /** اولین‌بار که ویجت اضافه می‌شود، داده را فوری بیاور. */
     override fun onEnabled(context: Context) {
+        renderImmediately(context)
         refreshAsync(context, goAsync(), forceWidgetCheck = true)
+    }
+
+    /**
+     * پیش از هر خواندن سنگین، ویجت را با «آخرین تصویر شناخته‌شده» (یا چیدمان
+     * حداقلی) رسم می‌کند.
+     *
+     * چرا؟ لانچر بعد از `onUpdate` انتظار دارد ویوها را تحویل بگیرد؛ اگر رسم
+     * کامل (خواندن آمار + ساخت چیدمان) طول بکشد یا شکست بخورد، جعبه‌ی قرمز
+     * «Can't load widget» نمایش داده می‌شود. این تابع بدون هیچ I/O و در همان
+     * فراخوانی، یک ویجت سالم روی صفحه می‌گذارد.
+     */
+    private fun renderImmediately(context: Context) {
+        val appContext = context.applicationContext
+        runCatching {
+            val cached = lastSnapshot
+            if (cached != null) {
+                WidgetRenderer.renderAll(appContext, cached)
+            } else {
+                WidgetRenderer.renderFallback(
+                    appContext,
+                    persian = LocaleHelper.isPersian(AppLanguage.SYSTEM),
+                    darkSurface = WidgetTheme.isDarkSurface(
+                        ThemeMode.SYSTEM.name,
+                        systemNight(appContext),
+                    ),
+                )
+            }
+        }
     }
 
     /** با تغییر اندازه، چیدمان همان لحظه دوباره چیده می‌شود. */
@@ -174,7 +206,29 @@ class UsageWidgetProvider : AppWidgetProvider() {
             if (forceWidgetCheck) widgetsCheckedAt = 0L
             scope.launch {
                 try {
-                    withTimeoutOrNull(BROADCAST_TIMEOUT_MS) { refreshNow(appContext) }
+                    val rendered = runCatching {
+                        withTimeoutOrNull(BROADCAST_TIMEOUT_MS) { refreshNow(appContext) } ?: false
+                    }.getOrDefault(false)
+                    if (!rendered) {
+                        // داده نیامد (بی‌دسترسی، خطای خواندن یا تمام‌شدن مهلت)؛
+                        // به‌جای رهاکردن ویجت روی پیام خطای لانچر، همان تصویر
+                        // قبلی را نگه می‌داریم و اگر هیچ تصویری نیست، حداقلی رسم می‌کنیم.
+                        val cached = lastSnapshot
+                        runCatching {
+                            if (cached != null) {
+                                WidgetRenderer.renderAll(appContext, cached)
+                            } else {
+                                WidgetRenderer.renderFallback(
+                                    appContext,
+                                    persian = LocaleHelper.isPersian(AppLanguage.SYSTEM),
+                                    darkSurface = WidgetTheme.isDarkSurface(
+                                        ThemeMode.SYSTEM.name,
+                                        systemNight(appContext),
+                                    ),
+                                )
+                            }
+                        }
+                    }
                 } finally {
                     pending?.let { runCatching { it.finish() } }
                 }

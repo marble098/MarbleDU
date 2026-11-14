@@ -40,8 +40,51 @@ internal object WidgetRenderer {
         }.getOrNull()
         if (ids == null || ids.isEmpty()) return
         ids.forEach { id ->
-            runCatching { manager.updateAppWidget(id, build(context, snapshot, manager, id)) }
+            // اگر ساخت چیدمان کامل شکست بخورد، به‌جای جعبه‌ی «Can't load widget»
+            // لانچر، همان ویجت را با چیدمان حداقلی رسم می‌کنیم.
+            val views = runCatching { build(context, snapshot, manager, id) }
+                .getOrElse { fallback(context, snapshot.persian, snapshot.darkSurface) }
+            runCatching { manager.updateAppWidget(id, views) }
         }
+    }
+
+    /**
+     * رسم چیدمان «حداقلی» برای همه‌ی ویجت‌ها.
+     *
+     * چند مسیر به این تابع می‌رسند: ویجت تازه اضافه شده و هنوز داده‌ای خوانده
+     * نشده، خواندن آمار طول کشیده و مهلت پخش‌داده (broadcast) تمام شده، یا
+     * ساخت چیدمان کامل به خطا خورده. در همه‌ی این حالت‌ها بهتر است یک کارت
+     * سالم و قابل‌ضربه ببینیم تا پیام قرمز «Can't load widget».
+     */
+    fun renderFallback(context: Context, persian: Boolean = true, darkSurface: Boolean = true) {
+        val appContext = context.applicationContext
+        val manager = runCatching { AppWidgetManager.getInstance(appContext) }.getOrNull() ?: return
+        val ids = runCatching {
+            manager.getAppWidgetIds(ComponentName(appContext, UsageWidgetProvider::class.java))
+        }.getOrNull()
+        if (ids == null || ids.isEmpty()) return
+        val views = runCatching { fallback(appContext, persian, darkSurface) }.getOrNull() ?: return
+        ids.forEach { id -> runCatching { manager.updateAppWidget(id, views) } }
+    }
+
+    /** ساخت RemoteViews چیدمان حداقلی ([R.layout.widget_fallback]). */
+    internal fun fallback(context: Context, persian: Boolean = true, darkSurface: Boolean = true): RemoteViews {
+        val strings = LocaleHelper.localizedContext(context, if (persian) "fa" else "en")
+        val views = RemoteViews(context.packageName, R.layout.widget_fallback)
+        views.setInt(
+            R.id.widget_fallback_root,
+            "setLayoutDirection",
+            if (persian) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR,
+        )
+        views.setInt(
+            R.id.widget_fallback_root,
+            "setBackgroundResource",
+            if (darkSurface) R.drawable.widget_surface_dark else R.drawable.widget_surface_light,
+        )
+        views.setTextViewText(R.id.widget_fallback_title, strings.getString(R.string.widget_usage_label))
+        views.setTextViewText(R.id.widget_fallback_text, strings.getString(R.string.widget_fallback_text))
+        views.setOnClickPendingIntent(R.id.widget_fallback_root, openIntent(context))
+        return views
     }
 
     /** ساخت RemoteViews یک ویجت مشخص. */

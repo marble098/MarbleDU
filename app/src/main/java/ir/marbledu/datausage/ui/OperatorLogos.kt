@@ -42,8 +42,21 @@ object OperatorLogos {
         "tic" to R.drawable.op_tic,
     )
 
-    /** لوگوهایی که سفید هستند و باید روی کاشیِ رنگ برند بنشینند. */
-    private val lightOnBrand: Set<String> = setOf("fanava", "laser")
+    /**
+     * لوگوهایی که خودشان روشن (سفید/کرم) هستند و روی کاشی سفید محو می‌شوند؛
+     * این‌ها روی کاشیِ رنگ برند می‌نشینند تا هم دیده شوند و هم خوانا بمانند.
+     *
+     * معیار انتخاب: میانگین روشنایی پیکسل‌های مات لوگو بالای ۰٬۷ باشد
+     * (samantel ۰٬۹۶ / telekish ۰٬۹۲ / aptel ۰٬۹۰ / mabna ۰٬۸۶ / mobinnet ۰٬۷۵ /
+     * mtce ۰٬۷۵ / fanava ۰٬۹۱ / laser ۱٬۰۰). بقیه‌ی لوگوها روی کاشی سفید کنتراست
+     * کافی دارند.
+     */
+    private val lightOnBrand: Set<String> = setOf(
+        "fanava", "laser", "samantel", "telekish", "aptel", "mabna", "mobinnet", "mtce",
+    )
+
+    /** شناسه‌ی همه‌ی اپراتورهایی که لوگوی رسمی دارند (برای تست یکپارچگی). */
+    fun idsWithLogo(): Set<String> = logos.keys
 
     @DrawableRes
     fun logoFor(operatorId: String): Int? = logos[operatorId]
