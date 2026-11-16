@@ -1,0 +1,12 @@
+{
+  "gradle": "0.7",
+  "agp": "9.6.0-alpha03",
+  "kotlin": "2.5.0-Beta2",
+  "composeBom": "2026.09.00",
+  "material3": "1.5.0-rc01",
+  "coreKtx": "1.19.1",
+  "activityCompose": "1.13.0",
+  "lifecycle": "2.11.0",
+  "datastore": "1.3.0",
+  "coroutines": "1.11.0"
+}
