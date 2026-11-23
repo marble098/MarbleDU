@@ -7,7 +7,7 @@
 agp = "9.5.1"
 kotlin = "2.4.21"
 composeBom = "2026.11.00"       # آخرین BOM بتا (همراه با Material 3 Expressive)
-material3 = "1.5.0-rc01"          # Material 3 Expressive (بتا/RC آخر)
+material3 = "1.6.0-alpha01"          # Material 3 Expressive (بتا/RC آخر)
 coreKtx = "1.19.1"
 activityCompose = "1.13.0"
 lifecycle = "2.11.0"
