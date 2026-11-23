@@ -4,9 +4,9 @@
 # آپدیت هفتگی با Dependabot + workflow «Dependency Update» انجام می‌شود.
 # ---------------------------------------------------------------------------
 [versions]
-agp = "9.5.1"
+agp = "9.5.2"
 kotlin = "2.4.21"
-composeBom = "2026.11.00"       # آخرین BOM بتا (همراه با Material 3 Expressive)
+composeBom = "2026.11.01"       # آخرین BOM بتا (همراه با Material 3 Expressive)
 material3 = "1.5.0-rc01"          # Material 3 Expressive (بتا/RC آخر)
 coreKtx = "1.19.1"
 activityCompose = "1.13.0"
